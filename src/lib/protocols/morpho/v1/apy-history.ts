@@ -37,7 +37,6 @@ type MarketBorrowHistoryQuery = {
       borrowApy: FloatDataPoint[]
       netBorrowApy: FloatDataPoint[]
       dailyBorrowApy: FloatDataPoint[]
-      fee: FloatDataPoint[]
     }
   } | null
 }
@@ -340,7 +339,6 @@ export async function fetchMorphoHistory(opts?: {
       const hist = data.marketById.historicalState
       const borrowApyMap = toMap(hist.borrowApy)
       const netBorrowApyMap = toMap(hist.netBorrowApy)
-      const feeMap = toMap(hist.fee)
 
       const productId = buildProductId(
         market.chainId,
@@ -356,7 +354,6 @@ export async function fetchMorphoHistory(opts?: {
       for (const ts of timestamps) {
         const borrowApy = borrowApyMap.get(ts) ?? 0
         const netBorrowApy = netBorrowApyMap.get(ts) ?? borrowApy
-        const fee = feeMap.get(ts) ?? 0
 
         points.push({
           timestamp: new Date(ts * 1000),
@@ -364,9 +361,11 @@ export async function fetchMorphoHistory(opts?: {
           kind: 'borrow',
           apy: {
             base: borrowApy,
-            rewards: 0,
-            // fee is the 0–1 market fee rate → store fee-APY (= base × fee rate).
-            fees: borrowApy * fee,
+            // Reward total derived from Morpho's own net (netBorrow = borrow −
+            // reward) so base − rewards === net exactly, matching the spot job.
+            rewards: Math.max(0, borrowApy - netBorrowApy),
+            // The market fee is taken from supplier interest, not a borrower cost.
+            fees: 0,
             net: netBorrowApy,
             rewardItems: [],
           },

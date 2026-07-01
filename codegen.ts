@@ -18,7 +18,7 @@ import { COMPOUND_CONFIG } from './src/lib/protocols/compound/config'
 import { MORPHO_CONFIG } from './src/lib/protocols/morpho/config'
 
 // Load environment variables from .env file
-loadEnv()
+loadEnv({ path: ['.env', '.env.local'] })
 
 // Extract API URLs from configs (single source of truth)
 const aaveV3ApiUrl = AAVE_CONFIG.aave_v3.offchainApiUrl

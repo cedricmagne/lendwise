@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 
 import { getEnsName } from '@wagmi/core'
+import posthog from 'posthog-js'
 import type { Address } from 'viem'
 import { useAccount, useConfig } from 'wagmi'
 import { mainnet } from 'wagmi/chains'
@@ -82,6 +83,14 @@ export function WalletWatcherProvider({
 
     addWallets([newWallet])
     addOrUpdateClient(walletAddress as Address, chain)
+
+    if (isActive) {
+      posthog.identify(walletAddress, {
+        wallet_address: walletAddress,
+        ens_name: ensName ?? undefined,
+        chain_family: 'evm',
+      })
+    }
   }
 
   // Listen to accountsChanged event from MetaMask

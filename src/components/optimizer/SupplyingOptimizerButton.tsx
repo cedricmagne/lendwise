@@ -12,6 +12,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
+import posthog from 'posthog-js'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 
 import { loadLatestPrice } from '@/app/actions/price-return-history.actions'
@@ -176,8 +177,17 @@ export function SupplyingOptimizerView({
 
       setResults(optimizationResults)
       setRan(true)
+      posthog.capture('supply_optimizer_run', {
+        asset_symbol: assetSymbol,
+        strategy,
+        horizon,
+        markets_count: markets.length,
+        amount: parseFloat(amount) || 0,
+        result_count: optimizationResults.length,
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Optimization failed')
+      posthog.captureException(err)
     } finally {
       setIsOptimizing(false)
     }
@@ -521,7 +531,21 @@ export function SupplyingOptimizerView({
             </button>
           )}
           <Button
-            onClick={ran ? onBack : handleRun}
+            onClick={
+              ran
+                ? () => {
+                    posthog.capture('supply_optimizer_applied', {
+                      asset_symbol: assetSymbol,
+                      strategy,
+                      horizon,
+                      weighted_apy: weightedApy,
+                      projected_return_usd: projectedReturn,
+                      markets_count: results?.length ?? 0,
+                    })
+                    onBack?.()
+                  }
+                : handleRun
+            }
             disabled={isOptimizing || (!ran && !amount)}
             className={
               ran

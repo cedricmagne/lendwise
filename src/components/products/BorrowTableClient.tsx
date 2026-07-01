@@ -16,6 +16,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
+import posthog from 'posthog-js'
 
 import { loadBorrowProducts } from '@/app/actions/products.actions'
 import { NetworkBadge } from '@/components/badge/NetworkBadge'
@@ -461,6 +462,12 @@ export function BorrowTableClient() {
     hasUserInteracted.current = true
     setRowSelection({})
     setColumnFilters(newFilters)
+    if (newFilters.length > 0) {
+      posthog.capture('borrow_table_filter_applied', {
+        filters: newFilters.map((f) => ({ column: f.id, value: f.value })),
+        filter_count: newFilters.length,
+      })
+    }
   }, [])
 
   // Selection lock: all selected rows must share the same loan asset and at
@@ -565,19 +572,20 @@ export function BorrowTableClient() {
   // column's own filter, so each chip shows "how many results you'd get by
   // picking that option".
   const applyFiltersExcept = (excludeId: string) =>
-    visibleMarkets.filter((m) =>
-      matchesSearch(m) &&
-      columnFilters.every((f) => {
-        if (f.id === excludeId) return true
-        if (f.id === 'collaterals') {
-          const v = f.value as string
-          return m.collaterals.some((c) => c.symbol === v)
-        }
-        const cell = String(m[f.id as keyof BorrowProduct] ?? '')
-        return Array.isArray(f.value)
-          ? (f.value as string[]).includes(cell)
-          : cell === String(f.value)
-      })
+    visibleMarkets.filter(
+      (m) =>
+        matchesSearch(m) &&
+        columnFilters.every((f) => {
+          if (f.id === excludeId) return true
+          if (f.id === 'collaterals') {
+            const v = f.value as string
+            return m.collaterals.some((c) => c.symbol === v)
+          }
+          const cell = String(m[f.id as keyof BorrowProduct] ?? '')
+          return Array.isArray(f.value)
+            ? (f.value as string[]).includes(cell)
+            : cell === String(f.value)
+        })
     )
 
   const protocolCounts = applyFiltersExcept('protocol').reduce((acc, m) => {

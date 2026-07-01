@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from 'react'
 
 import { AlertCircle, Gift, Percent, TrendingUp } from 'lucide-react'
+import posthog from 'posthog-js'
 import {
   Area,
   CartesianGrid,
@@ -299,9 +300,7 @@ function ApyBreakdownChart({
             <button
               key={c.key}
               type="button"
-              onClick={() =>
-                setVisible((v) => ({ ...v, [c.key]: !v[c.key] }))
-              }
+              onClick={() => setVisible((v) => ({ ...v, [c.key]: !v[c.key] }))}
               className={`flex cursor-pointer items-center gap-1.5 transition-opacity ${
                 on
                   ? 'text-foreground'
@@ -596,7 +595,17 @@ export function ProductDetailDrawer({
         <Button
           variant="link"
           className="text-foreground decoration-muted-foreground w-fit cursor-pointer px-0 text-left text-xs underline decoration-dashed underline-offset-6"
-          onClick={() => handleLoad('7d')}
+          onClick={() => {
+            posthog.capture('product_details_viewed', {
+              product_kind: kind,
+              pool_name: item.poolName,
+              protocol: item.protocol,
+              network: item.network,
+              asset_symbol: item.assetSymbol,
+              apy: item.apy,
+            })
+            handleLoad('7d')
+          }}
         >
           {item.poolName}
         </Button>

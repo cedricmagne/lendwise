@@ -6,6 +6,7 @@ import Image from 'next/image'
 
 import { Activity, ArrowRight, Globe } from 'lucide-react'
 import { motion } from 'motion/react'
+import posthog from 'posthog-js'
 
 import {
   Dialog,
@@ -54,6 +55,7 @@ export function NetworkFamilySelectorDialog({
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => {
+                posthog.capture('wallet_connected', { network_family: 'evm' })
                 onOpenChange(false)
                 onSelectEVM()
               }}
@@ -86,6 +88,9 @@ export function NetworkFamilySelectorDialog({
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => {
+                posthog.capture('wallet_connected', {
+                  network_family: 'stellar',
+                })
                 onOpenChange(false)
                 onSelectStellar()
               }}

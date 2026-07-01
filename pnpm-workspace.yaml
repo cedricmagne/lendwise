@@ -7,6 +7,7 @@ allowBuilds:
   '@stellar/stellar-sdk': true
   blake-hash: true
   bufferutil: true
+  core-js: true
   esbuild: true
   keccak: true
   protobufjs: true

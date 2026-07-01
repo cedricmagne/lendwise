@@ -12,6 +12,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
+import posthog from 'posthog-js'
 import {
   Area,
   AreaChart,
@@ -543,8 +544,18 @@ export function BorrowingOptimizerView({
       const response = await runOptimize(omegas[0] ?? 0, usdAmount, marketData)
       setResult(response)
       setRan(true)
+      posthog.capture('borrow_optimizer_run', {
+        mode,
+        horizon,
+        markets_count: markets.length,
+        collateral_symbol: collateralSymbol,
+        loan_symbol: loanSymbol,
+        amount: parseFloat(amount) || 0,
+        amount_usd: usdAmount,
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Optimization failed')
+      posthog.captureException(err)
     } finally {
       setIsOptimizing(false)
     }
@@ -1687,7 +1698,19 @@ export function BorrowingOptimizerView({
               </Button>
               {ran && !isOptimizing && (
                 <Button
-                  onClick={onBack}
+                  onClick={() => {
+                    posthog.capture('borrow_optimizer_applied', {
+                      mode,
+                      horizon,
+                      collateral_symbol: collateralSymbol,
+                      loan_symbol: loanSymbol,
+                      total_borrow_usd: result?.total_borrow,
+                      total_collateral_usd: result?.total_collateral,
+                      weighted_rate: weightedRate,
+                      markets_count: allocations.length,
+                    })
+                    onBack?.()
+                  }}
                   className="bg-emerald-500 text-white hover:bg-emerald-500/90"
                 >
                   <CheckCircle2 className="mr-2 h-4 w-4" />

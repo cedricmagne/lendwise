@@ -17,6 +17,7 @@ import {
   Users,
   Wallet,
 } from 'lucide-react'
+import posthog from 'posthog-js'
 
 import { CurrencyIcon } from '@/components/icon/CurrencyIcon'
 import { Button } from '@/components/ui/button'
@@ -49,6 +50,10 @@ export const UserMenu = () => {
   const { disconnectStellar } = useStellarWallet()
 
   const handleCurrencySelect = (currencyCode: string) => {
+    posthog.capture('currency_changed', {
+      from_currency: baseCurrency,
+      to_currency: currencyCode,
+    })
     setBaseCurrency(currencyCode)
     setCurrentView('main')
   }
@@ -213,7 +218,10 @@ export const UserMenu = () => {
             <ChevronDown className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        {renderDropdownContent(() => disconnectStellar(activeWallet.address))}
+        {renderDropdownContent(() => {
+          posthog.capture('wallet_disconnected', { network_family: 'stellar' })
+          disconnectStellar(activeWallet.address)
+        })}
       </DropdownMenu>
     )
   }
@@ -245,7 +253,10 @@ export const UserMenu = () => {
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            {renderDropdownContent(openAccountModal)}
+            {renderDropdownContent(() => {
+              posthog.capture('wallet_disconnected', { network_family: 'evm' })
+              openAccountModal()
+            })}
           </DropdownMenu>
         )
       }}

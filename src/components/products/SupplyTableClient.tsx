@@ -15,6 +15,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
+import posthog from 'posthog-js'
 
 import { loadSupplyProducts } from '@/app/actions/products.actions'
 import { NetworkBadge } from '@/components/badge/NetworkBadge'
@@ -358,6 +359,12 @@ export function SupplyTableClient() {
     hasUserInteracted.current = true
     setRowSelection({})
     setColumnFilters(newFilters)
+    if (newFilters.length > 0) {
+      posthog.capture('supply_table_filter_applied', {
+        filters: newFilters.map((f) => ({ column: f.id, value: f.value })),
+        filter_count: newFilters.length,
+      })
+    }
   }, [])
 
   const selectedAsset = (() => {
@@ -431,15 +438,16 @@ export function SupplyTableClient() {
 
   // Faceted counts: apply text search + all active filters except the target column
   const applyFiltersExcept = (excludeId: string) =>
-    visibleMarkets.filter((m) =>
-      matchesSearch(m) &&
-      columnFilters.every((f) => {
-        if (f.id === excludeId) return true
-        const cell = String(m[f.id as keyof SupplyProduct] ?? '')
-        return Array.isArray(f.value)
-          ? (f.value as string[]).includes(cell)
-          : cell === String(f.value)
-      })
+    visibleMarkets.filter(
+      (m) =>
+        matchesSearch(m) &&
+        columnFilters.every((f) => {
+          if (f.id === excludeId) return true
+          const cell = String(m[f.id as keyof SupplyProduct] ?? '')
+          return Array.isArray(f.value)
+            ? (f.value as string[]).includes(cell)
+            : cell === String(f.value)
+        })
     )
 
   const protocolCounts = new Map<string, number>(

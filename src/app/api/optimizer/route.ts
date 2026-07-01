@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+import { getPostHogClient } from '@/lib/posthog-server'
+
 /**
  * Generic Proxy for the Yield Optimizer API
  * External API: https://optimizer.lendwise.fi/redoc
@@ -89,6 +91,19 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json()
+
+    const distinctId =
+      request.headers.get('x-posthog-distinct-id') ?? 'anonymous'
+    const posthog = getPostHogClient()
+    posthog.capture({
+      distinctId,
+      event: 'optimizer_api_called',
+      properties: {
+        endpoint: body.endpoint,
+        status: response.status,
+      },
+    })
+
     return NextResponse.json(data)
   } catch (error) {
     console.error('Optimizer API error:', error)

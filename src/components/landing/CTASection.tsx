@@ -2,6 +2,7 @@
 
 import { ArrowRight } from 'lucide-react'
 import { motion } from 'motion/react'
+import posthog from 'posthog-js'
 
 import { Button } from '@/components/ui/button'
 
@@ -31,6 +32,9 @@ export function CTASection() {
         </p>
         <Button
           size="lg"
+          onClick={() =>
+            posthog.capture('landing_cta_clicked', { location: 'cta_section' })
+          }
           className="bg-primary text-primary-foreground hover:bg-primary/90 glow-cyan group h-14 rounded-xl px-10 text-base font-semibold"
         >
           Get Started Free

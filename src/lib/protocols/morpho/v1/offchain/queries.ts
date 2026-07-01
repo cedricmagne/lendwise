@@ -130,10 +130,6 @@ export const MARKET_BORROW_HISTORY = gql`
           x
           y
         }
-        fee(options: $options) {
-          x
-          y
-        }
       }
     }
   }
