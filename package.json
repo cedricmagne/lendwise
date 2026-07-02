@@ -56,7 +56,6 @@
     "@tanstack/react-table": "^8.21.3",
     "@upstash/qstash": "^2.9.0",
     "@urql/core": "^6.0.1",
-    "@vercel/analytics": "^2.0.1",
     "@vercel/functions": "^3.4.2",
     "@wagmi/core": "^2.20.2",
     "@zerodev/ecdsa-validator": "^5.4.9",
