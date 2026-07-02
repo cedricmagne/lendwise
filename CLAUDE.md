@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-DeFi yield optimization platform: aggregates and compares supply/borrow positions on Aave V3, Morpho Blue/MetaMorpho, and Compound V3 across multiple chains (Ethereum, Polygon, Arbitrum, Base, Optimism).
+DeFi yield optimization platform: aggregates and compares supply/borrow positions on Aave V3, Morpho Blue/MetaMorpho, and Compound V3 across 8 chains — Ethereum, Optimism, Polygon, Base, Arbitrum, Avalanche, Linea, BSC (the last three are Aave-only). ~700 active products / ~120 assets in the DB (July 2026). Production: https://lendwise.fi.
 
 **Stack:** Next.js 16 (App Router) · TypeScript strict · Tailwind 4 + Radix UI · viem/wagmi · PostgreSQL (Neon) + Drizzle ORM · The Graph (GraphQL) · graphql-yoga · URQL · Zustand · QStash (cron)
 
@@ -80,6 +80,7 @@ Drizzle ORM. Schema in `src/lib/db/schema.ts`, client in `src/lib/db/postgres.ts
 - Typed columns: `kind`, `provider`, `product_type`, `version`, `protocol_name`, `chain_id`, `chain_name`, `asset_*`, `protocol_address`
 - `meta` (jsonb) — protocol-specific params · `collaterals` (jsonb) — borrow only
 - Indexes: `(provider, asset_symbol, kind)`, `(protocol_name, asset_symbol, kind)`, `(active, chain_id)`
+- **Rule — filter/group chains by `chain_id`, never `chain_name`.** `chain_name` is inconsistent across adapters for the same chain: Aave writes capitalized names (`Ethereum`, `Optimism`, `Arbitrum`), Morpho/Compound write viem-style lowercase (`ethereum`, `op mainnet`, `arbitrum one`). Only `chain_id` is canonical.
 
 ### `apy_hourly` — rolling average per `(product_id, hour)`
 
