@@ -1,49 +1,49 @@
-'use client'
-
-import { ArrowRight } from 'lucide-react'
-import { motion } from 'motion/react'
-import posthog from 'posthog-js'
+import Image from 'next/image'
+import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
 
 export function CTASection() {
   return (
-    <section className="relative overflow-hidden px-6 py-32">
-      {/* Background glow */}
-      <div className="absolute inset-0">
-        <div className="bg-primary/8 absolute top-1/2 left-1/2 h-[400px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[120px]" />
-        <div className="bg-accent/5 absolute top-1/2 left-1/3 h-[300px] w-[300px] rounded-full blur-[100px]" />
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-100px' }}
-        transition={{ duration: 0.6 }}
-        className="relative z-10 mx-auto max-w-3xl text-center"
+    <section
+      className="bg-brand-deep border-border/60 relative overflow-hidden border-b"
+      id="docs"
+      data-screen-label="CTA"
+    >
+      <span
+        className="pointer-events-none absolute right-[-100px] bottom-[-200px] opacity-[0.18]"
+        aria-hidden="true"
       >
-        <h2 className="font-inter mb-6 text-4xl font-bold tracking-tight sm:text-6xl">
-          Ready to <span className="text-primary text-glow-cyan">optimize</span>
-          ?
+        <Image
+          src="/lendwise-icon.svg"
+          width={800}
+          height={800}
+          alt=""
+          loading="eager"
+          style={{ width: '800px', height: '800px' }}
+        />
+      </span>
+      <div className="wrap py-[120px]">
+        <p className="mono-label text-[oklch(0.8_0.05_25)]">
+          <span className="text-[oklch(0.88_0.05_25)]">/ 05</span> Get started
+        </p>
+        <h2 className="mt-[18px] mb-4 max-w-[14ch] text-[clamp(40px,5.4vw,68px)] leading-none font-semibold tracking-[-0.04em] text-white">
+          Stop guessing. Start optimizing.
         </h2>
-        <p className="text-muted-foreground mx-auto mb-10 max-w-xl text-lg leading-relaxed">
-          Stop guessing. Start earning more with data-driven yield optimization
-          across the entire DeFi ecosystem.
+        <p className="m-0 mb-[34px] max-w-[46ch] text-base text-[oklch(0.86_0.04_25)]">
+          Data-driven yield optimization across the entire DeFi ecosystem — free
+          tier, full API access.
         </p>
         <Button
-          size="lg"
-          onClick={() =>
-            posthog.capture('landing_cta_clicked', { location: 'cta_section' })
-          }
-          className="bg-primary text-primary-foreground hover:bg-primary/90 glow-cyan group h-14 rounded-xl px-10 text-base font-semibold"
+          asChild
+          className="text-brand-deep h-11 rounded bg-white px-[22px] text-sm font-medium hover:bg-white/90"
         >
-          Get Started Free
-          <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+          <Link href="/portfolio">Get started free</Link>
         </Button>
-        <p className="text-muted-foreground mt-4 text-xs">
+        <span className="mt-[14px] block font-mono text-[11.5px] text-[oklch(0.76_0.05_25)]">
           No credit card required · Free tier available
-        </p>
-      </motion.div>
+        </span>
+      </div>
     </section>
   )
 }

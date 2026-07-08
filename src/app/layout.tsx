@@ -1,6 +1,10 @@
 import type { Metadata } from 'next'
 
-import { Inter, JetBrains_Mono } from 'next/font/google'
+import {
+  Inter,
+  JetBrains_Mono,
+  Zalando_Sans_SemiExpanded,
+} from 'next/font/google'
 
 import { ThemeProvider } from '@/contexts'
 
@@ -19,6 +23,15 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 })
 
+const zalando = Zalando_Sans_SemiExpanded({
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-zalando',
+  display: 'swap',
+  weight: '400',
+  fallback: ['system-ui', 'sans-serif'],
+  adjustFontFallback: false,
+})
+
 export const metadata: Metadata = {
   title: 'Yield Optimizer - DeFi Portfolio Optimization',
   description: 'Maximize yields and minimize costs across DeFi protocols',
@@ -32,7 +45,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
+        className={`${inter.variable} ${jetbrainsMono.variable} ${zalando.variable} antialiased`}
       >
         <ThemeProvider
           attribute="class"

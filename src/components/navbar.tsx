@@ -20,6 +20,7 @@ import { useStellarWallet } from '@/contexts/StellarWalletContext'
 import { cn } from '@/lib/utils'
 import { useWalletStore } from '@/stores/walletStore'
 
+import { Logo } from './logo'
 import { UserMenu } from './user/UserMenu'
 
 const navItems = [
@@ -41,12 +42,7 @@ export function Navbar() {
   return (
     <header className="border-border bg-card sticky top-0 z-50 w-full border-b">
       <div className="flex h-14 items-center justify-between px-4 md:justify-start md:gap-8 md:px-6">
-        {/* Logo */}
-        <Link href="/" className="flex shrink-0 items-center">
-          <span className="font-inter text-lg font-bold tracking-tight">
-            Lend<span className="text-primary">wise</span>
-          </span>
-        </Link>
+        <Logo />
 
         {/* Nav links — desktop */}
         <nav className="hidden items-center gap-1 md:flex">

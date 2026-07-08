@@ -1,111 +1,93 @@
-'use client'
-
 import Link from 'next/link'
 
-import { ArrowRight, Play } from 'lucide-react'
-import { motion } from 'motion/react'
-
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
-import { AnimatedGrid } from './AnimatedGrid'
+import { Cube } from './Cube'
+import { CubeField } from './CubeField'
+
+const stats = [
+  { value: '10+', label: 'Blockchains' },
+  { value: '1,000+', label: 'Lending markets' },
+  { value: '<1s', label: 'Query latency' },
+  { value: '60s', label: 'Data refresh' },
+]
+
+const lineSoft = 'oklch(from var(--border) l c h / 0.6)'
 
 export function HeroSection() {
   return (
-    <section className="relative flex min-h-screen items-center justify-center overflow-hidden pt-16">
-      {/* Background layers */}
-      <AnimatedGrid />
-      <div className="from-background via-background/90 to-background pointer-events-none absolute inset-0 bg-linear-to-b" />
-
-      {/* Radial glow */}
-      <div className="bg-primary/5 pointer-events-none absolute top-1/3 left-1/2 h-[600px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[120px]" />
-      <div className="bg-accent/5 pointer-events-none absolute top-1/2 left-1/3 h-[400px] w-[400px] rounded-full blur-[100px]" />
-
-      <div className="relative z-10 mx-auto max-w-5xl px-6 text-center">
-        {/* Badge */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="border-primary/20 bg-primary/5 mb-8 inline-flex items-center gap-2 rounded-full border px-4 py-1.5"
-        >
-          <div className="bg-primary h-1.5 w-1.5 animate-pulse rounded-full" />
-          <span className="text-primary text-xs font-medium tracking-wide uppercase">
-            DeFi Lending Aggregator
-          </span>
-        </motion.div>
-
-        {/* Heading */}
-        <motion.h1
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.1 }}
-          className="font-inter mb-6 text-5xl leading-[0.95] font-bold tracking-tight sm:text-6xl lg:text-7xl"
-        >
-          Unified view for
-          <br />
-          <span className="text-primary text-glow-cyan">cross-chain</span>{' '}
-          lending markets
-        </motion.h1>
-
-        {/* Subtitle */}
-        <motion.p
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.2 }}
-          className="text-muted-foreground mx-auto mb-10 max-w-2xl text-lg leading-relaxed font-light sm:text-xl"
-        >
-          Track, compare and analyze lending markets across protocols and
-          chains. Transform fragmented APY data into actionable market insights
-          and smarter lending and borrowing decisions.
-        </motion.p>
-
-        {/* CTAs */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.3 }}
-          className="flex flex-col items-center justify-center gap-4 sm:flex-row"
-        >
-          <Link
-            href="/portfolio"
-            className="bg-primary text-primary-foreground hover:bg-primary/90 glow-cyan group flex items-center gap-2 rounded-xl px-6 py-4 text-sm font-semibold"
-          >
-            Explore Yields
-            <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-          </Link>
-          <Button
-            size="lg"
-            variant="outline"
-            className="border-border/60 text-muted-foreground hover:text-foreground hover:border-border group h-13 rounded-xl px-6 text-sm font-medium"
-          >
-            <Play className="group-hover:text-primary mr-2 h-4 w-4 transition-colors" />
-            Start Optimizing
-          </Button>
-        </motion.div>
-
-        {/* Stats row */}
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.5 }}
-          className="mt-20 flex items-center justify-center gap-8 sm:gap-16"
-        >
-          {[
-            { value: '10+', label: 'Blockchains' },
-            { value: '1000+', label: 'Markets' },
-            { value: '<1s', label: 'Latency' },
-          ].map((stat) => (
-            <div key={stat.label} className="text-center">
-              <div className="font-inter text-foreground text-2xl font-bold sm:text-3xl">
-                {stat.value}
-              </div>
-              <div className="text-muted-foreground mt-1 text-xs tracking-wide uppercase">
-                {stat.label}
-              </div>
+    <header
+      className="border-border/60 relative flex min-h-screen flex-col overflow-hidden border-b"
+      data-screen-label="Hero"
+    >
+      <div className="relative flex flex-1 items-center overflow-hidden pt-[112px] pb-12">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-35"
+          style={{
+            backgroundImage: `linear-gradient(${lineSoft} 1px, transparent 1px), linear-gradient(90deg, ${lineSoft} 1px, transparent 1px)`,
+            backgroundSize: '72px 72px',
+            maskImage:
+              'radial-gradient(ellipse 90% 80% at 30% 40%, black 0%, transparent 70%)',
+            WebkitMaskImage:
+              'radial-gradient(ellipse 90% 80% at 30% 40%, black 0%, transparent 70%)',
+          }}
+        />
+        <CubeField />
+        <div className="wrap w-full">
+          <div className="relative z-2 max-w-[720px] pl-[88px]">
+            <p className="mono-label mb-[26px]">
+              <Cube /> DeFi lending aggregator — 10+ chains
+            </p>
+            <h1 className="text-foreground m-0 mb-6 flex max-w-[11ch] flex-col text-[clamp(52px,7.2vw,96px)] leading-[0.98] font-semibold tracking-[-0.045em] text-balance">
+              All of DeFi lending.{' '}
+              <span className="text-brand-bright">One standard.</span>
+            </h1>
+            <p className="text-muted-foreground mb-9 max-w-[44ch] text-[17px] leading-[1.6] text-pretty">
+              Lendwise tracks, standardizes and optimizes lending markets across
+              every major protocol and chain — turning fragmented APY data into
+              decisions you can defend.
+            </p>
+            <div className="flex items-center gap-3 max-[560px]:flex-col max-[560px]:items-stretch">
+              <Button
+                asChild
+                className="hover:bg-brand-bright active:bg-brand-deep bg-primary h-11 rounded px-[22px] text-sm font-medium text-white"
+              >
+                <Link href="/portfolio">Explore yields</Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="border-border text-foreground hover:border-muted-foreground hover:text-foreground h-11 rounded bg-transparent px-[22px] text-sm font-medium hover:bg-transparent"
+              >
+                <Link href="/docs">Read the docs</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="bg-background border-border/60 relative z-2 border-t">
+        <div className="wrap grid grid-cols-2 min-[960px]:grid-cols-4">
+          {stats.map((s, i) => (
+            <div
+              className={cn(
+                'py-[22px] min-[960px]:border-t-0',
+                i % 2 === 0 ? 'pl-0' : 'border-border/60 border-l pl-6',
+                i >= 2 && 'border-border/60 border-t',
+                i === 0
+                  ? 'min-[960px]:pl-0'
+                  : 'min-[960px]:border-border/60 min-[960px]:border-l min-[960px]:pl-6'
+              )}
+              key={s.label}
+            >
+              <b className="text-foreground block font-mono text-[26px] font-semibold tracking-[-0.02em]">
+                {s.value}
+              </b>
+              <span className="text-ink-faint text-[12.5px]">{s.label}</span>
             </div>
           ))}
-        </motion.div>
+        </div>
       </div>
-    </section>
+    </header>
   )
 }

@@ -1,50 +1,37 @@
-'use client'
-
 import Link from 'next/link'
 
-import { Zap } from 'lucide-react'
+import { Logo } from '../logo'
 
-import { ThemeSwitcher } from '@/components/theme/ThemeSwitcher'
-
-const links = {
-  Product: ['Features', 'Pricing', 'API Docs', 'Changelog'],
+const groups: Record<string, string[]> = {
+  Product: ['Features', 'Pricing', 'API docs', 'Changelog'],
   Resources: ['Documentation', 'Blog', 'Tutorials', 'Status'],
   Company: ['About', 'Careers', 'Contact', 'Privacy'],
 }
 
 export function Footer() {
   return (
-    <footer className="border-border/50 border-t px-6 py-16">
-      <div className="mx-auto max-w-6xl">
-        <div className="grid grid-cols-2 gap-10 md:grid-cols-4">
-          {/* Brand */}
-          <div className="col-span-2 md:col-span-1">
-            <div className="mb-4 flex items-center gap-2">
-              <div className="bg-primary/10 border-primary/20 flex h-7 w-7 items-center justify-center rounded-lg border">
-                <Zap className="text-primary h-3.5 w-3.5" />
-              </div>
-              <span className="font-inter text-lg font-bold tracking-tight">
-                Lend<span className="text-primary">wise</span>
-              </span>
-            </div>
-            <p className="text-muted-foreground max-w-[200px] text-xs leading-relaxed">
+    <footer className="bg-background" data-screen-label="Footer">
+      <div className="wrap pt-[72px] pb-10">
+        <div className="border-border/60 grid grid-cols-[2fr_1fr_1fr_1fr] gap-10 border-b pb-14 max-[960px]:grid-cols-2 max-[560px]:grid-cols-1">
+          <div>
+            <Logo className="mb-4" />
+            <p className="text-ink-faint m-0 max-w-[30ch] text-[13.5px] leading-[1.6]">
               The unified yield aggregation and optimization platform for DeFi.
             </p>
           </div>
-
-          {Object.entries(links).map(([title, items]) => (
+          {Object.entries(groups).map(([title, items]) => (
             <div key={title}>
-              <h4 className="text-muted-foreground mb-4 text-xs font-semibold tracking-wider uppercase">
+              <h4 className="text-ink-faint m-0 mb-[14px] font-mono text-[11px] font-medium tracking-[0.12em] uppercase">
                 {title}
               </h4>
-              <ul className="space-y-2.5">
-                {items.map((item) => (
-                  <li key={item}>
+              <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+                {items.map((i) => (
+                  <li key={i}>
                     <Link
+                      className="text-muted-foreground hover:text-foreground text-[13.5px] transition-colors"
                       href="#"
-                      className="text-muted-foreground hover:text-foreground text-sm transition-colors duration-300"
                     >
-                      {item}
+                      {i}
                     </Link>
                   </li>
                 ))}
@@ -52,32 +39,28 @@ export function Footer() {
             </div>
           ))}
         </div>
-
-        <div className="border-border/30 mt-16 flex flex-col items-center justify-between gap-4 border-t pt-6 sm:flex-row">
-          <span className="text-muted-foreground text-xs">
-            © 2026 Lendwise. All rights reserved.
-          </span>
-          <div className="flex items-center gap-6">
+        <div className="text-ink-faint flex items-center gap-6 pt-6 font-mono text-[11.5px]">
+          <span>© 2026 Lendwise. All rights reserved.</span>
+          <span className="ml-auto flex gap-5">
             <Link
+              className="text-ink-faint hover:text-muted-foreground"
               href="#"
-              className="text-muted-foreground hover:text-foreground text-xs transition-colors"
             >
               Terms
             </Link>
             <Link
+              className="text-ink-faint hover:text-muted-foreground"
               href="#"
-              className="text-muted-foreground hover:text-foreground text-xs transition-colors"
             >
               Privacy
             </Link>
             <Link
+              className="text-ink-faint hover:text-muted-foreground"
               href="#"
-              className="text-muted-foreground hover:text-foreground text-xs transition-colors"
             >
               Cookies
             </Link>
-            <ThemeSwitcher />
-          </div>
+          </span>
         </div>
       </div>
     </footer>

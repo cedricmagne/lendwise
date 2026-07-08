@@ -1,112 +1,88 @@
-'use client'
+import { cn } from '@/lib/utils'
 
-import { AlertTriangle, Clock, Shuffle } from 'lucide-react'
-import { motion } from 'motion/react'
+import { Cube } from './Cube'
 
-const problems = [
+const chips = [
+  { v: '7.37%', name: 'Morpho', sub: 'supply APY' },
+  { v: '3.21%', name: 'Aave v3', sub: 'net yield' },
+  { v: '6.12%', name: 'Compound', sub: 'borrow rate' },
+  { v: '~12%', name: 'Yearn', sub: 'estimated' },
+  { v: '5.00%', name: 'Spark', sub: 'APR base' },
+  { v: '4.79%', name: 'Pendle', sub: 'PT fixed' },
+]
+
+const cols = [
   {
-    icon: Shuffle,
-    title: 'Scattered Data',
-    description:
-      'Lending opportunities are spread across protocols and chains, leaving investors without a unified view of the market.',
+    h: 'Scattered data',
+    p: 'Opportunities live across dozens of protocols and chains. There is no unified view of the market.',
   },
   {
-    icon: AlertTriangle,
-    title: 'Inconsistent APYs',
-    description:
-      'Protocols report rates using different conventions, time windows and assumptions. Raw APYs are often not directly comparable.',
+    h: 'Inconsistent APYs',
+    p: 'Supply APY, net yield, APR base, PT fixed — the same word, six different calculations.',
   },
   {
-    icon: Clock,
-    title: 'Manual Analysis',
-    description:
-      'Investors spend hours switching between dashboards and checking market conditions before making informed decisions.',
+    h: 'Manual analysis',
+    p: 'Hours lost switching dashboards and normalizing numbers by hand before every decision.',
   },
 ]
 
 export function ProblemSection() {
-  const protocols = [
-    { name: 'Morpho', apy: '7.37%', color: '#3B82F6', note: 'supply APY' },
-    { name: 'Aave v3', apy: '3.21%', color: '#B382E8', note: 'net yield' },
-    { name: 'Compound', apy: '6.12%', color: '#00D395', note: 'borrow rate' },
-    { name: 'Yearn', apy: '~12%', color: '#F59E0B', note: 'estimated' },
-    { name: 'Spark', apy: '5.00%', color: '#EF4444', note: 'APR base' },
-    { name: 'Pendle', apy: '4.79%', color: '#8B5CF6', note: 'PT fixed' },
-  ]
   return (
-    <section className="relative overflow-hidden px-6 py-32">
-      <div className="from-background via-card/30 to-background absolute inset-0 bg-linear-to-b" />
-
-      <div className="relative z-10 mx-auto max-w-6xl">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-100px' }}
-          transition={{ duration: 0.6 }}
-          className="mb-20 text-center"
-        >
-          <h2 className="font-inter text-3xl font-bold tracking-tight sm:text-5xl">
-            Lending markets are{' '}
-            <span className="text-destructive">fragmented</span>
+    <section
+      className="border-border/60 border-b"
+      id="problem"
+      data-screen-label="Problem"
+    >
+      <div className="wrap py-[110px]">
+        <div className="reveal mb-14 max-w-[640px]">
+          <p className="mono-label">
+            <span className="text-brand-bright">/ 00</span> The problem
+          </p>
+          <h2 className="text-foreground mt-[18px] mb-[14px] text-[clamp(32px,4vw,48px)] leading-[1.05] font-semibold tracking-[-0.035em] text-balance">
+            Lending markets are fragmented by design.
           </h2>
-        </motion.div>
-
-        <div className="relative mb-24">
-          <div className="mx-auto mb-8 grid max-w-2xl grid-cols-2 gap-4 md:grid-cols-3">
-            {protocols.map((p) => (
-              <div
-                key={p.name}
-                className="border-border bg-card/60 group relative overflow-hidden rounded-xl border p-4 backdrop-blur-sm"
-              >
-                <div
-                  className="absolute inset-0 opacity-5 transition-opacity group-hover:opacity-10"
-                  style={{ background: p.color }}
-                />
-                <div className="text-muted-foreground mb-1 text-[11px]">
-                  {p.name}
-                </div>
-                <div
-                  className="font-mono text-xl font-bold"
-                  style={{ color: p.color }}
-                >
-                  {p.apy}
-                </div>
-                <div className="text-muted-foreground/60 mt-0.5 text-[10px] italic">
-                  {p.note}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="bg-destructive/10 border-destructive/30 text-destructive rounded-full border px-6 py-3 text-[14px] font-semibold backdrop-blur-sm">
-              Which one is actually better?
-            </div>
-          </div>
+          <p className="text-muted-foreground m-0 max-w-[54ch] text-base leading-[1.6] text-pretty">
+            Every protocol reports rates its own way — different conventions,
+            time windows and assumptions. Raw APYs are not comparable.
+          </p>
         </div>
-
-        <div className="grid gap-6 md:grid-cols-3">
-          {problems.map((item, i) => (
-            <motion.div
-              key={item.title}
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-80px' }}
-              transition={{ duration: 0.5, delay: i * 0.15 }}
-              className="group border-border/50 bg-card/50 hover:border-border relative rounded-2xl border p-8 backdrop-blur-sm transition-all duration-500"
+        <div className="reveal mb-10 flex max-w-[760px] flex-wrap gap-2.5">
+          {chips.map((c) => (
+            <span
+              className="border-border bg-card text-muted-foreground inline-flex flex-none items-baseline gap-2.5 rounded border px-4 py-3 font-mono text-[13px] whitespace-nowrap"
+              key={c.name}
             >
-              <div className="from-destructive/3 absolute inset-0 rounded-2xl bg-linear-to-b to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-              <div className="relative z-10">
-                <div className="bg-destructive/10 border-destructive/20 mb-6 flex h-12 w-12 items-center justify-center rounded-xl border">
-                  <item.icon className="text-destructive/70 h-5 w-5" />
-                </div>
-                <h3 className="font-inter mb-3 text-lg font-semibold">
-                  {item.title}
-                </h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  {item.description}
-                </p>
-              </div>
-            </motion.div>
+              <b className="text-foreground text-[15px] font-semibold">{c.v}</b>{' '}
+              {c.name}{' '}
+              <span className="text-ink-faint text-[10.5px] tracking-[0.08em] whitespace-nowrap uppercase">
+                {c.sub}
+              </span>
+            </span>
+          ))}
+        </div>
+        <p className="reveal text-foreground mb-16 font-mono text-[clamp(20px,2.6vw,30px)]">
+          &gt; which one is actually better?
+          <span className="bg-brand-bright animate-blink inline-block h-[1.1em] w-[0.6em] align-text-bottom" />
+        </p>
+        <div className="reveal border-border/60 grid grid-cols-3 border-t max-[960px]:grid-cols-1">
+          {cols.map((c, i) => (
+            <div
+              className={cn(
+                'pt-7 pr-7 pb-1',
+                i === 0 ? 'pl-0' : 'border-border/60 border-l pl-7',
+                'max-[960px]:border-l-0 max-[960px]:pl-0',
+                i !== 0 && 'max-[960px]:border-border/60 max-[960px]:border-t'
+              )}
+              key={c.h}
+            >
+              <Cube dim />
+              <h3 className="text-foreground mt-[14px] mb-2 text-base font-semibold tracking-[-0.02em]">
+                {c.h}
+              </h3>
+              <p className="text-muted-foreground m-0 text-[14px] leading-[1.6]">
+                {c.p}
+              </p>
+            </div>
           ))}
         </div>
       </div>
