@@ -1,5 +1,7 @@
 import Link from 'next/link'
 
+import { ThemeSwitcher } from '@/components/theme/ThemeSwitcher'
+
 import { Logo } from '../logo'
 
 const groups: Record<string, string[]> = {
@@ -61,6 +63,7 @@ export function Footer() {
               Cookies
             </Link>
           </span>
+          <ThemeSwitcher className="border-border h-7 w-7 rounded-md border hover:bg-transparent hover:text-emerald-500 dark:hover:bg-transparent" />
         </div>
       </div>
     </footer>

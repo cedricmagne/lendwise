@@ -10,6 +10,12 @@ export function Footer() {
     <footer className="border-border/50 bg-background border-t">
       <div className="flex h-10 items-center justify-end px-6">
         <div className="flex items-center gap-2">
+          <Link
+            href="/support"
+            className="text-2xs text-muted-foreground hover:text-primary px-1 transition-colors"
+          >
+            Support
+          </Link>
           <Badge
             variant="outline"
             className="text-2xs border-border h-7 gap-1.5 rounded-md px-2"

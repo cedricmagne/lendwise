@@ -111,7 +111,7 @@ export function NetworkFamilySelectorDialog({
                     Stellar Network
                   </h4>
                   <p className="text-muted-foreground mt-1 max-w-[260px] text-xs">
-                    Access Blend protocol and Soroban smart contracts.
+                    Access Blend protocol.
                   </p>
                 </div>
               </div>

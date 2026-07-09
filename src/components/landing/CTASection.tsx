@@ -31,8 +31,8 @@ export function CTASection() {
           Stop guessing. Start optimizing.
         </h2>
         <p className="m-0 mb-[34px] max-w-[46ch] text-base text-[oklch(0.86_0.04_25)]">
-          Data-driven yield optimization across the entire DeFi ecosystem — free
-          tier, full API access.
+          Data-driven yield optimization across the entire DeFi ecosystem — full
+          API access.
         </p>
         <Button
           asChild
@@ -40,9 +40,6 @@ export function CTASection() {
         >
           <Link href="/portfolio">Get started free</Link>
         </Button>
-        <span className="mt-[14px] block font-mono text-[11.5px] text-[oklch(0.76_0.05_25)]">
-          No credit card required · Free tier available
-        </span>
       </div>
     </section>
   )

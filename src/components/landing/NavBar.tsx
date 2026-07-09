@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 
 import Link from 'next/link'
 
-import { ThemeSwitcher } from '@/components/theme/ThemeSwitcher'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -12,7 +11,7 @@ import { Logo } from '../logo'
 
 const links = [
   { label: 'Why Lendwise', href: '#problem' },
-  { label: 'How it works', href: '#how-it-works' },
+  { label: 'How it works', href: '#features' },
   { label: 'API', href: '#api' },
   { label: 'Portfolio', href: '#portfolio' },
   { label: 'Docs', href: '/docs' },
@@ -53,7 +52,6 @@ export function NavBar() {
           })}
         </div>
         <div className="ml-auto flex items-center gap-4">
-          <ThemeSwitcher />
           <Button
             asChild
             className="hover:bg-brand-bright bg-primary h-9 rounded px-4 text-[13px] font-medium text-white"

@@ -53,7 +53,7 @@ export function HeroSection() {
                 asChild
                 className="hover:bg-brand-bright active:bg-brand-deep bg-primary h-11 rounded px-[22px] text-sm font-medium text-white"
               >
-                <Link href="/portfolio">Explore yields</Link>
+                <Link href="/supply">Explore yields</Link>
               </Button>
               <Button
                 asChild

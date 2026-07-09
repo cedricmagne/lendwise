@@ -1,24 +1,41 @@
 import type { CSSProperties, ReactNode } from 'react'
 
+import { ArrowUpRight } from 'lucide-react'
+
 import { cn } from '@/lib/utils'
 
 import { Cube } from './Cube'
 
-type Point = { b: string; s: string }
+type Point = { b: string; s: string; href?: string }
+
+function PointBody({ p }: { p: Point }) {
+  return (
+    <>
+      <Cube className="mt-0.5 scale-[0.85]" />
+      <span>
+        <b className="text-foreground block font-semibold">{p.b}</b>
+        <span className="text-muted-foreground">{p.s}</span>
+      </span>
+    </>
+  )
+}
 
 function Points({ items }: { items: Point[] }) {
+  const row = 'flex items-start gap-[14px] py-[13px] text-[14px]'
   return (
     <ul className="m-0 flex list-none flex-col p-0">
       {items.map((p) => (
-        <li
-          key={p.b}
-          className="border-border/60 flex items-start gap-[14px] border-t py-[13px] text-[14px]"
-        >
-          <Cube className="mt-0.5 scale-[0.85]" />
-          <span>
-            <b className="text-foreground block font-semibold">{p.b}</b>
-            <span className="text-muted-foreground">{p.s}</span>
-          </span>
+        <li key={p.b} className="border-border/60 border-t">
+          {p.href ? (
+            <a href={p.href} className={cn(row, 'group')}>
+              <PointBody p={p} />
+              <ArrowUpRight className="text-ink-faint group-hover:text-brand-bright mt-1 ml-auto h-4 w-4 shrink-0 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+            </a>
+          ) : (
+            <span className={row}>
+              <PointBody p={p} />
+            </span>
+          )}
         </li>
       ))}
     </ul>
@@ -219,9 +236,11 @@ function ApiPanel() {
         <br />
         &nbsp;&nbsp;<span className={fld}>pools</span>(
         <span className={fld}>chain</span>:{' '}
-        <span className="text-[oklch(0.62_0.06_140)]">&quot;ethereum&quot;</span>
-        , <span className={fld}>orderBy</span>: <span className={fld}>apy</span>,{' '}
-        <span className={fld}>first</span>:{' '}
+        <span className="text-[oklch(0.62_0.06_140)]">
+          &quot;ethereum&quot;
+        </span>
+        , <span className={fld}>orderBy</span>: <span className={fld}>apy</span>
+        , <span className={fld}>first</span>:{' '}
         <span className="text-[oklch(0.68_0.08_80)]">5</span>) {'{'}
         <br />
         &nbsp;&nbsp;&nbsp;&nbsp;<span className={fld}>protocol</span>
@@ -245,9 +264,30 @@ function ApiPanel() {
 }
 
 const folio = [
-  { ic: 'US', name: 'USDC', src: 'Aave V3 · Ethereum', val: '$12,450', d: '+$245', neg: false },
-  { ic: 'ET', name: 'ETH', src: 'Lido · Ethereum', val: '$8,200', d: '+$180', neg: false },
-  { ic: 'DA', name: 'DAI', src: 'Morpho · Base', val: '$5,100', d: '−$12', neg: true },
+  {
+    ic: 'US',
+    name: 'USDC',
+    src: 'Aave V3 · Ethereum',
+    val: '$12,450',
+    d: '+$245',
+    neg: false,
+  },
+  {
+    ic: 'ET',
+    name: 'ETH',
+    src: 'Lido · Ethereum',
+    val: '$8,200',
+    d: '+$180',
+    neg: false,
+  },
+  {
+    ic: 'DA',
+    name: 'DAI',
+    src: 'Morpho · Base',
+    val: '$5,100',
+    d: '−$12',
+    neg: true,
+  },
 ]
 
 function PortfolioPanel() {
@@ -298,7 +338,11 @@ function PortfolioPanel() {
 
 export function Features() {
   return (
-    <section className="border-border/60 border-b" data-screen-label="Features">
+    <section
+      className="border-border/60 border-b"
+      id="features"
+      data-screen-label="Features"
+    >
       <div className="wrap py-[110px]">
         <Feature
           first
@@ -308,9 +352,18 @@ export function Features() {
           title="One number you can trust."
           body="Our engine standardizes yield data across protocols, vaults and chains — adjusting for rate conventions and averaging windows so every market speaks the same language."
           points={[
-            { b: 'Cross-protocol analytics', s: 'Standardized yields across Aave, Morpho, Compound and more.' },
-            { b: 'Live market data', s: 'APYs and market conditions updated every 60 seconds.' },
-            { b: 'Historical trends', s: 'Compare APY trends across markets and vaults.' },
+            {
+              b: 'Cross-protocol analytics',
+              s: 'Standardized yields across Aave, Morpho, Compound and more.',
+            },
+            {
+              b: 'Live market data',
+              s: 'APYs and market conditions updated every 60 seconds.',
+            },
+            {
+              b: 'Historical trends',
+              s: 'Compare APY trends across markets and vaults.',
+            },
           ]}
           visual={<StandardPanel />}
         />
@@ -322,9 +375,18 @@ export function Features() {
           title="Strategies, not spreadsheets."
           body="Optimize lending and borrowing across protocols, vaults and chains using configurable risk preferences and market constraints."
           points={[
-            { b: 'Smart strategy', s: 'Opportunities ranked by yield, risk and market conditions.' },
-            { b: 'Risk-aware', s: 'Configure risk preferences and diversification levels.' },
-            { b: 'Auto-rebalance', s: 'Automated on-chain rebalancing as markets evolve.' },
+            {
+              b: 'Smart strategy',
+              s: 'Opportunities ranked by yield, risk and market conditions.',
+            },
+            {
+              b: 'Risk-aware',
+              s: 'Configure risk preferences and diversification levels.',
+            },
+            {
+              b: 'Auto-rebalance',
+              s: 'Automated on-chain rebalancing as markets evolve.',
+            },
           ]}
           visual={<OptimizerPanel />}
         />
@@ -335,7 +397,11 @@ export function Features() {
           title="The data layer, exposed."
           body="Standardized lending yield, protocol and market data through a simple GraphQL API built for production integrations."
           points={[
-            { b: 'GraphQL & REST', s: 'Flexible query interface for any stack.' },
+            {
+              b: 'GraphQL API',
+              s: 'Flexible query interface for any stack.',
+              href: '/docs/api/',
+            },
             { b: '99.9% uptime SLA', s: 'Enterprise-grade reliability.' },
             { b: 'Webhooks', s: 'Real-time yield change notifications.' },
           ]}
@@ -350,7 +416,11 @@ export function Features() {
           title="Your positions, one ledger."
           body="Connect your wallets and monitor lending positions, PnL and yield performance from a unified dashboard."
           points={[
-            { b: 'Multi-wallet support', s: 'Connect unlimited addresses.' },
+            {
+              b: 'Multi-wallet support',
+              s: 'Connect unlimited addresses.',
+              href: '/portfolio',
+            },
             { b: 'Smart alerts', s: 'Stay informed on market movements.' },
             { b: 'Full history', s: 'Historical yields and transactions.' },
           ]}
