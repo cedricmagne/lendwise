@@ -18,11 +18,11 @@ const cols = [
   },
   {
     h: 'Inconsistent APYs',
-    p: 'Supply APY, net yield, APR base, PT fixed — the same word, six different calculations.',
+    p: 'Protocols report rates using different conventions, time windows and assumptions. Raw APYs are often not directly comparable.',
   },
   {
     h: 'Manual analysis',
-    p: 'Hours lost switching dashboards and normalizing numbers by hand before every decision.',
+    p: 'Investors spend hours switching between dashboards and checking market conditions before making informed decisions.',
   },
 ]
 
@@ -39,11 +39,10 @@ export function ProblemSection() {
             <span className="text-brand-bright">/ 00</span> The problem
           </p>
           <h2 className="text-foreground mt-[18px] mb-[14px] text-[clamp(32px,4vw,48px)] leading-[1.05] font-semibold tracking-[-0.035em] text-balance">
-            Lending markets are fragmented by design.
+            Lending market is fragmented.
           </h2>
           <p className="text-muted-foreground m-0 max-w-[54ch] text-base leading-[1.6] text-pretty">
-            Every protocol reports rates its own way — different conventions,
-            time windows and assumptions. Raw APYs are not comparable.
+            Lending market is fragmented across vaults, protocols and chains.
           </p>
         </div>
         <div className="reveal mb-10 flex max-w-[760px] flex-wrap gap-2.5">

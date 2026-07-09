@@ -28,11 +28,11 @@ export function CTASection() {
           <span className="text-[oklch(0.88_0.05_25)]">/ 05</span> Get started
         </p>
         <h2 className="mt-[18px] mb-4 max-w-[14ch] text-[clamp(40px,5.4vw,68px)] leading-none font-semibold tracking-[-0.04em] text-white">
-          Stop guessing. Start optimizing.
+          Ready to optimize?
         </h2>
         <p className="m-0 mb-[34px] max-w-[46ch] text-base text-[oklch(0.86_0.04_25)]">
-          Data-driven yield optimization across the entire DeFi ecosystem — full
-          API access.
+          Stop guessing. Start making fully informed decisions across the entire
+          lending market.
         </p>
         <Button
           asChild

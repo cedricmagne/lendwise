@@ -9,7 +9,7 @@ import { CubeField } from './CubeField'
 const stats = [
   { value: '10+', label: 'Blockchains' },
   { value: '1,000+', label: 'Lending markets' },
-  { value: '<1s', label: 'Query latency' },
+  { value: '<1s', label: 'Latency' },
   { value: '60s', label: 'Data refresh' },
 ]
 
@@ -37,16 +37,15 @@ export function HeroSection() {
         <div className="wrap w-full">
           <div className="relative z-2 max-w-[720px] pl-[88px]">
             <p className="mono-label mb-[26px]">
-              <Cube /> DeFi lending aggregator — 10+ chains
+              <Cube /> DEFI LENDING AGGREGATOR
             </p>
-            <h1 className="text-foreground m-0 mb-6 flex max-w-[11ch] flex-col text-[clamp(52px,7.2vw,96px)] leading-[0.98] font-semibold tracking-[-0.045em] text-balance">
-              All of DeFi lending.{' '}
-              <span className="text-brand-bright">One standard.</span>
+            <h1 className="text-foreground m-0 mb-6 flex flex-col text-7xl leading-[0.98] font-semibold tracking-[-0.045em] text-balance">
+              Unified view for cross-chain{' '}
+              <span className="text-brand-bright">lending markets.</span>
             </h1>
             <p className="text-muted-foreground mb-9 max-w-[44ch] text-[17px] leading-[1.6] text-pretty">
-              Lendwise tracks, standardizes and optimizes lending markets across
-              every major protocol and chain — turning fragmented APY data into
-              decisions you can defend.
+              Track, compare and optimize lending markets across protocols and 8
+              chains. Fragmented APY data turned into one standardized view.
             </p>
             <div className="flex items-center gap-3 max-[560px]:flex-col max-[560px]:items-stretch">
               <Button

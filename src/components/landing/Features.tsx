@@ -349,11 +349,11 @@ export function Features() {
           id="standard"
           idx="01"
           eyebrow="Standard"
-          title="One number you can trust."
-          body="Our engine standardizes yield data across protocols, vaults and chains — adjusting for rate conventions and averaging windows so every market speaks the same language."
+          title="Market intelligence"
+          body="Our engine standardizes lending yield data across protocols, vaults and chains, adjusting for rate conventions and averaging windows. Compare protocols, vaults and chains using standardized metrics, historical trends and market context."
           points={[
             {
-              b: 'Cross-protocol analytics',
+              b: 'Multi-chain coverage',
               s: 'Standardized yields across Aave, Morpho, Compound and more.',
             },
             {
@@ -372,12 +372,12 @@ export function Features() {
           id="optimizer"
           idx="02"
           eyebrow="Optimizer"
-          title="Strategies, not spreadsheets."
+          title="Optimization engine"
           body="Optimize lending and borrowing across protocols, vaults and chains using configurable risk preferences and market constraints."
           points={[
             {
               b: 'Smart strategy',
-              s: 'Opportunities ranked by yield, risk and market conditions.',
+              s: 'Identify opportunities based on yield, risk and market conditions.',
             },
             {
               b: 'Risk-aware',
@@ -394,7 +394,7 @@ export function Features() {
           id="api"
           idx="03"
           eyebrow="API"
-          title="The data layer, exposed."
+          title="Data layer exposed"
           body="Standardized lending yield, protocol and market data through a simple GraphQL API built for production integrations."
           points={[
             {
@@ -413,7 +413,7 @@ export function Features() {
           id="portfolio"
           idx="04"
           eyebrow="Portfolio"
-          title="Your positions, one ledger."
+          title="Portfolio tracker"
           body="Connect your wallets and monitor lending positions, PnL and yield performance from a unified dashboard."
           points={[
             {
@@ -422,7 +422,10 @@ export function Features() {
               href: '/portfolio',
             },
             { b: 'Smart alerts', s: 'Stay informed on market movements.' },
-            { b: 'Full history', s: 'Historical yields and transactions.' },
+            {
+              b: 'Full history',
+              s: 'Access historical yields and transactions.',
+            },
           ]}
           visual={<PortfolioPanel />}
         />
