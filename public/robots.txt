@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /ingest/
+
+Sitemap: https://lendwise.fi/docs/sitemap.xml

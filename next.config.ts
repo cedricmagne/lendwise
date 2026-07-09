@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
   skipTrailingSlashRedirect: true,
   async rewrites() {
     return [
+      // VitePress docs — separate Vercel project proxied under /docs (SEO: same domain)
+      {
+        source: '/docs/:path*',
+        destination: 'https://docs-lendwise.vercel.app/:path*',
+      },
       {
         source: '/ingest/static/:path*',
         destination: 'https://eu-assets.i.posthog.com/static/:path*',
