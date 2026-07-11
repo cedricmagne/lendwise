@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { forwardRef } from 'react'
 
 import { ArrowUpRight } from 'lucide-react'
 
@@ -92,13 +93,19 @@ function Feature({
   )
 }
 
-function Panel({ children }: { children: ReactNode }) {
-  return (
-    <div className="bg-card border-border overflow-hidden rounded-md border shadow-xl">
-      {children}
-    </div>
-  )
-}
+const Panel = forwardRef<HTMLDivElement, { children: ReactNode }>(
+  ({ children }, ref) => {
+    return (
+      <div
+        ref={ref}
+        className="bg-card border-border overflow-hidden rounded-md border shadow-xl"
+      >
+        {children}
+      </div>
+    )
+  }
+)
+Panel.displayName = 'Panel'
 
 function PanelBar({ label, right }: { label: string; right: string }) {
   return (
@@ -186,7 +193,7 @@ function OptimizerPanel() {
             +2.4% vs manual
           </span>
         </div>
-        {positions.map((p) => (
+        {positions.map((p, index) => (
           <div
             key={p.name}
             className="border-border/60 grid grid-cols-[1fr_auto_auto] items-center gap-x-4 gap-y-1 border-t py-[11px]"
@@ -203,10 +210,15 @@ function OptimizerPanel() {
             <span className="bg-border/60 col-span-full h-[4px] overflow-hidden rounded-[2px]">
               <i
                 className={cn(
-                  'block h-full rounded-[2px]',
+                  'slider-animate block h-full rounded-[2px]',
                   p.hot ? 'bg-brand-bright' : 'bg-primary'
                 )}
-                style={{ width: `${p.pct}%` }}
+                style={
+                  {
+                    '--target-width': `${p.pct}%`,
+                    '--animation-delay': `${index * 0.15}s`,
+                  } as CSSProperties
+                }
               />
             </span>
           </div>
@@ -227,33 +239,40 @@ function OptimizerPanel() {
 }
 
 function ApiPanel() {
-  const fld = 'text-foreground'
   return (
-    <Panel>
+    <Panel data-panel="api">
       <PanelBar label="graphql_playground" right="connected" />
-      <div className="text-muted-foreground px-[22px] py-5 font-mono text-[13px] leading-[1.75]">
-        <span className="text-rose">query</span> {'{'}
-        <br />
-        &nbsp;&nbsp;<span className={fld}>pools</span>(
-        <span className={fld}>chain</span>:{' '}
-        <span className="text-[oklch(0.62_0.06_140)]">
-          &quot;ethereum&quot;
-        </span>
-        , <span className={fld}>orderBy</span>: <span className={fld}>apy</span>
-        , <span className={fld}>first</span>:{' '}
-        <span className="text-[oklch(0.68_0.08_80)]">5</span>) {'{'}
-        <br />
-        &nbsp;&nbsp;&nbsp;&nbsp;<span className={fld}>protocol</span>
-        <br />
-        &nbsp;&nbsp;&nbsp;&nbsp;<span className={fld}>tvl</span>
-        <br />
-        &nbsp;&nbsp;&nbsp;&nbsp;<span className={fld}>apy</span>
-        <br />
-        &nbsp;&nbsp;&nbsp;&nbsp;<span className={fld}>apyStandardized</span>
-        <br />
-        &nbsp;&nbsp;{'}'}
-        <br />
-        {'}'}
+      <div className="code-typing text-muted-foreground px-[22px] py-5 font-mono text-[13px] leading-[1.75]">
+        <div>
+          <span className="text-rose">query</span> {'{'}
+        </div>
+        <div>
+          &nbsp;&nbsp;<span className="text-foreground">pools</span>(
+          <span className="text-foreground">chain</span>:{' '}
+          <span className="text-[oklch(0.62_0.06_140)]">
+            &quot;ethereum&quot;
+          </span>
+          , <span className="text-foreground">orderBy</span>:{' '}
+          <span className="text-foreground">apy</span>,{' '}
+          <span className="text-foreground">first</span>:{' '}
+          <span className="text-[oklch(0.68_0.08_80)]">5</span>) {'{'}
+        </div>
+        <div>
+          &nbsp;&nbsp;&nbsp;&nbsp;
+          <span className="text-foreground">protocol</span>
+        </div>
+        <div>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span className="text-foreground">tvl</span>
+        </div>
+        <div>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span className="text-foreground">apy</span>
+        </div>
+        <div>
+          &nbsp;&nbsp;&nbsp;&nbsp;
+          <span className="text-foreground">apyStandardized</span>
+        </div>
+        <div>&nbsp;&nbsp;{'}'}</div>
+        <div>{'}'}</div>
       </div>
       <div className="border-border/60 text-ink-faint flex gap-4 border-t px-[22px] py-3 font-mono text-[12px]">
         <b className="text-rose font-medium">200</b> response · 42ms{' '}
@@ -394,7 +413,7 @@ export function Features() {
           id="api"
           idx="03"
           eyebrow="API"
-          title="Data layer exposed"
+          title="Data layer"
           body="Standardized lending yield, protocol and market data through a simple GraphQL API built for production integrations."
           points={[
             {

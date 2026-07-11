@@ -44,8 +44,7 @@ export function HeroSection() {
               <span className="text-brand-bright">lending markets.</span>
             </h1>
             <p className="text-muted-foreground mb-9 max-w-[44ch] text-[17px] leading-[1.6] text-pretty">
-              Track, compare and optimize lending markets across protocols and 8
-              chains. Fragmented APY data turned into one standardized view.
+              Track, compare and analyze lending markets across protocols and chains. Transform fragmented APY data into actionable market insights and smarter decisions.
             </p>
             <div className="flex items-center gap-3 max-[560px]:flex-col max-[560px]:items-stretch">
               <Button

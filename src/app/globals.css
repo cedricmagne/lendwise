@@ -139,6 +139,7 @@
 
   --animate-marquee: marquee var(--marquee-dur, 42s) linear infinite;
   --animate-blink: blink 1.1s steps(1) infinite;
+  --animate-slide-in: slide-in 0.8s ease-out forwards;
 
   --font-sans: var(--font-inter), sans-serif;
   --font-mono: var(--font-jetbrains-mono), monospace;
@@ -229,6 +230,79 @@
 @keyframes blink {
   50% {
     opacity: 0;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    width: 0;
+  }
+  to {
+    width: var(--target-width, 100%);
+  }
+}
+
+/* Trigger slider animation only when parent has .in class */
+.reveal.in .slider-animate {
+  width: 0;
+  animation: slide-in 0.8s ease-out forwards;
+  animation-delay: var(--animation-delay, 0s);
+}
+
+/* Typing animation for code - line by line reveal */
+.reveal.in .code-typing > * {
+  opacity: 0;
+  animation: fade-in-line 0.3s ease-out forwards;
+}
+
+.reveal.in .code-typing > *:nth-child(1) {
+  animation-delay: 0.1s;
+}
+.reveal.in .code-typing > *:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.reveal.in .code-typing > *:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.reveal.in .code-typing > *:nth-child(4) {
+  animation-delay: 0.4s;
+}
+.reveal.in .code-typing > *:nth-child(5) {
+  animation-delay: 0.5s;
+}
+.reveal.in .code-typing > *:nth-child(6) {
+  animation-delay: 0.6s;
+}
+.reveal.in .code-typing > *:nth-child(7) {
+  animation-delay: 0.7s;
+}
+.reveal.in .code-typing > *:nth-child(8) {
+  animation-delay: 0.8s;
+}
+.reveal.in .code-typing > *:nth-child(9) {
+  animation-delay: 0.9s;
+}
+.reveal.in .code-typing > *:nth-child(10) {
+  animation-delay: 1s;
+}
+.reveal.in .code-typing > *:nth-child(11) {
+  animation-delay: 1.1s;
+}
+.reveal.in .code-typing > *:nth-child(12) {
+  animation-delay: 1.2s;
+}
+.reveal.in .code-typing > *:nth-child(13) {
+  animation-delay: 1.3s;
+}
+
+@keyframes fade-in-line {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
