@@ -24,7 +24,7 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 const zalando = Zalando_Sans_SemiExpanded({
-  subsets: ['latin', 'latin-ext'],
+  subsets: ['latin'],
   variable: '--font-zalando',
   display: 'swap',
   weight: '400',

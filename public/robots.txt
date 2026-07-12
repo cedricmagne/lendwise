@@ -3,4 +3,5 @@ Allow: /
 Disallow: /api/
 Disallow: /ingest/
 
+Sitemap: https://lendwise.fi/sitemap.xml
 Sitemap: https://lendwise.fi/docs/sitemap.xml

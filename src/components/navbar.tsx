@@ -6,15 +6,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 import { useConnectModal } from '@rainbow-me/rainbowkit'
-import { Menu } from 'lucide-react'
 
+import { MobileNavSheet } from '@/components/mobile-nav-sheet'
 import { Button } from '@/components/ui/button'
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet'
 import { NetworkFamilySelectorDialog } from '@/components/wallet/NetworkFamilySelectorDialog'
 import { useStellarWallet } from '@/contexts/StellarWalletContext'
 import { cn } from '@/lib/utils'
@@ -28,6 +22,9 @@ const navItems = [
   { label: 'Supply', href: '/supply' },
   { label: 'Borrow', href: '/borrow' },
 ]
+
+/** dashboard header height (h-14) — the mobile menu hangs below it */
+const HEADER_H = 56
 
 export function Navbar() {
   const { wallets } = useWalletStore()
@@ -80,57 +77,48 @@ export function Navbar() {
             </Button>
           )}
 
-          {/* Burger — mobile only */}
-          <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="-mr-2 md:hidden">
-                <Menu className="h-5 w-5" />
-                <span className="sr-only">Menu</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-64 p-0">
-              <SheetTitle className="sr-only">Navigation</SheetTitle>
-              <div className="flex h-14 items-center border-b px-6">
-                <span className="text-foreground text-sm font-bold">Menu</span>
-              </div>
-              <nav className="flex flex-col gap-1 p-4">
-                {navItems.map((item) => {
-                  const isActive =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`)
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setOpen(false)}
-                      className={cn(
-                        'rounded-md px-3 py-2.5 text-sm font-medium transition-colors',
-                        isActive
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-                      )}
-                    >
-                      {item.label}
-                    </Link>
-                  )
-                })}
-              </nav>
-              {!isConnected && (
-                <div className="border-t p-4">
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setOpen(false)
-                      setShowNetworkDialog(true)
-                    }}
-                    className="w-full"
+          {/* Burger — mobile only. Same full-width menu as the landing header:
+           * drops under the bar, which stays visible and interactive. */}
+          <MobileNavSheet
+            open={open}
+            onOpenChange={setOpen}
+            offset={HEADER_H}
+            triggerClassName="md:hidden"
+          >
+            <nav className="flex flex-col px-4 py-2">
+              {navItems.map((item) => {
+                const isActive =
+                  pathname === item.href || pathname.startsWith(`${item.href}/`)
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setOpen(false)}
+                    className={cn(
+                      'border-border/60 border-b py-4 text-[15px] font-medium transition-colors',
+                      isActive
+                        ? 'text-primary'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
                   >
-                    Connect wallet
-                  </Button>
-                </div>
+                    {item.label}
+                  </Link>
+                )
+              })}
+              {!isConnected && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setOpen(false)
+                    setShowNetworkDialog(true)
+                  }}
+                  className="mt-4 mb-2 w-full"
+                >
+                  Connect wallet
+                </Button>
               )}
-            </SheetContent>
-          </Sheet>
+            </nav>
+          </MobileNavSheet>
         </div>
       </div>
 

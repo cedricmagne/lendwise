@@ -1,15 +1,7 @@
 import { cn } from '@/lib/utils'
 
 import { Cube } from './Cube'
-
-const chips = [
-  { v: '7.37%', name: 'Morpho', sub: 'supply APY' },
-  { v: '3.21%', name: 'Aave v3', sub: 'net yield' },
-  { v: '6.12%', name: 'Compound', sub: 'borrow rate' },
-  { v: '~12%', name: 'Yearn', sub: 'estimated' },
-  { v: '5.00%', name: 'Spark', sub: 'APR base' },
-  { v: '4.79%', name: 'Pendle', sub: 'PT fixed' },
-]
+import { chipRates } from './market-data'
 
 const cols = [
   {
@@ -46,15 +38,17 @@ export function ProblemSection() {
           </p>
         </div>
         <div className="reveal mb-10 flex max-w-[760px] flex-wrap gap-2.5">
-          {chips.map((c) => (
+          {chipRates.map((c) => (
             <span
               className="border-border bg-card text-muted-foreground inline-flex flex-none items-baseline gap-2.5 rounded border px-4 py-3 font-mono text-[13px] whitespace-nowrap"
-              key={c.name}
+              key={c.protocol}
             >
-              <b className="text-foreground text-[15px] font-semibold">{c.v}</b>{' '}
-              {c.name}{' '}
+              <b className="text-foreground text-[15px] font-semibold">
+                {c.rate}
+              </b>{' '}
+              {c.protocol}{' '}
               <span className="text-ink-faint text-[10.5px] tracking-[0.08em] whitespace-nowrap uppercase">
-                {c.sub}
+                {c.chipSub}
               </span>
             </span>
           ))}
@@ -63,14 +57,14 @@ export function ProblemSection() {
           &gt; which one is actually better?
           <span className="bg-brand-bright animate-blink inline-block h-[1.1em] w-[0.6em] align-text-bottom" />
         </p>
-        <div className="reveal border-border/60 grid grid-cols-3 border-t max-[960px]:grid-cols-1">
+        <div className="reveal border-border/60 max-desk:grid-cols-1 grid grid-cols-3 border-t">
           {cols.map((c, i) => (
             <div
               className={cn(
                 'pt-7 pr-7 pb-1',
                 i === 0 ? 'pl-0' : 'border-border/60 border-l pl-7',
-                'max-[960px]:border-l-0 max-[960px]:pl-0',
-                i !== 0 && 'max-[960px]:border-border/60 max-[960px]:border-t'
+                'max-desk:border-l-0 max-desk:pl-0',
+                i !== 0 && 'max-desk:border-border/60 max-desk:border-t'
               )}
               key={c.h}
             >

@@ -1,5 +1,4 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { forwardRef } from 'react'
 
 import { ArrowUpRight } from 'lucide-react'
 
@@ -71,12 +70,12 @@ function Feature({
       id={id}
       className={cn(
         'reveal border-border/60 grid grid-cols-[5fr_6fr] items-center gap-[72px] border-t py-[88px]',
-        'max-[960px]:grid-cols-1 max-[960px]:gap-10 max-[960px]:py-16',
-        first && 'border-t-0 pt-0 max-[960px]:pt-0',
-        last && 'pb-0 max-[960px]:pb-0'
+        'max-desk:grid-cols-1 max-desk:gap-10 max-desk:py-16',
+        first && 'max-desk:pt-0 border-t-0 pt-0',
+        last && 'max-desk:pb-0 pb-0'
       )}
     >
-      <div className={cn(flip && 'order-2 max-[960px]:order-1')}>
+      <div className={cn(flip && 'max-desk:order-1 order-2')}>
         <p className="mono-label">
           <span className="text-brand-bright">/ {idx}</span> {eyebrow}
         </p>
@@ -88,24 +87,18 @@ function Feature({
         </p>
         <Points items={points} />
       </div>
-      <div className={cn(flip && 'order-1 max-[960px]:order-2')}>{visual}</div>
+      <div className={cn(flip && 'max-desk:order-2 order-1')}>{visual}</div>
     </div>
   )
 }
 
-const Panel = forwardRef<HTMLDivElement, { children: ReactNode }>(
-  ({ children }, ref) => {
-    return (
-      <div
-        ref={ref}
-        className="bg-card border-border overflow-hidden rounded-md border shadow-xl"
-      >
-        {children}
-      </div>
-    )
-  }
-)
-Panel.displayName = 'Panel'
+function Panel({ children }: { children: ReactNode }) {
+  return (
+    <div className="bg-card border-border overflow-hidden rounded-md border shadow-xl">
+      {children}
+    </div>
+  )
+}
 
 function PanelBar({ label, right }: { label: string; right: string }) {
   return (
@@ -131,35 +124,51 @@ function StandardPanel() {
   return (
     <Panel>
       <PanelBar label="yield_standardization" right="60s refresh" />
-      <table className="w-full border-collapse font-mono text-[13px] [&_tr:last-child>td]:border-b-0">
-        <thead>
-          <tr>
-            <th className={th}>Protocol</th>
-            <th className={th}>Chain</th>
-            <th className={th}>Raw APY</th>
-            <th className={cn(th, 'text-right')}>Standardized</th>
-          </tr>
-        </thead>
-        <tbody>
-          {standardRows.map((r) => (
-            <tr key={r[0]}>
-              <td
-                className={cn(
-                  td,
-                  'text-foreground font-sans text-[13.5px] font-semibold'
-                )}
-              >
-                {r[0]}
-              </td>
-              <td className={cn(td, 'text-muted-foreground')}>{r[1]}</td>
-              <td className={cn(td, 'text-muted-foreground')}>{r[2]}</td>
-              <td className={cn(td, 'text-rose text-right font-semibold')}>
-                {r[3]}
-              </td>
+      {/* the 4 columns don't fit under ~430px — scroll the table, not the page */}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[420px] border-collapse font-mono text-[13px] [&_tr:last-child>td]:border-b-0">
+          <thead>
+            <tr>
+              <th className={th}>Protocol</th>
+              <th className={th}>Chain</th>
+              <th className={th}>Raw APY</th>
+              <th className={cn(th, 'text-right')}>Standardized</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {standardRows.map((r) => (
+              <tr key={r[0]}>
+                <td
+                  className={cn(
+                    td,
+                    'text-foreground font-sans text-[13.5px] font-semibold whitespace-nowrap'
+                  )}
+                >
+                  {r[0]}
+                </td>
+                <td
+                  className={cn(td, 'text-muted-foreground whitespace-nowrap')}
+                >
+                  {r[1]}
+                </td>
+                <td
+                  className={cn(td, 'text-muted-foreground whitespace-nowrap')}
+                >
+                  {r[2]}
+                </td>
+                <td
+                  className={cn(
+                    td,
+                    'text-rose text-right font-semibold whitespace-nowrap'
+                  )}
+                >
+                  {r[3]}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Panel>
   )
 }
@@ -215,6 +224,9 @@ function OptimizerPanel() {
                 )}
                 style={
                   {
+                    // inline width is the reduced-motion / no-JS end state;
+                    // the gated slide-in animation overrides it while playing
+                    width: `${p.pct}%`,
                     '--target-width': `${p.pct}%`,
                     '--animation-delay': `${index * 0.15}s`,
                   } as CSSProperties
@@ -238,15 +250,19 @@ function OptimizerPanel() {
   )
 }
 
+function CodeLine({ n, children }: { n: number; children: ReactNode }) {
+  return <div style={{ '--line': n } as CSSProperties}>{children}</div>
+}
+
 function ApiPanel() {
   return (
-    <Panel data-panel="api">
+    <Panel>
       <PanelBar label="graphql_playground" right="connected" />
       <div className="code-typing text-muted-foreground px-[22px] py-5 font-mono text-[13px] leading-[1.75]">
-        <div>
+        <CodeLine n={1}>
           <span className="text-rose">query</span> {'{'}
-        </div>
-        <div>
+        </CodeLine>
+        <CodeLine n={2}>
           &nbsp;&nbsp;<span className="text-foreground">pools</span>(
           <span className="text-foreground">chain</span>:{' '}
           <span className="text-[oklch(0.62_0.06_140)]">
@@ -256,23 +272,23 @@ function ApiPanel() {
           <span className="text-foreground">apy</span>,{' '}
           <span className="text-foreground">first</span>:{' '}
           <span className="text-[oklch(0.68_0.08_80)]">5</span>) {'{'}
-        </div>
-        <div>
+        </CodeLine>
+        <CodeLine n={3}>
           &nbsp;&nbsp;&nbsp;&nbsp;
           <span className="text-foreground">protocol</span>
-        </div>
-        <div>
+        </CodeLine>
+        <CodeLine n={4}>
           &nbsp;&nbsp;&nbsp;&nbsp;<span className="text-foreground">tvl</span>
-        </div>
-        <div>
+        </CodeLine>
+        <CodeLine n={5}>
           &nbsp;&nbsp;&nbsp;&nbsp;<span className="text-foreground">apy</span>
-        </div>
-        <div>
+        </CodeLine>
+        <CodeLine n={6}>
           &nbsp;&nbsp;&nbsp;&nbsp;
           <span className="text-foreground">apyStandardized</span>
-        </div>
-        <div>&nbsp;&nbsp;{'}'}</div>
-        <div>{'}'}</div>
+        </CodeLine>
+        <CodeLine n={7}>&nbsp;&nbsp;{'}'}</CodeLine>
+        <CodeLine n={8}>{'}'}</CodeLine>
       </div>
       <div className="border-border/60 text-ink-faint flex gap-4 border-t px-[22px] py-3 font-mono text-[12px]">
         <b className="text-rose font-medium">200</b> response · 42ms{' '}
@@ -355,6 +371,86 @@ function PortfolioPanel() {
   )
 }
 
+const features = [
+  {
+    id: 'standard',
+    eyebrow: 'Standard',
+    title: 'Market intelligence',
+    body: 'Our engine standardizes lending yield data across protocols, vaults and chains, adjusting for rate conventions and averaging windows. Compare protocols, vaults and chains using standardized metrics, historical trends and market context.',
+    points: [
+      {
+        b: 'Multi-chain coverage',
+        s: 'Standardized yields across Aave, Morpho, Compound and more.',
+      },
+      {
+        b: 'Live market data',
+        s: 'APYs and market conditions updated every 60 seconds.',
+      },
+      {
+        b: 'Historical trends',
+        s: 'Compare APY trends across markets and vaults.',
+      },
+    ],
+    visual: <StandardPanel />,
+  },
+  {
+    id: 'optimizer',
+    eyebrow: 'Optimizer',
+    title: 'Optimization engine',
+    body: 'Optimize lending and borrowing across protocols, vaults and chains using configurable risk preferences and market constraints.',
+    points: [
+      {
+        b: 'Smart strategy',
+        s: 'Identify opportunities based on yield, risk and market conditions.',
+      },
+      {
+        b: 'Risk-aware',
+        s: 'Configure risk preferences and diversification levels.',
+      },
+      {
+        b: 'Auto-rebalance',
+        s: 'Automated on-chain rebalancing as markets evolve.',
+      },
+    ],
+    visual: <OptimizerPanel />,
+  },
+  {
+    id: 'api',
+    eyebrow: 'API',
+    title: 'Data layer',
+    body: 'Standardized lending yield, protocol and market data through a simple GraphQL API built for production integrations.',
+    points: [
+      {
+        b: 'GraphQL API',
+        s: 'Flexible query interface for any stack.',
+        href: '/docs/api/',
+      },
+      { b: '99.9% uptime SLA', s: 'Enterprise-grade reliability.' },
+      { b: 'Webhooks', s: 'Real-time yield change notifications.' },
+    ],
+    visual: <ApiPanel />,
+  },
+  {
+    id: 'portfolio',
+    eyebrow: 'Portfolio',
+    title: 'Portfolio tracker',
+    body: 'Connect your wallets and monitor lending positions, PnL and yield performance from a unified dashboard.',
+    points: [
+      {
+        b: 'Multi-wallet support',
+        s: 'Connect unlimited addresses.',
+        href: '/portfolio',
+      },
+      { b: 'Smart alerts', s: 'Stay informed on market movements.' },
+      {
+        b: 'Full history',
+        s: 'Access historical yields and transactions.',
+      },
+    ],
+    visual: <PortfolioPanel />,
+  },
+]
+
 export function Features() {
   return (
     <section
@@ -363,91 +459,16 @@ export function Features() {
       data-screen-label="Features"
     >
       <div className="wrap py-[110px]">
-        <Feature
-          first
-          id="standard"
-          idx="01"
-          eyebrow="Standard"
-          title="Market intelligence"
-          body="Our engine standardizes lending yield data across protocols, vaults and chains, adjusting for rate conventions and averaging windows. Compare protocols, vaults and chains using standardized metrics, historical trends and market context."
-          points={[
-            {
-              b: 'Multi-chain coverage',
-              s: 'Standardized yields across Aave, Morpho, Compound and more.',
-            },
-            {
-              b: 'Live market data',
-              s: 'APYs and market conditions updated every 60 seconds.',
-            },
-            {
-              b: 'Historical trends',
-              s: 'Compare APY trends across markets and vaults.',
-            },
-          ]}
-          visual={<StandardPanel />}
-        />
-        <Feature
-          flip
-          id="optimizer"
-          idx="02"
-          eyebrow="Optimizer"
-          title="Optimization engine"
-          body="Optimize lending and borrowing across protocols, vaults and chains using configurable risk preferences and market constraints."
-          points={[
-            {
-              b: 'Smart strategy',
-              s: 'Identify opportunities based on yield, risk and market conditions.',
-            },
-            {
-              b: 'Risk-aware',
-              s: 'Configure risk preferences and diversification levels.',
-            },
-            {
-              b: 'Auto-rebalance',
-              s: 'Automated on-chain rebalancing as markets evolve.',
-            },
-          ]}
-          visual={<OptimizerPanel />}
-        />
-        <Feature
-          id="api"
-          idx="03"
-          eyebrow="API"
-          title="Data layer"
-          body="Standardized lending yield, protocol and market data through a simple GraphQL API built for production integrations."
-          points={[
-            {
-              b: 'GraphQL API',
-              s: 'Flexible query interface for any stack.',
-              href: '/docs/api/',
-            },
-            { b: '99.9% uptime SLA', s: 'Enterprise-grade reliability.' },
-            { b: 'Webhooks', s: 'Real-time yield change notifications.' },
-          ]}
-          visual={<ApiPanel />}
-        />
-        <Feature
-          flip
-          last
-          id="portfolio"
-          idx="04"
-          eyebrow="Portfolio"
-          title="Portfolio tracker"
-          body="Connect your wallets and monitor lending positions, PnL and yield performance from a unified dashboard."
-          points={[
-            {
-              b: 'Multi-wallet support',
-              s: 'Connect unlimited addresses.',
-              href: '/portfolio',
-            },
-            { b: 'Smart alerts', s: 'Stay informed on market movements.' },
-            {
-              b: 'Full history',
-              s: 'Access historical yields and transactions.',
-            },
-          ]}
-          visual={<PortfolioPanel />}
-        />
+        {features.map((f, i) => (
+          <Feature
+            key={f.id}
+            {...f}
+            idx={String(i + 1).padStart(2, '0')}
+            flip={i % 2 === 1}
+            first={i === 0}
+            last={i === features.length - 1}
+          />
+        ))}
       </div>
     </section>
   )

@@ -14,8 +14,8 @@ export function Footer() {
   return (
     <footer className="bg-background" data-screen-label="Footer">
       <div className="wrap pt-[72px] pb-10">
-        <div className="border-border/60 grid grid-cols-[2fr_1fr_1fr_1fr] gap-10 border-b pb-14 max-[960px]:grid-cols-2 max-[560px]:grid-cols-1">
-          <div>
+        <div className="border-border/60 max-desk:grid-cols-2 grid grid-cols-[2fr_1fr_1fr_1fr] gap-10 border-b pb-14">
+          <div className="max-desk:col-span-2">
             <Logo className="mb-4" />
             <p className="text-ink-faint m-0 max-w-[30ch] text-[13.5px] leading-[1.6]">
               The unified yield aggregation and optimization platform for DeFi.
@@ -41,29 +41,24 @@ export function Footer() {
             </div>
           ))}
         </div>
-        <div className="text-ink-faint flex items-center gap-6 pt-6 font-mono text-[11.5px]">
-          <span>© 2026 Lendwise. All rights reserved.</span>
-          <span className="ml-auto flex gap-5">
-            <Link
-              className="text-ink-faint hover:text-muted-foreground"
-              href="#"
-            >
-              Terms
-            </Link>
-            <Link
-              className="text-ink-faint hover:text-muted-foreground"
-              href="#"
-            >
-              Privacy
-            </Link>
-            <Link
-              className="text-ink-faint hover:text-muted-foreground"
-              href="#"
-            >
-              Cookies
-            </Link>
+        {/* below `desk` the row stacks and reorders: links, switcher, then the
+         * copyright last */}
+        <div className="text-ink-faint max-desk:flex-col max-desk:gap-4 flex items-center gap-6 pt-6 font-mono text-[11.5px]">
+          <span className="max-desk:order-3 max-desk:text-center">
+            © 2026 Lendwise. All rights reserved.
           </span>
-          <ThemeSwitcher className="border-border h-7 w-7 rounded-md border hover:bg-transparent hover:text-emerald-500 dark:hover:bg-transparent" />
+          <span className="max-desk:order-1 max-desk:ml-0 ml-auto flex gap-5">
+            {['Terms', 'Privacy', 'Cookies'].map((l) => (
+              <Link
+                key={l}
+                className="text-ink-faint hover:text-muted-foreground"
+                href="#"
+              >
+                {l}
+              </Link>
+            ))}
+          </span>
+          <ThemeSwitcher className="border-border max-desk:order-2 h-7 w-7 rounded-md border hover:bg-transparent hover:text-emerald-500 dark:hover:bg-transparent" />
         </div>
       </div>
     </footer>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { useTheme } from 'next-themes'
 
@@ -68,12 +68,28 @@ const easeInCubic = (t: number) => t * t * t
  * brand's maroon ramp that pop up on random cells, hold, then fade back into
  * the grid. Ambient hero background; respects reduced-motion and active theme.
  */
+// Matches the `desk` breakpoint in globals.css — the field is hidden (and never
+// animated) below it, where it only crowds the hero copy.
+const DESK = '(min-width: 960px)'
+
 export function CubeField() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
+  const [onDesk, setOnDesk] = useState(false)
 
   useEffect(() => {
+    const mq = window.matchMedia(DESK)
+    const sync = () => setOnDesk(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+
+  useEffect(() => {
+    // Wait for next-themes to resolve; painting before that flashes the wrong
+    // palette and the [resolvedTheme] re-run would wipe the field anyway.
+    if (!resolvedTheme || !onDesk) return
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
@@ -102,6 +118,9 @@ export function CubeField() {
     let spawnAt = 0
     let last = 0
     let raf = 0
+    let visible = true
+    let resizeTimer = 0
+    let floor: HTMLCanvasElement | null = null
 
     const occupied = (i: number, j: number) => {
       for (const c of cubes) if (c.i === i && c.j === j) return true
@@ -113,8 +132,7 @@ export function CubeField() {
       for (let tries = 0; tries < 8; tries++) {
         const cell = free[(Math.random() * free.length) | 0]
         if (occupied(cell.i, cell.j)) continue
-        const born =
-          typeof bornOffset === 'number' ? last - bornOffset : last
+        const born = typeof bornOffset === 'number' ? last - bornOffset : last
         cubes.push({
           i: cell.i,
           j: cell.j,
@@ -158,6 +176,8 @@ export function CubeField() {
       const seed = Math.round(free.length * (reduced ? 0.16 : 0.09))
       for (let n = 0; n < seed; n++) spawn(reduced ? -1 : (n / seed) * 1800)
       spawnAt = 0
+
+      buildFloor(dpr)
     }
 
     const tilePos = (i: number, j: number) => ({
@@ -165,18 +185,40 @@ export function CubeField() {
       y: oy - (i + j - maxDepth) * hh * 0.98,
     })
 
-    const drawTile = (x: number, y: number) => {
-      ctx.beginPath()
-      ctx.moveTo(x, y - hh)
-      ctx.lineTo(x + hw, y)
-      ctx.lineTo(x, y + hh)
-      ctx.lineTo(x - hw, y)
-      ctx.closePath()
-      ctx.fillStyle = theme.gridFill
-      ctx.fill()
-      ctx.strokeStyle = theme.gridLine
-      ctx.lineWidth = 1
-      ctx.stroke()
+    const drawTile = (c: CanvasRenderingContext2D, x: number, y: number) => {
+      c.beginPath()
+      c.moveTo(x, y - hh)
+      c.lineTo(x + hw, y)
+      c.lineTo(x, y + hh)
+      c.lineTo(x - hw, y)
+      c.closePath()
+      c.fillStyle = theme.gridFill
+      c.fill()
+      c.strokeStyle = theme.gridLine
+      c.lineWidth = 1
+      c.stroke()
+    }
+
+    // The floor never changes between resizes — paint it once offscreen and
+    // blit it each frame instead of re-pathing ~500 tiles at 60fps.
+    const buildFloor = (dpr: number) => {
+      floor = document.createElement('canvas')
+      floor.width = canvas.width
+      floor.height = canvas.height
+      const fctx = floor.getContext('2d')
+      if (!fctx) {
+        floor = null
+        return
+      }
+      fctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      for (let i = 0; i < iN; i++)
+        for (let j = 0; j < jN; j++) {
+          const p = tilePos(i, j)
+          const depthFade = 1 - ((i + j) / maxDepth) * 0.65
+          fctx.globalAlpha = Math.max(0.12, depthFade) * theme.alpha
+          drawTile(fctx, p.x, p.y)
+        }
+      fctx.globalAlpha = 1
     }
 
     const drawCube = (
@@ -230,18 +272,8 @@ export function CubeField() {
     const render = (now: number) => {
       ctx.clearRect(0, 0, W, H)
 
-      // 1) single-layer grid floor, back-to-front
-      const tiles: { i: number; j: number }[] = []
-      for (let i = 0; i < iN; i++)
-        for (let j = 0; j < jN; j++) tiles.push({ i, j })
-      tiles.sort((a, b) => a.i + a.j - (b.i + b.j))
-      for (const t of tiles) {
-        const p = tilePos(t.i, t.j)
-        const depthFade = 1 - ((t.i + t.j) / maxDepth) * 0.65
-        ctx.globalAlpha = Math.max(0.12, depthFade) * theme.alpha
-        drawTile(p.x, p.y)
-        ctx.globalAlpha = 1
-      }
+      // 1) single-layer grid floor, pre-rendered in buildFloor()
+      if (floor) ctx.drawImage(floor, 0, 0, W, H)
 
       // 2) cubes on top, farthest-first (painter's algorithm)
       cubes.sort((a, b) => b.i + b.j - (a.i + a.j))
@@ -259,7 +291,13 @@ export function CubeField() {
           alpha = 1 - p
         }
         const pos = tilePos(c.i, c.j)
-        drawCube(pos.x, pos.y, c.hMax * s * grow, c.pal, Math.max(0, alpha) * theme.alpha)
+        drawCube(
+          pos.x,
+          pos.y,
+          c.hMax * s * grow,
+          c.pal,
+          Math.max(0, alpha) * theme.alpha
+        )
       }
     }
 
@@ -267,9 +305,7 @@ export function CubeField() {
       const dt = Math.min(t - last, 60)
       last = t
 
-      cubes = cubes.filter(
-        (c) => t - c.born < c.appear + c.hold + c.vanish
-      )
+      cubes = cubes.filter((c) => t - c.born < c.appear + c.hold + c.vanish)
 
       const target = Math.round(free.length * 0.1)
       spawnAt -= dt
@@ -279,35 +315,61 @@ export function CubeField() {
       }
 
       render(t)
-      if (!reduced) raf = requestAnimationFrame(loop)
+      raf = visible ? requestAnimationFrame(loop) : 0
     }
 
-    const onResize = () => {
-      build()
-      if (reduced) {
-        last = performance.now()
-        render(last)
-      }
-    }
-
-    build()
-    if (reduced) {
-      last = performance.now()
-      // freeze all seeded cubes into hold state
-      for (const c of cubes) c.born = last - c.appear - 200
-      render(last)
-    } else {
+    // (Re)start the loop, shifting cube ages by the time spent stopped so the
+    // seed batch (born relative to last=0) and paused cubes don't all expire
+    // on the first frame's much larger rAF timestamp.
+    const startLoop = () => {
+      if (raf) return
       raf = requestAnimationFrame((t) => {
+        for (const c of cubes) c.born += t - last
         last = t
         loop(t)
       })
     }
+
+    const freeze = () => {
+      // freeze all cubes into hold state for a static render
+      last = performance.now()
+      for (const c of cubes) c.born = last - c.appear - 200
+      render(last)
+    }
+
+    const onResize = () => {
+      window.clearTimeout(resizeTimer)
+      resizeTimer = window.setTimeout(() => {
+        build()
+        if (reduced) freeze()
+      }, 150)
+    }
+
+    // Skip animation work entirely while the hero is scrolled out of view
+    const io = new IntersectionObserver((entries) => {
+      visible = entries[0]?.isIntersecting ?? true
+      if (reduced) return
+      if (visible) startLoop()
+      else {
+        cancelAnimationFrame(raf)
+        raf = 0
+      }
+    })
+    io.observe(canvas)
+
+    build()
+    if (reduced) freeze()
+    else startLoop()
     window.addEventListener('resize', onResize)
     return () => {
       cancelAnimationFrame(raf)
+      window.clearTimeout(resizeTimer)
+      io.disconnect()
       window.removeEventListener('resize', onResize)
     }
-  }, [isDark])
+  }, [resolvedTheme, isDark, onDesk])
+
+  if (!onDesk) return null
 
   return (
     <canvas
