@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 
 import { clampPage } from '@/lib/db/pagination'
 import { db } from '@/lib/db/postgres'
@@ -105,14 +105,32 @@ export async function syncProviderProducts(
   fetchedIds: string[],
   syncStartedAt: Date
 ): Promise<ProviderSyncResult> {
-  const currentlyActive = await db
-    .select({ id: products.id })
-    .from(products)
-    .where(and(eq(products.provider, provider), eq(products.active, true)))
-  const activeIds = new Set(currentlyActive.map((r) => r.id))
+  // Keyed on the OPEN PERIOD, not on `products.active`.
+  //
+  // These two say the same thing when all is well, but they are written by
+  // different statements and they DO drift — three products were left `active =
+  // false` with an open period, and a reconciliation driven by `active` never
+  // looked at them again: not active, so never a candidate for closing; period
+  // still open, so expected by gap detection and /status forever. Phantom gaps, and
+  // a heal job refetching a market that no longer exists, in perpetuity.
+  //
+  // The period table is what every downstream reader actually consults, so it is
+  // the thing to reconcile against. Doing so makes this self-healing: whatever
+  // state the two columns are in, one run converges them.
+  const open = await db
+    .select({ id: productAvailabilityPeriods.productId })
+    .from(productAvailabilityPeriods)
+    .innerJoin(products, eq(products.id, productAvailabilityPeriods.productId))
+    .where(
+      and(
+        eq(products.provider, provider),
+        isNull(productAvailabilityPeriods.deactivatedAt)
+      )
+    )
+  const openIds = new Set(open.map((r) => r.id))
 
   const returned = new Set(fetchedIds)
-  const staleIds = [...activeIds].filter((id) => !returned.has(id))
+  const staleIds = [...openIds].filter((id) => !returned.has(id))
 
   if (staleIds.length > 0) {
     await db

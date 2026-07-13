@@ -183,6 +183,24 @@ export async function reconcileDisplayFlags(
       .where(inArray(productDisplayFlags.productId, toClear))
   }
 
+  // Stamp every pool that REMAINS hidden, not just the ones whose state changed.
+  //
+  // A pool that is already hidden and stays hidden decides `unchanged`, so it never
+  // reaches the upsert above — which meant last_evaluated_at froze at the moment the
+  // pool was first flagged and never moved again. The column then says "last looked
+  // at 6 days ago" for a job that has been running fine every hour, and, far worse,
+  // says exactly the same thing for a job that died 6 days ago. It is the only signal
+  // that distinguishes the two, so it has to be written on every pass.
+  const stillFlagged = [...flaggedAtById.keys()].filter(
+    (id) => !toClear.includes(id)
+  )
+  if (stillFlagged.length > 0) {
+    await db
+      .update(productDisplayFlags)
+      .set({ lastEvaluatedAt: now })
+      .where(inArray(productDisplayFlags.productId, stillFlagged))
+  }
+
   return {
     evaluated: series.size,
     flagged: toFlag.length,
