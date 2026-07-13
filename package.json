@@ -17,6 +17,7 @@
     "clean:non-finite-apy": "dotenv -- tsx scripts/clean-non-finite-apy.ts",
     "clean:reward-spikes": "dotenv -- tsx scripts/clean-reward-spikes.ts",
     "clean:stale-heals": "dotenv -- tsx scripts/clean-stale-heals.ts",
+    "fix:availability": "dotenv -- tsx scripts/fix-availability-overshoot.ts",
     "dev": "next dev",
     "build": "pnpm codegen && next build",
     "start": "next start",

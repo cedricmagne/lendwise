@@ -144,13 +144,31 @@ export async function syncProviderProducts(
     )})`
     // Correlated subquery, NOT `UPDATE … FROM`: a FROM-join without a join key
     // cross-joins and rewrites every row in the table.
+    //
+    // The boundary is the hour after the last row we actually COLLECTED, capped at
+    // the moment the catalogue stopped listing the pool, and never before the
+    // period began. Each of the three parts earns its place:
+    //
+    //   last collected + 1h — the sync is a poll, so it learns of a delisting up to
+    //     an hour late. Closing at "now" would leave that hour expected and empty:
+    //     a phantom gap, and a heal attempt against a market that no longer exists.
+    //   `NOT healed` — a healed row is NOT evidence the market was alive. The heal
+    //     job fabricated two nearest-neighbor rows for one frxUSD market two days
+    //     AFTER it was delisted; a boundary drawn from max(hour) swallowed them and
+    //     held the period open across a stretch the pool did not exist in.
+    //   LEAST(…, syncStartedAt) — a hard cap. Whatever rows exist, a pool cannot be
+    //     expected past the point its provider stopped listing it.
     await db.execute(sql`
       UPDATE product_availability_periods pap
       SET deactivated_at = GREATEST(
-        COALESCE(
-          (SELECT date_trunc('hour', max(h.hour)) + interval '1 hour'
-             FROM apy_hourly h
-            WHERE h.product_id = pap.product_id),
+        LEAST(
+          COALESCE(
+            (SELECT date_trunc('hour', max(h.hour)) + interval '1 hour'
+               FROM apy_hourly h
+              WHERE h.product_id = pap.product_id
+                AND NOT h.healed),
+            ${syncStartedAt}
+          ),
           ${syncStartedAt}
         ),
         pap.activated_at
