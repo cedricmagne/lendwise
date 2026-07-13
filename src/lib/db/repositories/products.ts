@@ -145,15 +145,21 @@ export async function syncProviderProducts(
     // Correlated subquery, NOT `UPDATE … FROM`: a FROM-join without a join key
     // cross-joins and rewrites every row in the table.
     //
-    // The boundary is the hour after the last row we actually COLLECTED, capped at
-    // the moment the catalogue stopped listing the pool, and never before the
-    // period began. Each of the three parts earns its place:
+    // The boundary is the hour after the last hour the pool lived through WHOLE,
+    // capped at the moment the catalogue stopped listing it, and never before the
+    // period began. Each part of that earns its place:
     //
-    //   last collected + 1h — the sync is a poll, so it learns of a delisting up to
-    //     an hour late. Closing at "now" would leave that hour expected and empty:
-    //     a phantom gap, and a heal attempt against a market that no longer exists.
-    //   `NOT healed` — a healed row is NOT evidence the market was alive. The heal
-    //     job fabricated two nearest-neighbor rows for one frxUSD market two days
+    //   + 1h — the sync is a poll, so it learns of a delisting up to an hour late.
+    //     Closing at "now" would leave the intervening hours expected and empty: a
+    //     phantom gap, and a heal attempt against a market that no longer exists.
+    //   `quality_count >= 6` — the LAST hour of a pool's life is usually a partial
+    //     one: the market vanished from the API mid-hour, so we collected 1 spot of
+    //     6. Closing after it would mark that hour "expected" and score it
+    //     incomplete — reporting a defect where there was none. The pool did not
+    //     fail to report; it ceased to exist. Closing AT it drops a stub hour from
+    //     the denominator and keeps every hour the pool actually lived through.
+    //   `NOT healed` — a healed row is not evidence the market was alive. The heal
+    //     job fabricated two nearest-neighbor rows for an frxUSD market two days
     //     AFTER it was delisted; a boundary drawn from max(hour) swallowed them and
     //     held the period open across a stretch the pool did not exist in.
     //   LEAST(…, syncStartedAt) — a hard cap. Whatever rows exist, a pool cannot be
@@ -166,7 +172,8 @@ export async function syncProviderProducts(
             (SELECT date_trunc('hour', max(h.hour)) + interval '1 hour'
                FROM apy_hourly h
               WHERE h.product_id = pap.product_id
-                AND NOT h.healed),
+                AND NOT h.healed
+                AND h.quality_count >= 6),
             ${syncStartedAt}
           ),
           ${syncStartedAt}

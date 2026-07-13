@@ -76,14 +76,30 @@ type MarketsListQuery = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function emptyBorrowMarket(): BorrowMarketState {
+/**
+ * Market state for a healed borrow hour: UNKNOWN, not empty.
+ *
+ * Morpho's market-history query returns rates but no liquidity, so a healed borrow
+ * row genuinely has no market state. It used to record zeros — and a zero is not a
+ * blank, it is a CLAIM: "this market holds nothing". 1,595 rows asserted exactly
+ * that about markets holding tens of millions, and the display policy, reading
+ * `supply_assets_usd = 0`, dutifully hid two $27M markets as `empty_market`.
+ *
+ * NULL says what is true: we do not know. Every consumer already handles it —
+ * `minTvlUsd` skips the row, ORDER BY pushes it last, and the eligibility policy
+ * ignores healed rows outright (see MIN_QUALITY_COUNT in display-flags).
+ *
+ * The real fix is for MARKET_BORROW_HISTORY to fetch the liquidity timeseries
+ * alongside the rates; until then, an honest blank beats a confident zero.
+ */
+function unknownBorrowMarket(): BorrowMarketState {
   return {
-    supplyAssets: 0,
-    supplyAssetsUsd: 0,
-    borrowAssets: 0,
-    borrowAssetsUsd: 0,
-    utilizationRate: 0,
-    assetPriceUsd: 0,
+    supplyAssets: null,
+    supplyAssetsUsd: null,
+    borrowAssets: null,
+    borrowAssetsUsd: null,
+    utilizationRate: null,
+    assetPriceUsd: null,
     collateralAssetsUsd: null,
     priceCollateralInLoanAsset: null,
   }
@@ -379,7 +395,7 @@ export async function fetchMorphoHistory(opts?: {
           productId,
           kind: 'borrow',
           apy,
-          market: emptyBorrowMarket(),
+          market: unknownBorrowMarket(),
         })
       }
 

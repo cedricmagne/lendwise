@@ -241,19 +241,32 @@ export interface SupplyMarketState {
   assetPriceUsd: number
 }
 
+/**
+ * Every number here is nullable, because "we don't know" is a state the pipeline
+ * really does reach and the columns behind them have always been nullable.
+ *
+ * Morpho's market-history query returns rates but no liquidity, so a HEALED borrow
+ * hour has no market state at all. While this type insisted on `number`, the only
+ * way to satisfy it was to write zeros — and a zero is not a blank, it is a claim
+ * that the market holds nothing. 1,595 rows made that claim about markets holding
+ * tens of millions, and the display policy believed them and hid two $27M markets
+ * as `empty_market`.
+ *
+ * A type that cannot say "unknown" forces every writer to lie.
+ */
 export interface BorrowMarketState {
   /** Average total amount supplied in native token units. */
-  supplyAssets: number
+  supplyAssets: number | null
   /** Average total value supplied in USD. */
-  supplyAssetsUsd: number
+  supplyAssetsUsd: number | null
   /** Average total amount borrowed in native token units. */
-  borrowAssets: number
+  borrowAssets: number | null
   /** Average total value borrowed in USD. */
-  borrowAssetsUsd: number
+  borrowAssetsUsd: number | null
   /** Average borrow utilization rate — 0 to 1. */
-  utilizationRate: number
+  utilizationRate: number | null
   /** Average loan asset price in USD. */
-  assetPriceUsd: number
+  assetPriceUsd: number | null
   /**
    * Average total collateral in USD.
    * null for AAVE/Compound (multi-collateral).

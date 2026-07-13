@@ -42,7 +42,16 @@ import { sql } from 'drizzle-orm'
 
 import { db } from '@/lib/db/postgres'
 
-/** The boundary the period SHOULD have. Referenced by both the report and the update. */
+/**
+ * The boundary the period SHOULD have — the same expression syncProviderProducts
+ * uses. Referenced by both the report and the update, so they cannot disagree.
+ *
+ * `quality_count >= 6 AND NOT healed`: the hour after the last hour the pool lived
+ * through WHOLE. Its final hour is usually a stub — the market vanished from the
+ * API mid-hour, so 1 spot of 6 landed — and holding the period open past it marks
+ * that hour "expected" and scores it incomplete, reporting a defect where there was
+ * none. The pool did not fail to report; it ceased to exist.
+ */
 const corrected = sql`
   GREATEST(
     LEAST(
@@ -50,7 +59,8 @@ const corrected = sql`
         (SELECT date_trunc('hour', max(h.hour)) + interval '1 hour'
            FROM apy_hourly h
           WHERE h.product_id = pa.product_id
-            AND NOT h.healed),
+            AND NOT h.healed
+            AND h.quality_count >= 6),
         p.updated_at
       ),
       p.updated_at
