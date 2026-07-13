@@ -108,7 +108,25 @@ export async function reconcileDisplayFlags(
     flaggedRows.map((r) => [r.productId, r.flaggedAt])
   )
 
-  const toFlag: {
+  /**
+   * Every pool that is hidden AFTER this run — the newly hidden AND the ones that
+   * were already hidden and stay so.
+   *
+   * The row is rewritten for both, not just for the ones whose state changed. A
+   * pool that stays hidden decides `unchanged`, and an earlier version skipped it
+   * entirely: its `reason` and observed values froze at the instant it was first
+   * flagged and never moved again. That went wrong in the most misleading way
+   * possible — the two Morpho markets were first flagged from HEAL-written rows,
+   * whose market state is empty by construction, so they were recorded as
+   * `empty_market, TVL $0`. Once real collection resumed they turned out to hold
+   * $27.8M at 100% utilisation, and the frozen row went on insisting they were
+   * empty. A flag nobody can trust is a flag nobody will act on.
+   *
+   * So: the row always reflects the LATEST observation and the reason that holds
+   * NOW. Only `flagged_at` is preserved, because that one really is about the past
+   * — it marks when the current episode began.
+   */
+  const toPersist: {
     productId: string
     reason: IneligibilityReason
     flaggedAt: Date
@@ -117,6 +135,7 @@ export async function reconcileDisplayFlags(
     lastObservedTvlUsd: number | null
   }[] = []
   const toClear: string[] = []
+  let flagged = 0
   let unchanged = 0
 
   for (const [productId, observations] of series) {
@@ -127,25 +146,42 @@ export async function reconcileDisplayFlags(
     }))
 
     const action = decideFlag({ currentlyFlagged, recent })
-    if (action === 'unchanged') {
-      unchanged++
-      continue
-    }
+
     if (action === 'clear') {
       toClear.push(productId)
       continue
     }
+    if (action === 'unchanged') {
+      unchanged++
+      // An unflagged pool that stays unflagged has nothing to write.
+      if (!currentlyFlagged) continue
+    } else {
+      flagged++
+    }
 
+    // Reaching here means the pool is hidden from now on. Its newest observation
+    // decides the reason — which can legitimately CHANGE between runs without the
+    // pool ever becoming visible: a market that empties out flips `outlier_apy` →
+    // `empty_market`, and one that refills flips back.
     const latest = observations[0]
     const reason = ineligibilityReason(recent[0])
-    // decideFlag only returns 'flag' when every observation in the window is
-    // ineligible, so the newest one necessarily has a reason.
-    if (!reason) continue
-    toFlag.push({
+    // Defensive: a still-flagged pool whose newest hour is fine but which has not
+    // yet earned its 12 clean hours has no reason to record. Keep the row as it is
+    // rather than invent one.
+    if (!reason) {
+      if (currentlyFlagged) {
+        await db
+          .update(productDisplayFlags)
+          .set({ lastEvaluatedAt: now })
+          .where(eq(productDisplayFlags.productId, productId))
+      }
+      continue
+    }
+
+    toPersist.push({
       productId,
       reason,
-      // Preserve the start of the episode across re-flags of an already-hidden
-      // pool; a newly hidden one starts its episode now.
+      // The episode start survives; everything else is refreshed.
       flaggedAt: flaggedAtById.get(productId) ?? now,
       lastObservedHour: latest.hour,
       lastObservedApyNet: latest.apyNet,
@@ -153,13 +189,13 @@ export async function reconcileDisplayFlags(
     })
   }
 
-  if (toFlag.length > 0) {
+  if (toPersist.length > 0) {
     const CHUNK = 200
-    for (let i = 0; i < toFlag.length; i += CHUNK) {
+    for (let i = 0; i < toPersist.length; i += CHUNK) {
       await db
         .insert(productDisplayFlags)
         .values(
-          toFlag
+          toPersist
             .slice(i, i + CHUNK)
             .map((f) => ({ ...f, lastEvaluatedAt: now }))
         )
@@ -183,27 +219,9 @@ export async function reconcileDisplayFlags(
       .where(inArray(productDisplayFlags.productId, toClear))
   }
 
-  // Stamp every pool that REMAINS hidden, not just the ones whose state changed.
-  //
-  // A pool that is already hidden and stays hidden decides `unchanged`, so it never
-  // reaches the upsert above — which meant last_evaluated_at froze at the moment the
-  // pool was first flagged and never moved again. The column then says "last looked
-  // at 6 days ago" for a job that has been running fine every hour, and, far worse,
-  // says exactly the same thing for a job that died 6 days ago. It is the only signal
-  // that distinguishes the two, so it has to be written on every pass.
-  const stillFlagged = [...flaggedAtById.keys()].filter(
-    (id) => !toClear.includes(id)
-  )
-  if (stillFlagged.length > 0) {
-    await db
-      .update(productDisplayFlags)
-      .set({ lastEvaluatedAt: now })
-      .where(inArray(productDisplayFlags.productId, stillFlagged))
-  }
-
   return {
     evaluated: series.size,
-    flagged: toFlag.length,
+    flagged,
     cleared: toClear.length,
     unchanged,
   }
