@@ -1,5 +1,7 @@
-import { and, asc, desc, eq, gte, lte, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
+import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 
+import { MAX_PRODUCT_IDS, clampPage } from '@/lib/db/pagination'
 import { db } from '@/lib/db/postgres'
 import { apyDaily, apyHourly, products } from '@/lib/db/schema'
 import type {
@@ -282,25 +284,143 @@ export async function apyEnrichments(
 export interface ApyFilters {
   kind: 'supply' | 'borrow'
   productId?: string // exact products.id PK match — no parsing
+  productIds?: string[] // exact PK batch — lets a client fetch N products in one query
   protocol?: string // 'aave' | 'morpho' | 'compound' (or '<provider>_<version>')
   market?: string // protocol_name, e.g. "AaveV3Ethereum"
   chainId?: number
   asset?: string // asset symbol — NOW actually applied
   collateral?: string // borrow only; matched against collaterals jsonb
+  minTvlUsd?: number // floor on supply_assets_usd — thin markets are APY noise
   from?: Date
   to?: Date
 }
 
+/** Window an hourly read falls back to when the caller gives no `from`. */
+const HOURLY_DEFAULT_HOURS = 24
+
+/** Window a daily read falls back to when the caller gives no `from`. */
+const DAILY_DEFAULT_DAYS = 30
+
+/**
+ * Sortable fields. `time` maps to `hour` (hourly) or `date` (daily), so one
+ * union serves both grains. `borrowAssetsUsd` is only meaningful for borrow.
+ */
+export type ApyOrderBy =
+  | 'time'
+  | 'apyNet'
+  | 'apyBase'
+  | 'supplyAssetsUsd'
+  | 'utilizationRate'
+  | 'borrowAssetsUsd'
+
 export interface Page {
   first: number
   skip: number
-  orderBy: 'hour' | 'date'
+  orderBy: ApyOrderBy
   orderDir: 'asc' | 'desc'
+}
+
+/**
+ * The orderable columns, structurally. Both apy_hourly and apy_daily satisfy
+ * this, as does the `latest` CTE — their column sets are identical apart from
+ * the time column, which is passed separately.
+ */
+interface OrderableColumns {
+  apyNet: AnyPgColumn
+  apyBase: AnyPgColumn
+  supplyAssetsUsd: AnyPgColumn
+  utilizationRate: AnyPgColumn
+  borrowAssetsUsd: AnyPgColumn
+}
+
+/** Resolve an ApyOrderBy to the real column on the table being read. */
+function orderColumn(
+  table: OrderableColumns,
+  timeCol: AnyPgColumn,
+  orderBy: ApyOrderBy
+): AnyPgColumn {
+  switch (orderBy) {
+    case 'time':
+      return timeCol
+    case 'apyNet':
+      return table.apyNet
+    case 'apyBase':
+      return table.apyBase
+    case 'supplyAssetsUsd':
+      return table.supplyAssetsUsd
+    case 'utilizationRate':
+      return table.utilizationRate
+    case 'borrowAssetsUsd':
+      return table.borrowAssetsUsd
+  }
+}
+
+/**
+ * ORDER BY with the tiebreaker, and with NULLs pushed to the end.
+ *
+ * Postgres defaults to NULLS FIRST on DESC, so `orderBy: supplyAssetsUsd,
+ * desc` would rank markets whose TVL is unknown ABOVE the genuinely largest
+ * ones. NULL means "we don't know", which is never the top of a "best" list.
+ *
+ * productId breaks ties: many products share an APY to float precision, and an
+ * unstable sort makes offset pagination repeat or skip rows across pages.
+ */
+function orderClause(
+  col: AnyPgColumn,
+  dir: 'asc' | 'desc',
+  productIdCol: AnyPgColumn
+) {
+  return [
+    dir === 'desc' ? sql`${col} DESC NULLS LAST` : sql`${col} ASC NULLS LAST`,
+    asc(productIdCol),
+  ]
+}
+
+/**
+ * Exclude rows whose core APY is NaN.
+ *
+ * Postgres `double precision` can hold NaN (a bad upstream APR→APY lands there),
+ * and Postgres sorts NaN ABOVE every real number — so a single NaN row would top
+ * every `orderBy: apyNet desc` ranking. It would also break the response
+ * outright: the GraphQL `Float!` serializer throws on NaN, failing the whole
+ * query rather than the one row. A NaN APY is not data; it never leaves the DB.
+ */
+function finiteApy(
+  table: OrderableColumns & { apyRewards: AnyPgColumn; apyFees: AnyPgColumn }
+) {
+  return sql`
+    ${table.apyNet} <> 'NaN'::float8 AND
+    ${table.apyBase} <> 'NaN'::float8 AND
+    ${table.apyRewards} <> 'NaN'::float8 AND
+    ${table.apyFees} <> 'NaN'::float8
+  `
+}
+
+/** Shared product-level predicates. Typed, indexed columns only — no productId parsing. */
+function productConds(f: ApyFilters) {
+  const conds = [eq(products.kind, f.kind)]
+  if (f.productId) conds.push(eq(products.id, f.productId))
+  if (f.productIds?.length)
+    conds.push(inArray(products.id, f.productIds.slice(0, MAX_PRODUCT_IDS)))
+  if (f.protocol) conds.push(eq(products.provider, f.protocol.split('_')[0]))
+  if (f.market) conds.push(eq(products.protocolName, f.market))
+  if (f.chainId) conds.push(eq(products.chainId, f.chainId))
+  if (f.asset) conds.push(eq(products.assetSymbol, f.asset))
+  if (f.collateral)
+    conds.push(
+      sql`${products.collaterals} @> ${JSON.stringify([{ symbol: f.collateral }])}::jsonb`
+    )
+  return conds
 }
 
 /**
  * Returns rows joined with their product, plus a total count, for a hourly/daily query.
  * Filters hit indexed columns on products — no regex, no full scan.
+ *
+ * The time window defaults HERE rather than in the resolver: without a `from`,
+ * an `orderBy: apyNet` sorts and counts every row ever retained (180 days ×
+ * ~700 products). Any caller that forgets to bound the range would otherwise
+ * silently reintroduce that scan.
  */
 export async function queryApy(
   grain: 'hourly' | 'daily',
@@ -310,22 +430,26 @@ export async function queryApy(
   // Column names are identical across both tables; cast for unified typing.
   const table = (grain === 'hourly' ? apyHourly : apyDaily) as typeof apyHourly
   const timeCol = grain === 'hourly' ? apyHourly.hour : apyDaily.date
+  const applied = clampPage(page)
 
-  const conds = [eq(products.kind, f.kind)]
-  if (f.productId) conds.push(eq(products.id, f.productId))
-  if (f.protocol) conds.push(eq(products.provider, f.protocol.split('_')[0]))
-  if (f.market) conds.push(eq(products.protocolName, f.market))
-  if (f.chainId) conds.push(eq(products.chainId, f.chainId))
-  if (f.asset) conds.push(eq(products.assetSymbol, f.asset))
-  if (f.collateral)
-    conds.push(
-      sql`${products.collaterals} @> ${JSON.stringify([{ symbol: f.collateral }])}::jsonb`
+  const from =
+    f.from ??
+    new Date(
+      Date.now() -
+        (grain === 'hourly'
+          ? HOURLY_DEFAULT_HOURS * 60 * 60 * 1000
+          : DAILY_DEFAULT_DAYS * 24 * 60 * 60 * 1000)
     )
-  if (f.from) conds.push(gte(timeCol, f.from))
+
+  const conds = productConds(f)
+  conds.push(finiteApy(table))
+  if (f.minTvlUsd != null) conds.push(gte(table.supplyAssetsUsd, f.minTvlUsd))
+  conds.push(gte(timeCol, from))
   if (f.to) conds.push(lte(timeCol, f.to))
   const where = and(...conds)
 
-  const order = page.orderDir === 'desc' ? desc(timeCol) : asc(timeCol)
+  const col = orderColumn(table, timeCol, page.orderBy)
+  const order = orderClause(col, page.orderDir, table.productId)
 
   const [countRows, rows] = await Promise.all([
     db
@@ -338,12 +462,76 @@ export async function queryApy(
       .from(table)
       .innerJoin(products, eq(table.productId, products.id))
       .where(where)
-      .orderBy(order)
-      .limit(Math.min(page.first, 10_000))
-      .offset(page.skip),
+      .orderBy(...order)
+      .limit(applied.first)
+      .offset(applied.skip),
   ])
 
-  return { rows, countTotal: countRows[0]?.n ?? 0 }
+  return { rows, countTotal: countRows[0]?.n ?? 0, applied }
+}
+
+// ─── Latest snapshot across all products ─────────────────────────────────────
+
+/**
+ * Hours of history the "latest" snapshot may draw from. Bounds the DISTINCT ON
+ * scan, and naturally drops products whose pipeline has stalled — a stale APY is
+ * worse than a missing one. A pipeline outage therefore looks like "fewer
+ * markets" here; /status is where gaps are surfaced.
+ */
+const LATEST_WINDOW_HOURS = 6
+
+/**
+ * The most recent hourly row per product, across the whole catalogue, sorted and
+ * paginated by any field. This is what answers "the best markets right now" —
+ * `latestHourlyNet` can't, because it takes explicit productIds and so discovers
+ * nothing.
+ *
+ * DISTINCT ON must sort by product_id first, which rules out sorting by APY in
+ * the same statement — hence the CTE: reduce to one row per product, then order
+ * the result.
+ */
+export async function queryLatestApy(f: ApyFilters, page: Page) {
+  const since = new Date(Date.now() - LATEST_WINDOW_HOURS * 60 * 60 * 1000)
+  const applied = clampPage(page)
+
+  const latest = db.$with('latest').as(
+    db
+      .selectDistinctOn([apyHourly.productId])
+      .from(apyHourly)
+      .where(and(gte(apyHourly.hour, since), finiteApy(apyHourly)))
+      .orderBy(apyHourly.productId, desc(apyHourly.hour))
+  )
+
+  const conds = productConds(f)
+  if (f.minTvlUsd != null) conds.push(gte(latest.supplyAssetsUsd, f.minTvlUsd))
+  const where = and(...conds)
+
+  const col = orderColumn(latest, latest.hour, page.orderBy)
+  const order = orderClause(col, page.orderDir, latest.productId)
+
+  const [countRows, rows] = await Promise.all([
+    db
+      .with(latest)
+      .select({ n: sql<number>`count(*)::int` })
+      .from(latest)
+      .innerJoin(products, eq(latest.productId, products.id))
+      .where(where),
+    db
+      .with(latest)
+      .select()
+      .from(latest)
+      .innerJoin(products, eq(latest.productId, products.id))
+      .where(where)
+      .orderBy(...order)
+      .limit(applied.first)
+      .offset(applied.skip),
+  ])
+
+  return {
+    rows: rows.map((r) => ({ row: r.latest, product: r.products })),
+    countTotal: countRows[0]?.n ?? 0,
+    applied,
+  }
 }
 
 // ─── Single-product time series ──────────────────────────────────────────────

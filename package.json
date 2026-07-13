@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "@creit-tech/stellar-wallets-kit": "npm:@jsr/creit-tech__stellar-wallets-kit@^2.3.0",
+    "@escape.tech/graphql-armor": "^3.2.0",
     "@graphql-typed-document-node/core": "^3.2.0",
     "@metamask/connect-multichain": "^0.15.0",
     "@metamask/sdk": "^0.34.0",
@@ -55,6 +56,8 @@
     "@tanstack/react-query": "^5.90.20",
     "@tanstack/react-table": "^8.21.3",
     "@upstash/qstash": "^2.9.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.0",
     "@urql/core": "^6.0.1",
     "@vercel/functions": "^3.4.2",
     "@wagmi/core": "^2.20.2",

@@ -207,6 +207,28 @@ export const typeDefs = /* GraphQL */ `
     desc
   }
 
+  """
+  Sortable fields for supply queries. \`time\` resolves to the hour (hourly) or
+  the date (daily), so one enum serves both grains.
+  """
+  enum SupplyApyOrderBy {
+    time
+    apyNet
+    apyBase
+    supplyAssetsUsd
+    utilizationRate
+  }
+
+  "Sortable fields for borrow queries."
+  enum BorrowApyOrderBy {
+    time
+    apyNet
+    apyBase
+    supplyAssetsUsd
+    borrowAssetsUsd
+    utilizationRate
+  }
+
   # ─── Supply results ─────────────────────────────────────────────────────────────
 
   type SupplyHourlyResult {
@@ -281,12 +303,46 @@ export const typeDefs = /* GraphQL */ `
     pagination: PaginationInfo!
   }
 
+  type ProductsResponse {
+    items: [Product!]!
+    pagination: PaginationInfo!
+  }
+
+  # ─── Facets ───────────────────────────────────────────────────────────────────
+
+  type AssetFacet {
+    symbol: String!
+    "Number of products matching the filters with this asset."
+    count: Int!
+  }
+
+  type ChainFacet {
+    id: Int!
+    "Canonical chain name, resolved from the chain ID."
+    name: String!
+    count: Int!
+  }
+
+  type ProtocolFacet {
+    name: ProtocolName!
+    count: Int!
+  }
+
+  "The filter values that actually exist, with counts — so a client never has to guess one."
+  type ProductFacets {
+    assets: [AssetFacet!]!
+    chains: [ChainFacet!]!
+    protocols: [ProtocolFacet!]!
+  }
+
   # ─── Inputs ───────────────────────────────────────────────────────────────────
 
   "Shared filters for hourly queries."
   input HourlyFilters {
     "Filter by exact productId — e.g. morpho:v1:ethereum:vault:0x…:supply."
     productId: String
+    "Filter by a batch of exact productIds — max 50."
+    productIds: [String!]
     "Filter by protocol name — aave | morpho | compound."
     protocol: ProtocolName
     "Filter by native market name — e.g. AaveV3Ethereum, MorphoBlueEthereum."
@@ -295,21 +351,74 @@ export const typeDefs = /* GraphQL */ `
     chainId: Int
     "Filter by loan asset symbol — e.g. USDC, WETH."
     asset: String
+    "Minimum supplied TVL in USD. In a thin market a headline APY is mostly noise."
+    minTvlUsd: Float
     "ISO date string — start of range (inclusive). Defaults to last 24h."
     from: String
     "ISO date string — end of range (inclusive)."
     to: String
   }
 
-  "Shared filters for daily queries."
-  input DailyFilters {
-    "Filter by exact productId — e.g. morpho:v1:ethereum:vault:0x…:supply."
+  """
+  Filters for the latest-snapshot queries.
+
+  Deliberately has no \`from\` / \`to\`: these queries always read the most recent
+  reading per product within a fixed 6-hour window. Accepting a time range here
+  and ignoring it would be a filter that silently does nothing.
+  """
+  input LatestFilters {
     productId: String
+    "Filter by a batch of exact productIds — max 50."
+    productIds: [String!]
     protocol: ProtocolName
     market: String
     chainId: Int
     asset: String
-    "ISO date string — start of range (inclusive)."
+    "Minimum supplied TVL in USD. In a thin market a headline APY is mostly noise."
+    minTvlUsd: Float
+  }
+
+  "Latest-snapshot filters for borrow products."
+  input LatestBorrowFilters {
+    productId: String
+    "Filter by a batch of exact productIds — max 50."
+    productIds: [String!]
+    protocol: ProtocolName
+    market: String
+    chainId: Int
+    asset: String
+    "Filter by collateral asset symbol."
+    collateral: String
+    minTvlUsd: Float
+  }
+
+  "Filters for the product registry. Typed columns only — the productId slug is never parsed."
+  input ProductFilters {
+    "Exact productId (primary key) — matched whole, never parsed."
+    productId: String
+    "supply | borrow."
+    kind: String
+    protocol: ProtocolName
+    market: String
+    chainId: Int
+    asset: String
+    "Defaults to true — only products still being tracked."
+    active: Boolean
+  }
+
+  "Shared filters for daily queries."
+  input DailyFilters {
+    "Filter by exact productId — e.g. morpho:v1:ethereum:vault:0x…:supply."
+    productId: String
+    "Filter by a batch of exact productIds — max 50."
+    productIds: [String!]
+    protocol: ProtocolName
+    market: String
+    chainId: Int
+    asset: String
+    "Minimum supplied TVL in USD. In a thin market a headline APY is mostly noise."
+    minTvlUsd: Float
+    "ISO date string — start of range (inclusive). Defaults to last 30 days."
     from: String
     "ISO date string — end of range (inclusive)."
     to: String
@@ -320,12 +429,17 @@ export const typeDefs = /* GraphQL */ `
   input BorrowHourlyFilters {
     "Filter by exact productId — e.g. aave:v3:ethereum:reserve:0x…:borrow."
     productId: String
+    "Filter by a batch of exact productIds — max 50."
+    productIds: [String!]
     protocol: ProtocolName
     market: String
     chainId: Int
     asset: String
     "Filter by collateral asset symbol."
     collateral: String
+    "Minimum supplied TVL in USD."
+    minTvlUsd: Float
+    "ISO date string — start of range (inclusive). Defaults to last 24h."
     from: String
     to: String
   }
@@ -333,11 +447,16 @@ export const typeDefs = /* GraphQL */ `
   input BorrowDailyFilters {
     "Filter by exact productId — e.g. aave:v3:ethereum:reserve:0x…:borrow."
     productId: String
+    "Filter by a batch of exact productIds — max 50."
+    productIds: [String!]
     protocol: ProtocolName
     market: String
     chainId: Int
     asset: String
     collateral: String
+    "Minimum supplied TVL in USD."
+    minTvlUsd: Float
+    "ISO date string — start of range (inclusive). Defaults to last 30 days."
     from: String
     to: String
     range: String
@@ -346,38 +465,71 @@ export const typeDefs = /* GraphQL */ `
   # ─── Queries ──────────────────────────────────────────────────────────────────
 
   type Query {
-    "Latest hourly APY snapshots for supply products."
+    "Hourly APY time series for supply products. \`first\` is capped at 500."
     supplyApyHourly(
       filters: HourlyFilters
       first: Int = 100
       skip: Int = 0
-      orderBy: String = "hour"
+      orderBy: SupplyApyOrderBy = time
       orderDirection: OrderDirection = asc
     ): SupplyHourlyResponse!
-    "Daily aggregated APY for supply products."
+    "Daily aggregated APY for supply products. \`first\` is capped at 500."
     supplyApyDaily(
       filters: DailyFilters
       first: Int = 100
       skip: Int = 0
-      orderBy: String = "date"
+      orderBy: SupplyApyOrderBy = time
       orderDirection: OrderDirection = asc
     ): SupplyDailyResponse!
-    "Latest hourly APY snapshots for borrow pools."
+    "Hourly APY time series for borrow pools. \`first\` is capped at 500."
     borrowApyHourly(
       filters: BorrowHourlyFilters
       first: Int = 100
       skip: Int = 0
-      orderBy: String = "hour"
+      orderBy: BorrowApyOrderBy = time
       orderDirection: OrderDirection = asc
     ): BorrowHourlyResponse!
-    "Daily aggregated APY for borrow pools."
+    "Daily aggregated APY for borrow pools. \`first\` is capped at 500."
     borrowApyDaily(
       filters: BorrowDailyFilters
       first: Int = 100
       skip: Int = 0
-      orderBy: String = "date"
+      orderBy: BorrowApyOrderBy = time
       orderDirection: OrderDirection = asc
     ): BorrowDailyResponse!
+
+    """
+    The single most recent snapshot per supply product, across the whole
+    catalogue — the "best markets right now" query. Only products with a reading
+    in the last 6 hours are returned; a stale APY is worse than a missing one.
+    """
+    latestSupplyApy(
+      filters: LatestFilters
+      first: Int = 100
+      skip: Int = 0
+      orderBy: SupplyApyOrderBy = apyNet
+      orderDirection: OrderDirection = desc
+    ): SupplyHourlyResponse!
+    "The single most recent snapshot per borrow product, across the whole catalogue."
+    latestBorrowApy(
+      filters: LatestBorrowFilters
+      first: Int = 100
+      skip: Int = 0
+      orderBy: BorrowApyOrderBy = apyNet
+      orderDirection: OrderDirection = desc
+    ): BorrowHourlyResponse!
+
+    "The product registry. \`first\` is capped at 500."
+    products(
+      filters: ProductFilters
+      first: Int = 100
+      skip: Int = 0
+    ): ProductsResponse!
+    """
+    Distinct assets / chains / protocols that exist, with counts. Call this first:
+    it is what stops a client from guessing a filter value that does not exist.
+    """
+    productFacets(filters: ProductFilters): ProductFacets!
   }
 `
 
