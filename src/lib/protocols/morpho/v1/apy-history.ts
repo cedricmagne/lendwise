@@ -3,6 +3,10 @@ import type { BorrowMarketState, SupplyMarketState } from '@/lib/db/types'
 import type { HistoryDataPoint } from '@/lib/protocols/aave/v3/apy-history'
 import { MORPHO_CONFIG } from '@/lib/protocols/morpho/config'
 import {
+  morphoMarketWhere,
+  morphoVaultWhere,
+} from '@/lib/protocols/morpho/v1/listing'
+import {
   MARKETS_APY,
   MARKET_BORROW_HISTORY,
   VAULTS_APY,
@@ -83,7 +87,7 @@ type MarketsListQuery = {
  * row genuinely has no market state. It used to record zeros — and a zero is not a
  * blank, it is a CLAIM: "this market holds nothing". 1,595 rows asserted exactly
  * that about markets holding tens of millions, and the display policy, reading
- * `supply_assets_usd = 0`, dutifully hid two $27M markets as `empty_market`.
+ * `supply_assets_usd = 0`, dutifully hid two $27M markets as `low_liquidity`.
  *
  * NULL says what is true: we do not know. Every consumer already handles it —
  * `minTvlUsd` skips the row, ORDER BY pushes it last, and the eligibility policy
@@ -176,7 +180,7 @@ export async function fetchMorphoHistory(opts?: {
       .query<VaultsListQuery>(VAULTS_APY, {
         first: 100,
         skip,
-        where: { listed: true, chainId_in: chainIds },
+        where: morphoVaultWhere(chainIds),
       })
       .toPromise()
 
@@ -303,11 +307,7 @@ export async function fetchMorphoHistory(opts?: {
       .query<MarketsListQuery>(MARKETS_APY, {
         first: 100,
         skip,
-        where: {
-          listed: true,
-          chainId_in: chainIds,
-          borrowAssetsUsd_gte: 10000,
-        },
+        where: morphoMarketWhere(chainIds),
       })
       .toPromise()
 

@@ -4,6 +4,7 @@ import { BorrowProduct } from '@/types'
 
 import { client } from '.'
 import { AAVE_CONFIG } from '../../config'
+import { listsBorrow } from '../listing'
 import { buildProductNetworkSlug, getNetworkName } from '../utils'
 import { ListBorrowProductsQuery } from './generated/graphql'
 import { LIST_BORROW_PRODUCTS } from './queries'
@@ -24,38 +25,40 @@ const _formatBorrowProducts = cache(
           lltv: Number(r.supplyInfo?.liquidationThreshold?.value ?? 0),
         }))
 
-      return market.reserves
-        .filter(
-          (reserve) =>
-            reserve.borrowInfo !== null &&
-            reserve.borrowInfo?.borrowingState !== 'DISABLED'
-        )
-        .map((reserve): BorrowProduct => {
-          return {
-            protocol: AAVE_CONFIG.aave_v3.id,
-            network: getNetworkName(market.name),
-            poolName: reserve.underlyingToken.name,
-            poolId: market.address,
-            poolAddress: market.address,
-            poolChainId: market.chain.chainId,
-            assetAddress: reserve.underlyingToken.address,
-            assetName: reserve.underlyingToken.name,
-            assetSymbol: reserve.underlyingToken.symbol,
-            assetDecimals: reserve.underlyingToken.decimals,
-            assetAmount: reserve.size.amount.raw.toString(),
-            assetAmountUsd: reserve.size.usd,
-            liquidityAmount: String(
-              (reserve.supplyInfo.total.raw ?? 0) -
-                (reserve.borrowInfo?.total?.amount?.raw ?? 0)
-            ),
-            liquidityAmountUsd:
-              reserve.size.usd - (reserve.borrowInfo?.total?.usd ?? 0),
-            collaterals: collateralReserves,
-            apy: reserve.borrowInfo?.apy.value || 0,
-            productId: `aave:v3:${buildProductNetworkSlug(market.name)}:reserve:${reserve.underlyingToken.address.toLowerCase()}:borrow`,
-            link: `https://app.aave.com/reserve-overview/?underlyingAsset=${reserve.underlyingToken.address.toLowerCase()}&marketName=proto_${market.chain.name.toLowerCase()}_v3`,
-          }
-        })
+      return (
+        market.reserves
+          // The shared listing rule. This used `!== 'DISABLED'`, which is NOT the
+          // same predicate the catalogue used (`=== 'ENABLED'`): the enum has a third
+          // value, USER_EMODE_DISABLED_BORROW, that a `!==` test lets through. The
+          // /borrow page could therefore list a market the pipeline never collects.
+          .filter(listsBorrow)
+          .map((reserve): BorrowProduct => {
+            return {
+              protocol: AAVE_CONFIG.aave_v3.id,
+              network: getNetworkName(market.name),
+              poolName: reserve.underlyingToken.name,
+              poolId: market.address,
+              poolAddress: market.address,
+              poolChainId: market.chain.chainId,
+              assetAddress: reserve.underlyingToken.address,
+              assetName: reserve.underlyingToken.name,
+              assetSymbol: reserve.underlyingToken.symbol,
+              assetDecimals: reserve.underlyingToken.decimals,
+              assetAmount: reserve.size.amount.raw.toString(),
+              assetAmountUsd: reserve.size.usd,
+              liquidityAmount: String(
+                (reserve.supplyInfo.total.raw ?? 0) -
+                  (reserve.borrowInfo?.total?.amount?.raw ?? 0)
+              ),
+              liquidityAmountUsd:
+                reserve.size.usd - (reserve.borrowInfo?.total?.usd ?? 0),
+              collaterals: collateralReserves,
+              apy: reserve.borrowInfo?.apy.value || 0,
+              productId: `aave:v3:${buildProductNetworkSlug(market.name)}:reserve:${reserve.underlyingToken.address.toLowerCase()}:borrow`,
+              link: `https://app.aave.com/reserve-overview/?underlyingAsset=${reserve.underlyingToken.address.toLowerCase()}&marketName=proto_${market.chain.name.toLowerCase()}_v3`,
+            }
+          })
+      )
     })
 )
 

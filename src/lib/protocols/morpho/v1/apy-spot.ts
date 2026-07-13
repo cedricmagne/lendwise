@@ -15,6 +15,7 @@ import {
 } from '@/lib/protocols/morpho/v1/offchain/queries'
 import { createGraphQLClient } from '@/lib/protocols/shared'
 
+import { morphoMarketWhere, morphoVaultWhere } from './listing'
 import { buildProductId } from './utils'
 
 /**
@@ -57,11 +58,7 @@ export async function fetchMorphoV1ApySpot(
       .query<VaultsApyQuery>(VAULTS_APY, {
         first: 100,
         skip,
-        where: {
-          listed: true,
-          chainId_in: chainIds,
-          // totalAssetsUsd_gte: 10000,
-        },
+        where: morphoVaultWhere(chainIds),
       })
       .toPromise()
 
@@ -184,11 +181,7 @@ export async function fetchMorphoV1ApySpot(
       .query<MarketsApyQuery>(MARKETS_APY, {
         first: 100,
         skip,
-        where: {
-          listed: true,
-          chainId_in: chainIds,
-          borrowAssetsUsd_gte: 10000,
-        },
+        where: morphoMarketWhere(chainIds),
       })
       .toPromise()
 

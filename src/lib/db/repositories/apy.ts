@@ -149,8 +149,15 @@ export async function upsertHourlySlots(
       '[apy:upsert] products catalogue is empty — collecting unfiltered'
     )
   } else if (deduped.length < all.length) {
-    console.log(
-      `[apy:upsert] Skipped ${all.length - deduped.length} snapshots for unlisted products`
+    // Now that every protocol's collector and catalogue share ONE listing rule
+    // (lib/protocols/*/listing.ts), this should be zero on every slot. A non-zero
+    // count means the two enumerations have drifted apart again — the exact fault
+    // that quietly wrote ~18,500 orphan rows a week. It is not routine, so it is
+    // logged as the error it is: the drop itself is harmless (the rows are
+    // unreadable anyway), but the divergence upstream is not.
+    console.error(
+      `[apy:upsert] ENUMERATION DRIFT — ${all.length - deduped.length} snapshots for products the catalogue does not list. ` +
+        `The collector and the catalogue sync disagree; check lib/protocols/*/listing.ts.`
     )
   }
 

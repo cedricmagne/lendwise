@@ -19,9 +19,13 @@ export async function getSupplyProducts(): Promise<SupplyProduct[]> {
         .query<ListSupplyProductsQuery>(LIST_SUPPLY_PRODUCTS, {
           first: 100,
           skip,
+          // No TVL floor here. It used to be `totalAssetsUsd_gte: 100000` — a
+          // DISPLAY rule buried in a fetch, which meant this page and the public
+          // API applied different ones and disagreed about which pools exist. The
+          // floor now lives in lib/display-eligibility, applied on the read side,
+          // to every surface at once.
           where: {
             listed: true,
-            totalAssetsUsd_gte: 100000,
             chainId_in: Object.keys(MORPHO_CONFIG.morpho_v1.chains).map((key) =>
               Number(key)
             ),

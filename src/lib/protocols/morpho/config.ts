@@ -12,6 +12,13 @@ export const MORPHO_CONFIG: Record<string, ProtocolConfig> = {
     id: 'morpho_v1',
     name: 'Morpho v1',
     offchainApiUrl: 'https://api.morpho.org/graphql',
+    ingestion: {
+      // Morpho Blue is permissionless: anyone can deploy a market, and most are
+      // never borrowed from at all. This floor keeps them out of the pipeline.
+      // Vaults have no floor — a MetaMorpho vault's TVL is legitimately near zero
+      // while it is being seeded, and its APY is meaningful long before it is big.
+      minBorrowAssetsUsd: 10_000,
+    },
     chains: {
       [mainnet.id]: {
         ...mainnet,

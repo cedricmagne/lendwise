@@ -24,27 +24,27 @@ describe('ineligibilityReason', () => {
   it('rejects an empty market whatever it quotes', () => {
     // The pool that started all this: TVL $0, utilisation 0, quoting 297,996%.
     expect(ineligibilityReason({ tvlUsd: 0, apyNet: 2979.96 })).toBe(
-      'empty_market'
+      'low_liquidity'
     )
     // And the case magnitude alone would have missed: dead pool, plausible rate.
     expect(ineligibilityReason({ tvlUsd: 0, apyNet: 0.08 })).toBe(
-      'empty_market'
+      'low_liquidity'
     )
     expect(ineligibilityReason({ tvlUsd: 519.75, apyNet: 0.043 })).toBe(
-      'empty_market'
+      'low_liquidity'
     )
   })
 
   it('treats unknown liquidity as empty, not as passing', () => {
     expect(ineligibilityReason({ tvlUsd: null, apyNet: 0.05 })).toBe(
-      'empty_market'
+      'low_liquidity'
     )
   })
 
   it('reports the empty market as the cause when a pool is both', () => {
     // Both rules fire; the empty market is the root cause, the rate its symptom.
     expect(ineligibilityReason({ tvlUsd: 0, apyNet: 2979.96 })).toBe(
-      'empty_market'
+      'low_liquidity'
     )
   })
 

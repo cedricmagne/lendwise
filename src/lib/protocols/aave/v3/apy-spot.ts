@@ -10,6 +10,7 @@ import { MARKETS_APY } from '@/lib/protocols/aave/v3/offchain/queries'
 import { createGraphQLClient } from '@/lib/protocols/shared'
 import { aprToApyDaily, aprToApyPerSecond } from '@/lib/utils'
 
+import { listsBorrow } from './listing'
 import { buildProductId } from './utils'
 
 // ─── Merkl types ──────────────────────────────────────────────────────────────
@@ -404,7 +405,16 @@ export async function fetchAaveV3ApySpot(
         } as SupplyMarketState,
       }
 
+      snapshots.push(supplySpot)
+
       // ─── Borrow document ───────────────────────────────────────────────────
+      // The shared listing rule — the catalogue sync applies the same one, so the
+      // two enumerations cannot drift (see ./listing.ts). Without it this loop
+      // emitted a borrow snapshot for all 196 reserves while the catalogue
+      // registered the 85 that are actually borrowable, and the other 111 wrote
+      // ~2,600 orphan rows a day that no query could ever read.
+      if (!listsBorrow(reserve)) continue
+
       const borrowProductId = buildProductId(reserve, 'borrow')
 
       const borrowSpot: SpotPayload = {
@@ -435,12 +445,13 @@ export async function fetchAaveV3ApySpot(
         } as BorrowMarketState,
       }
 
-      snapshots.push(supplySpot, borrowSpot)
+      snapshots.push(borrowSpot)
     }
   }
 
+  const borrows = snapshots.filter((s) => s.kind === 'borrow').length
   console.log(
-    `[cron:aave] Fetched ${snapshots.length} spot documents (${snapshots.length / 2} reserves)`
+    `[cron:aave] Fetched ${snapshots.length} spot documents (${snapshots.length - borrows} supply + ${borrows} borrow)`
   )
   return snapshots
 }

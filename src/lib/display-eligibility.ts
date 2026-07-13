@@ -1,38 +1,61 @@
 /**
- * Display eligibility — the read-side filter layer.
+ * Display eligibility — the ONE place that decides what a user is shown.
  *
- * Strictly separate from ingestion. `/status` answers "did the protocol API
- * respond and did we store what it said?" and its only guard is
- * `isFiniteApyBlock`. THIS module answers a different question: "is a stored,
+ * The pipeline has three layers, and this is the middle one:
+ *
+ *   1. INGESTION — per protocol, in its config. The only filter allowed in a
+ *      query's `where`, and it exists solely to avoid collecting literal dust. It
+ *      must stay low, because it is the one IRREVERSIBLE decision in the system: a
+ *      pool we never collect has no history, and can never be given one. A market
+ *      at $80k that grows to $500k arrives with no 30-day mean, no 180-day stddev,
+ *      and nothing the MCP can say about whether it is stable.
+ *   2. ELIGIBILITY — here. Applied on the READ side, in SQL, before ordering,
+ *      counting and pagination, on every surface: /supply, /borrow, the public
+ *      GraphQL API, the MCP tools. Change a number here and it takes effect
+ *      everywhere, instantly, retroactively, with the full history intact. That
+ *      reversibility is the whole reason the filter belongs at read time and not
+ *      in the fetch.
+ *   3. RELEVANCE — `ApyFilters.minTvlUsd`, a per-row CONSUMER preference ("only
+ *      show me markets over $1M"), opt-in, stacked on top.
+ *
+ * Ingestion answers "did the protocol tell us?", and its only guard is
+ * `isFiniteApyBlock`. THIS module answers something else entirely: "is a stored,
  * perfectly-collected observation fit to put in front of a user?" A pool failing
  * these rules is still active, still collected, still counted as complete in the
- * pipeline heatmap. It is merely not shown.
+ * /status heatmap. It is merely not shown.
  *
  * Two ways a pool becomes unshowable:
  *
- *   - `empty_market` — no liquidity behind the quote. An IRM on a drained market
- *     returns arithmetic, not a rate: our two worst pools sit at TVL $0 with
- *     utilisation 0.000 and quote 297,996%. Below the floor nobody can deposit
- *     and the APY is numerically meaningless, so the number is noise whatever it
- *     says. This is the rule that survives the next weird IRM — magnitude alone
- *     would not have caught a dead pool quoting a plausible 8%.
- *   - `outlier_apy` — a rate no market can sustain, on a pool that does have
- *     liquidity. The backstop for the case the TVL floor misses.
+ *   - `low_liquidity` — not enough behind the quote to act on. This is the rule
+ *     that does most of the work, and the one that survives the next weird IRM:
+ *     magnitude alone would never have caught a $22k market quoting a plausible
+ *     342%, nor a dead pool quoting a plausible 8%.
+ *   - `outlier_apy` — a rate no market can sustain, on a pool that DOES have
+ *     liquidity. The backstop: two Morpho markets hold $27M and $8.9M at 100%
+ *     utilisation and quote 297,996%. Real IRM output, real money behind it, and
+ *     completely unactionable.
  *
- * Not to be confused with `ApyFilters.minTvlUsd`, which is a CONSUMER preference
- * ("only show me markets over $1M") applied per row and opt-in. Eligibility is a
- * property of the product, always on, and not negotiable by the caller — except
- * through the explicit `includeIneligible` raw-data escape hatch.
+ * Not negotiable by the caller — except through the explicit `includeIneligible`
+ * escape hatch, which is what a future "expert mode" toggle will flip.
  */
 
 export const DISPLAY_POLICY = {
   /**
-   * TVL floor, USD, on the latest `supply_assets_usd`. Chosen to match the
-   * `borrowAssetsUsd_gte: 10000` filter Morpho's own ingestion query already
-   * applies, so the two ends of the pipeline agree on what counts as a market.
-   * Hides 60 of 705 pools at time of writing.
+   * TVL floor, USD, on the latest organically-collected `supply_assets_usd`.
+   *
+   * $100k is where a market starts being one you can actually act on. Below it the
+   * APY is real but the liquidity is not: a $22k market at 342% would top the
+   * borrow rankings and be worth nothing to anyone.
+   *
+   * This number used to live in the protocol GraphQL queries themselves
+   * (`totalAssetsUsd_gte: 100000`), which meant it silently governed which pools
+   * the /supply and /borrow PAGES fetched, while the API and the MCP applied a
+   * different rule — two truths from one system. It lives here now, in one place,
+   * where changing it is a one-line, retroactive change.
+   *
+   * Hides ~168 of 701 pools at time of writing.
    */
-  minTvlUsd: 10_000,
+  minTvlUsd: 100_000,
 
   /**
    * Absolute net-APY ceiling, as a fraction (10 = 1000%). Rates are stored as
@@ -53,7 +76,7 @@ export const DISPLAY_POLICY = {
 } as const
 
 /** Why a pool is not shown. Recorded so "why is my pool missing?" is answerable. */
-export type IneligibilityReason = 'empty_market' | 'outlier_apy'
+export type IneligibilityReason = 'low_liquidity' | 'outlier_apy'
 
 /** The fields of one hourly observation the policy actually looks at. */
 export interface Observation {
@@ -64,7 +87,7 @@ export interface Observation {
 /**
  * The reason this observation is unshowable, or null if it is fine.
  *
- * `empty_market` is tested first: when a pool is both empty AND absurd (which is
+ * `low_liquidity` is tested first: when a pool is both empty AND absurd (which is
  * exactly what our two worst pools are), the empty market is the root cause and
  * the absurd rate is its symptom. Reporting the cause is more useful.
  *
@@ -75,7 +98,7 @@ export function ineligibilityReason(
   o: Observation
 ): IneligibilityReason | null {
   if (o.tvlUsd == null || o.tvlUsd < DISPLAY_POLICY.minTvlUsd) {
-    return 'empty_market'
+    return 'low_liquidity'
   }
   if (
     o.apyNet == null ||

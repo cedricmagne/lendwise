@@ -24,7 +24,7 @@ export interface ReconciliationResult {
  * landed, and no part of the row was reconstructed.
  *
  * `quality_count >= 6` alone is not enough, and the difference is not academic —
- * it is the bug that hid two real $27M markets as `empty_market`:
+ * it is the bug that hid two real $27M markets as `low_liquidity`:
  *
  *   - A REFETCH-healed row carries `quality_count = 6` and the protocol's true
  *     RATE, but Morpho's market-history query returns no liquidity, so its market
@@ -121,7 +121,7 @@ export async function reconcileDisplayFlags(
    * flagged and never moved again. That went wrong in the most misleading way
    * possible — the two Morpho markets were first flagged from HEAL-written rows,
    * whose market state is empty by construction, so they were recorded as
-   * `empty_market, TVL $0`. Once real collection resumed they turned out to hold
+   * `low_liquidity, TVL $0`. Once real collection resumed they turned out to hold
    * $27.8M at 100% utilisation, and the frozen row went on insisting they were
    * empty. A flag nobody can trust is a flag nobody will act on.
    *
@@ -165,7 +165,7 @@ export async function reconcileDisplayFlags(
     // Reaching here means the pool is hidden from now on. Its newest observation
     // decides the reason — which can legitimately CHANGE between runs without the
     // pool ever becoming visible: a market that empties out flips `outlier_apy` →
-    // `empty_market`, and one that refills flips back.
+    // `low_liquidity`, and one that refills flips back.
     const latest = observations[0]
     const reason = ineligibilityReason(recent[0])
     // Defensive: a still-flagged pool whose newest hour is fine but which has not

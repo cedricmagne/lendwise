@@ -173,7 +173,7 @@ export const productDisplayFlags = pgTable(
   'product_display_flags',
   {
     productId: text('product_id').primaryKey(),
-    reason: text('reason').notNull(), // 'empty_market' | 'outlier_apy'
+    reason: text('reason').notNull(), // 'low_liquidity' | 'outlier_apy'
     flaggedAt: timestamp('flagged_at', { withTimezone: true }).notNull(),
     lastEvaluatedAt: timestamp('last_evaluated_at', {
       withTimezone: true,

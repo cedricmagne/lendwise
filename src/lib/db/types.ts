@@ -250,7 +250,7 @@ export interface SupplyMarketState {
  * way to satisfy it was to write zeros — and a zero is not a blank, it is a claim
  * that the market holds nothing. 1,595 rows made that claim about markets holding
  * tens of millions, and the display policy believed them and hid two $27M markets
- * as `empty_market`.
+ * as `low_liquidity`.
  *
  * A type that cannot say "unknown" forces every writer to lie.
  */

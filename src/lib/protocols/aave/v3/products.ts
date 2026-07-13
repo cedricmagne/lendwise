@@ -4,6 +4,7 @@ import type { MarketsApyQuery } from '@/lib/protocols/aave/v3/offchain/generated
 import { MARKETS_APY } from '@/lib/protocols/aave/v3/offchain/queries'
 import { createGraphQLClient } from '@/lib/protocols/shared'
 
+import { listsBorrow } from './listing'
 import { buildProductId } from './utils'
 
 /**
@@ -112,8 +113,9 @@ export async function fetchAaveV3Products(
       products.push(supplyProduct)
 
       // ─── Borrow product ─────────────────────────────────────────────────────────────────────────
-      // Only create borrow product if borrowing is enabled
-      if (reserve.borrowInfo?.borrowingState === 'ENABLED') {
+      // The shared listing rule — the APY collector applies the same one, so the
+      // two enumerations cannot drift (see ./listing.ts).
+      if (listsBorrow(reserve)) {
         const borrowProduct: BorrowProduct = {
           _id: borrowId,
           kind: 'borrow',

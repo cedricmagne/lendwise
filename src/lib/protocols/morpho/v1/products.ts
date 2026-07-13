@@ -10,6 +10,7 @@ import {
 } from '@/lib/protocols/morpho/v1/offchain/queries'
 import { createGraphQLClient } from '@/lib/protocols/shared'
 
+import { morphoMarketWhere, morphoVaultWhere } from './listing'
 import { buildProductId } from './utils'
 
 /**
@@ -51,11 +52,7 @@ export async function fetchMorphoV1Products(
       .query<MarketsApyQuery>(MARKETS_APY, {
         first: 100,
         skip,
-        where: {
-          chainId_in: chainIds,
-          borrowAssetsUsd_gte: 10000,
-          listed: true,
-        },
+        where: morphoMarketWhere(chainIds),
       })
       .toPromise()
 
@@ -151,10 +148,7 @@ export async function fetchMorphoV1Products(
       .query<ListSupplyProductsQuery>(LIST_SUPPLY_PRODUCTS, {
         first: 100,
         skip,
-        where: {
-          chainId_in: chainIds,
-          listed: true,
-        },
+        where: morphoVaultWhere(chainIds),
       })
       .toPromise()
 

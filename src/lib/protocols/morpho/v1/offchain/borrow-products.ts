@@ -78,9 +78,10 @@ export async function getBorrowProducts(): Promise<BorrowProduct[]> {
         .query<ListBorrowProductsQuery>(LIST_BORROW_PRODUCTS, {
           first: 100,
           skip,
+          // No TVL floor here — see supply-products.ts. The $100k is now a single
+          // read-side rule in lib/display-eligibility, not a per-query one.
           where: {
             listed: true,
-            supplyAssetsUsd_gte: 100000,
             chainId_in: Object.keys(MORPHO_CONFIG.morpho_v1.chains).map((key) =>
               Number(key)
             ),
