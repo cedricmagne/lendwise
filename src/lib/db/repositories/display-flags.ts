@@ -20,10 +20,20 @@ export interface ReconciliationResult {
 }
 
 /**
- * A row is evidence only if the hour was actually collected. `quality_count >= 6`
+ * A row is evidence only if the hour was actually observed. `quality_count >= 6`
  * means all six 10-minute spots landed, so the hour's mean is a real mean and not
- * one unlucky sample. Healed rows count too: the policy judges the protocol's
- * RATE, not how we came by it.
+ * one unlucky sample.
+ *
+ * This also draws the right line through the two kinds of healed row, without
+ * having to name them:
+ *
+ *   - REFETCH-healed rows carry `quality_count = 6`, and they count. They are the
+ *     protocol's own data, merely fetched late from its history API.
+ *   - NEAREST-NEIGHBOR-healed rows carry `quality_count = 0`, and they do not.
+ *     Those are a verbatim copy of an adjacent hour (see the heal route) — APY and
+ *     TVL alike. Letting a copied TVL decide whether a pool is hidden would mean a
+ *     drained market inheriting a healthy neighbour's liquidity and slipping back
+ *     into the rankings on evidence that was never observed.
  */
 const MIN_QUALITY_COUNT = 6
 
