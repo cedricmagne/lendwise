@@ -353,6 +353,12 @@ export const typeDefs = /* GraphQL */ `
     asset: String
     "Minimum supplied TVL in USD. In a thin market a headline APY is mostly noise."
     minTvlUsd: Float
+    """
+    Include pools withheld from public rankings — empty markets (TVL below the
+    floor) and absurd rates. Raw-data escape hatch: OFF by default, so every
+    ordinary query is filtered before sorting, counting and pagination.
+    """
+    includeIneligible: Boolean
     "ISO date string — start of range (inclusive). Defaults to last 24h."
     from: String
     "ISO date string — end of range (inclusive)."
@@ -376,6 +382,12 @@ export const typeDefs = /* GraphQL */ `
     asset: String
     "Minimum supplied TVL in USD. In a thin market a headline APY is mostly noise."
     minTvlUsd: Float
+    """
+    Include pools withheld from public rankings — empty markets (TVL below the
+    floor) and absurd rates. Raw-data escape hatch: OFF by default, so every
+    ordinary query is filtered before sorting, counting and pagination.
+    """
+    includeIneligible: Boolean
   }
 
   "Latest-snapshot filters for borrow products."
@@ -390,6 +402,12 @@ export const typeDefs = /* GraphQL */ `
     "Filter by collateral asset symbol."
     collateral: String
     minTvlUsd: Float
+    """
+    Include pools withheld from public rankings — empty markets (TVL below the
+    floor) and absurd rates. Raw-data escape hatch: OFF by default, so every
+    ordinary query is filtered before sorting, counting and pagination.
+    """
+    includeIneligible: Boolean
   }
 
   "Filters for the product registry. Typed columns only — the productId slug is never parsed."
@@ -418,6 +436,12 @@ export const typeDefs = /* GraphQL */ `
     asset: String
     "Minimum supplied TVL in USD. In a thin market a headline APY is mostly noise."
     minTvlUsd: Float
+    """
+    Include pools withheld from public rankings — empty markets (TVL below the
+    floor) and absurd rates. Raw-data escape hatch: OFF by default, so every
+    ordinary query is filtered before sorting, counting and pagination.
+    """
+    includeIneligible: Boolean
     "ISO date string — start of range (inclusive). Defaults to last 30 days."
     from: String
     "ISO date string — end of range (inclusive)."
@@ -439,6 +463,12 @@ export const typeDefs = /* GraphQL */ `
     collateral: String
     "Minimum supplied TVL in USD."
     minTvlUsd: Float
+    """
+    Include pools withheld from public rankings — empty markets (TVL below the
+    floor) and absurd rates. Raw-data escape hatch: OFF by default, so every
+    ordinary query is filtered before sorting, counting and pagination.
+    """
+    includeIneligible: Boolean
     "ISO date string — start of range (inclusive). Defaults to last 24h."
     from: String
     to: String
@@ -456,6 +486,12 @@ export const typeDefs = /* GraphQL */ `
     collateral: String
     "Minimum supplied TVL in USD."
     minTvlUsd: Float
+    """
+    Include pools withheld from public rankings — empty markets (TVL below the
+    floor) and absurd rates. Raw-data escape hatch: OFF by default, so every
+    ordinary query is filtered before sorting, counting and pagination.
+    """
+    includeIneligible: Boolean
     "ISO date string — start of range (inclusive). Defaults to last 30 days."
     from: String
     to: String
@@ -464,7 +500,34 @@ export const typeDefs = /* GraphQL */ `
 
   # ─── Queries ──────────────────────────────────────────────────────────────────
 
+  """
+  One stretch during which a pool was listed by its protocol.
+
+  Half-open: \`activatedAt <= t < deactivatedAt\`. A null \`deactivatedAt\` means the
+  pool is listed right now.
+  """
+  type AvailabilityPeriod {
+    activatedAt: DateTime!
+    "null = still listed."
+    deactivatedAt: DateTime
+    "How the boundary was established — product-sync | migration."
+    detectedBy: String!
+  }
+
   type Query {
+    """
+    A pool's listing history, oldest first.
+
+    Ask for this alongside a time series when you intend to PLOT it. The series has
+    no rows for hours the pool was not listed, so a chart that simply connects its
+    points will draw a straight line across a stretch where the market did not
+    exist. Split the series on these boundaries and draw one segment per period.
+
+    It is also the only way to tell the two kinds of hole apart: data we failed to
+    collect (a defect — it gets healed) versus a pool that was not there (not a
+    defect — there is nothing to heal).
+    """
+    productAvailability(productId: String!): [AvailabilityPeriod!]!
     "Hourly APY time series for supply products. \`first\` is capped at 500."
     supplyApyHourly(
       filters: HourlyFilters

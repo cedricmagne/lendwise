@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 
 import { clampPage } from '@/lib/db/pagination'
 import { db } from '@/lib/db/postgres'
-import { products } from '@/lib/db/schema'
+import { productAvailabilityPeriods, products } from '@/lib/db/schema'
 import type { Product } from '@/lib/db/types'
 
 /** Map a fetched Product document (current Mongo-shaped object) → products row. */
@@ -65,19 +65,111 @@ export async function upsertProducts(items: Product[]): Promise<void> {
   }
 }
 
-/** Deactivate all currently-active products for the given providers. Returns count. */
-export async function deactivateProviders(
-  providers: string[]
-): Promise<number> {
-  if (providers.length === 0) return 0
-  const updated = await db
-    .update(products)
-    .set({ active: false, updatedAt: new Date() })
-    .where(
-      and(inArray(products.provider, providers), eq(products.active, true))
-    )
-    .returning({ id: products.id })
-  return updated.length
+export interface ProviderSyncResult {
+  /** Products the provider returned that had no open availability period. */
+  activated: number
+  /** Products that were active but the provider no longer lists. */
+  deactivated: number
+  /** Returned products that were already open — the overwhelming majority. */
+  unchanged: number
+}
+
+/**
+ * Reconcile one provider's catalogue against what it actually returned.
+ *
+ * Replaces the old "deactivate the whole provider, then re-upsert to bring the
+ * survivors back" sequence. That was destructive by construction: for the width of
+ * the sync every pool of the provider was inactive, and — worse — it left no trace
+ * of WHEN a pool came or went, so a delisting was indistinguishable from a
+ * pipeline outage and the heal job kept trying to fabricate rows for markets that
+ * no longer existed.
+ *
+ * Here nothing is torn down. Three disjoint cases, all keyed on exact product ids
+ * (the slug is never parsed):
+ *
+ *   returned + open period      → untouched
+ *   returned + no open period   → active = true, a NEW period opens (relisting)
+ *   active + not returned       → active = false, its open period is CLOSED
+ *
+ * MUST only be called for a provider whose enumeration actually succeeded. An
+ * empty list from a failed fetch would read as "the provider delisted everything"
+ * and close every period it owns.
+ *
+ * The closing boundary is the hour AFTER the pool's last stored observation, not
+ * the sync's own clock: the sync is a poll, not an event stream, so it learns about
+ * a delisting up to an hour late. Closing at "now" would leave that hour expected
+ * and missing — a phantom gap, and a heal attempt against a dead market.
+ */
+export async function syncProviderProducts(
+  provider: string,
+  fetchedIds: string[],
+  syncStartedAt: Date
+): Promise<ProviderSyncResult> {
+  const currentlyActive = await db
+    .select({ id: products.id })
+    .from(products)
+    .where(and(eq(products.provider, provider), eq(products.active, true)))
+  const activeIds = new Set(currentlyActive.map((r) => r.id))
+
+  const returned = new Set(fetchedIds)
+  const staleIds = [...activeIds].filter((id) => !returned.has(id))
+
+  if (staleIds.length > 0) {
+    await db
+      .update(products)
+      .set({ active: false, updatedAt: syncStartedAt })
+      .where(inArray(products.id, staleIds))
+
+    const ids = sql`(${sql.join(
+      staleIds.map((v) => sql`${v}`),
+      sql`, `
+    )})`
+    // Correlated subquery, NOT `UPDATE … FROM`: a FROM-join without a join key
+    // cross-joins and rewrites every row in the table.
+    await db.execute(sql`
+      UPDATE product_availability_periods pap
+      SET deactivated_at = GREATEST(
+        COALESCE(
+          (SELECT date_trunc('hour', max(h.hour)) + interval '1 hour'
+             FROM apy_hourly h
+            WHERE h.product_id = pap.product_id),
+          ${syncStartedAt}
+        ),
+        pap.activated_at
+      )
+      WHERE pap.product_id IN ${ids}
+        AND pap.deactivated_at IS NULL
+    `)
+  }
+
+  // Anything returned without an open period is newly listed OR relisted after a
+  // dead stretch. Both open a period; ON CONFLICT DO NOTHING absorbs the race
+  // where two syncs overlap (the partial unique index would otherwise raise).
+  let activated = 0
+  if (fetchedIds.length > 0) {
+    const ids = sql`(${sql.join(
+      fetchedIds.map((v) => sql`${v}`),
+      sql`, `
+    )})`
+    const res = await db.execute(sql`
+      INSERT INTO product_availability_periods (product_id, activated_at, deactivated_at, detected_by)
+      SELECT p.id, ${syncStartedAt}, NULL, 'product-sync'
+      FROM products p
+      WHERE p.id IN ${ids}
+        AND NOT EXISTS (
+          SELECT 1 FROM product_availability_periods pap
+          WHERE pap.product_id = p.id AND pap.deactivated_at IS NULL
+        )
+      ON CONFLICT DO NOTHING
+    `)
+    activated = res.rowCount ?? 0
+  }
+
+  return {
+    activated,
+    deactivated: staleIds.length,
+    unchanged: fetchedIds.length - activated,
+  }
 }
 
 /** Active product ids (+ createdAt) — used by gap detection / status. */
@@ -152,6 +244,35 @@ export async function queryProducts(
   ])
 
   return { rows, countTotal: countRows[0]?.n ?? 0, applied }
+}
+
+/**
+ * A product's listing history, oldest first.
+ *
+ * Exists so an APY chart can BREAK its line instead of drawing one. A pool that
+ * was delisted on the 3rd and relisted on the 9th has no rows in between; without
+ * this, a chart joins the last point before to the first point after and invents a
+ * six-day trend across a stretch where the market did not exist. With it, the
+ * series is drawn as one segment per period.
+ *
+ * It also disambiguates the two reasons a series can have a hole — the pipeline
+ * missed the data (a defect, and healable) versus the pool was not listed (not a
+ * defect, and nothing to heal). Only the periods can tell them apart.
+ */
+export async function listAvailabilityPeriods(
+  productId: string
+): Promise<
+  { activatedAt: Date; deactivatedAt: Date | null; detectedBy: string }[]
+> {
+  return db
+    .select({
+      activatedAt: productAvailabilityPeriods.activatedAt,
+      deactivatedAt: productAvailabilityPeriods.deactivatedAt,
+      detectedBy: productAvailabilityPeriods.detectedBy,
+    })
+    .from(productAvailabilityPeriods)
+    .where(eq(productAvailabilityPeriods.productId, productId))
+    .orderBy(asc(productAvailabilityPeriods.activatedAt))
 }
 
 export interface ProductFacets {

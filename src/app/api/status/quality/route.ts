@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { sql } from 'drizzle-orm'
 
 import { db } from '@/lib/db/postgres'
+import { expectedAt } from '@/lib/db/repositories/gaps'
 import { latestReport } from '@/lib/db/repositories/reports'
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
@@ -47,7 +48,8 @@ async function qualityHandler(): Promise<NextResponse> {
            count(*) FILTER (WHERE h.healed)::int AS healed,
            sum(h.quality_count)::int AS total_count
     FROM apy_hourly h JOIN products p ON p.id = h.product_id
-    WHERE h.hour >= ${windowStart} AND h.hour < ${queryEnd} AND p.active
+    WHERE h.hour >= ${windowStart} AND h.hour < ${queryEnd}
+      AND ${expectedAt(sql.raw('p'), sql.raw('h.hour'))}
     GROUP BY p.provider, h.hour
   `)
   const byProto = new Map<
@@ -84,10 +86,11 @@ async function qualityHandler(): Promise<NextResponse> {
   }
 
   // Per-(provider, hour) EXPECTED pool count — scoped exactly like gap detection
-  // (findGaps): only products collected at some point in the window, and only
-  // for hours at/after each product's created_at. Without this the denominator
-  // is today's full set for every past hour, so a market created mid-window
-  // shows as "missing" for the hours before it existed.
+  // (findGaps), through the same `expectedAt` predicate, so the heatmap's
+  // denominator and the healer's worklist can never drift apart. A pool counts for
+  // an hour only if it was actually listed then: a market created mid-window is not
+  // "missing" for the hours before it existed, and a delisted one stops being owed
+  // the moment it leaves — while keeping every hour it really did report.
   const expectedRes = await db.execute(sql`
     WITH boundaries AS (
       SELECT generate_series(
@@ -104,7 +107,7 @@ async function qualityHandler(): Promise<NextResponse> {
     FROM products p
     JOIN collected c ON c.product_id = p.id
     CROSS JOIN boundaries b
-    WHERE p.active AND b.hour >= date_trunc('hour', p.created_at)
+    WHERE ${expectedAt(sql.raw('p'), sql.raw('b.hour'))}
     GROUP BY p.provider, b.hour
   `)
   const expectedByProto = new Map<string, Map<string, number>>()

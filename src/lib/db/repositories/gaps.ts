@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm'
+import { type SQL, sql } from 'drizzle-orm'
 
 import { db } from '@/lib/db/postgres'
 
@@ -13,9 +13,34 @@ export interface IncompleteRow {
 }
 
 /**
- * Missing slots: active products × hour boundaries (after product creation)
- * that have no apy_hourly row in the window. Pure set difference via generate_series.
- * Only products with at least one row in the window are considered ("collected").
+ * "Was product `p` listed at hour `h`?" — the single definition of expected,
+ * shared by gap detection and /status so the heatmap and the healer can never
+ * disagree about what was owed.
+ *
+ * Replaces `p.active AND h >= p.created_at`, which was wrong in both directions:
+ * a delisted pool stayed expected forever (phantom gaps, and heal attempts against
+ * a market that no longer exists), while its genuinely-collected past hours
+ * disappeared from the denominator the moment it was delisted.
+ *
+ * @param p  the products alias, e.g. `sql.raw('p')`
+ * @param h  the hour being tested — a column (`sql.raw('b.hour')`) or a bound
+ *           value (`sql\`${hour}\``)
+ */
+export function expectedAt(p: SQL, h: SQL): SQL {
+  return sql`EXISTS (
+    SELECT 1 FROM product_availability_periods pap
+    WHERE pap.product_id = ${p}.id
+      AND pap.activated_at <= ${h}
+      AND (pap.deactivated_at IS NULL OR ${h} < pap.deactivated_at)
+  )`
+}
+
+/**
+ * Missing slots: hour boundaries a product was listed for but produced no
+ * apy_hourly row. Pure set difference via generate_series.
+ *
+ * Only products with at least one row in the window are considered ("collected") —
+ * a product that never reported at all is a catalogue problem, not a gap.
  */
 export async function findGaps(
   windowStart: Date,
@@ -34,7 +59,7 @@ export async function findGaps(
       FROM products p
       JOIN collected c ON c.product_id = p.id
       CROSS JOIN boundaries b
-      WHERE p.active AND b.hour >= date_trunc('hour', p.created_at)
+      WHERE ${expectedAt(sql.raw('p'), sql.raw('b.hour'))}
     )
     SELECT e.product_id, e.hour
     FROM expected e
@@ -48,17 +73,26 @@ export async function findGaps(
   }))
 }
 
-/** Incomplete slots: rows present but quality_count < 6 and not healed. */
+/**
+ * Incomplete slots: rows present but quality_count < 6 and not healed.
+ *
+ * Joined to availability for the same reason findGaps is: the final hour of a
+ * delisted pool is usually short (the market vanished mid-hour), and healing it
+ * means refetching a market that no longer exists. It is not a defect — nothing
+ * was owed for an hour the pool had already left.
+ */
 export async function findIncomplete(
   windowStart: Date,
   windowEnd: Date
 ): Promise<IncompleteRow[]> {
   const res = await db.execute(sql`
-    SELECT product_id, hour, quality_count
-    FROM apy_hourly
-    WHERE hour >= ${windowStart} AND hour < ${windowEnd}
-      AND quality_count < 6 AND healed = false
-    ORDER BY hour
+    SELECT h.product_id, h.hour, h.quality_count
+    FROM apy_hourly h
+    JOIN products p ON p.id = h.product_id
+    WHERE h.hour >= ${windowStart} AND h.hour < ${windowEnd}
+      AND h.quality_count < 6 AND h.healed = false
+      AND ${expectedAt(sql.raw('p'), sql.raw('h.hour'))}
+    ORDER BY h.hour
   `)
   return (
     res.rows as { product_id: string; hour: Date; quality_count: number }[]

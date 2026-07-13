@@ -2,7 +2,7 @@
 
 import type { ProtocolName } from '@/config/protocols'
 import {
-  deactivateProviders,
+  syncProviderProducts,
   upsertProducts,
 } from '@/lib/db/repositories/products'
 import type { BorrowProduct, Product, SupplyProduct } from '@/lib/db/types'
@@ -39,6 +39,9 @@ export type SyncProductsResult = {
   success: boolean
   counts: Partial<Record<ProtocolName, number>> & {
     total: number
+    /** Newly listed or relisted — a fresh availability period opened. */
+    activated: number
+    /** No longer listed by the provider — their open period was closed. */
     deactivated: number
   }
   errors: string[]
@@ -77,7 +80,7 @@ export async function syncProducts(
   if (tasks.length === 0) {
     return {
       success: false,
-      counts: { total: 0, deactivated: 0 },
+      counts: { total: 0, activated: 0, deactivated: 0 },
       errors: [`Unknown protocol: ${protocol}`],
       durationMs: 0,
     }
@@ -105,36 +108,10 @@ export async function syncProducts(
     }
   }
 
-  // ─── Deactivate products for successfully fetched protocols ──────────
-  // Only deactivate protocols whose fetch succeeded — a failed fetch must
-  // not cause all products for that protocol to disappear.
-  let deactivated = 0
-  const succeededProviders = new Set<string>()
-
-  for (let i = 0; i < results.length; i++) {
-    if (results[i].status === 'fulfilled') {
-      const protoId = tasks[i][0] // e.g. "aave_v3"
-      const provider = protoId.split('_')[0] // e.g. "aave"
-      succeededProviders.add(provider)
-    }
-  }
-
-  if (succeededProviders.size > 0) {
-    try {
-      deactivated = await deactivateProviders([...succeededProviders])
-
-      console.log(
-        `[sync:products] Deactivated ${deactivated} products` +
-          ` for providers: ${[...succeededProviders].join(', ')}`
-      )
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      errors.push(`deactivation: ${msg}`)
-      console.error('[sync:products] Failed to deactivate:', msg)
-    }
-  }
-
-  // ─── Upsert fetched products (re-activates them) ────────────────────
+  // ─── Upsert first ────────────────────────────────────────────────────
+  // Availability reconciliation opens periods by selecting FROM products, so the
+  // rows must exist before it runs. Upserting also flips a relisted product back
+  // to active = true.
   if (allProducts.length > 0) {
     try {
       await writeProductDocs(allProducts)
@@ -146,6 +123,42 @@ export async function syncProducts(
     }
   }
 
+  // ─── Reconcile availability, per provider ────────────────────────────
+  // ONLY for providers whose enumeration succeeded. A failed fetch yields an
+  // empty id list, which reconciliation would read as "this provider delisted its
+  // entire catalogue" — closing every period it owns and erasing the pipeline's
+  // expectations for hundreds of live pools.
+  const fetchedByProvider = new Map<string, string[]>()
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i]
+    if (result.status !== 'fulfilled') continue
+    const provider = tasks[i][0].split('_')[0] // "aave_v3" → "aave"
+    const ids = result.value.map((p) => p._id)
+    const existing = fetchedByProvider.get(provider)
+    if (existing) existing.push(...ids)
+    else fetchedByProvider.set(provider, ids)
+  }
+
+  let deactivated = 0
+  let activated = 0
+  const syncStartedAt = new Date(start)
+
+  for (const [provider, ids] of fetchedByProvider) {
+    try {
+      const r = await syncProviderProducts(provider, ids, syncStartedAt)
+      deactivated += r.deactivated
+      activated += r.activated
+      console.log(
+        `[sync:products] ${provider} — activated:${r.activated}` +
+          ` deactivated:${r.deactivated} unchanged:${r.unchanged}`
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      errors.push(`[${provider}] availability: ${msg}`)
+      console.error(`[sync:products] ${provider} availability failed:`, msg)
+    }
+  }
+
   const durationMs = Date.now() - start
   const countSummary = Object.entries(protoCounts)
     .map(([k, v]) => `${k}:${v}`)
@@ -153,12 +166,17 @@ export async function syncProducts(
 
   console.log(
     `[sync:products] Completed in ${durationMs}ms — ${countSummary}` +
-      ` total:${allProducts.length} deactivated:${deactivated}`
+      ` total:${allProducts.length} activated:${activated} deactivated:${deactivated}`
   )
 
   return {
     success: errors.length === 0,
-    counts: { ...protoCounts, total: allProducts.length, deactivated },
+    counts: {
+      ...protoCounts,
+      total: allProducts.length,
+      activated,
+      deactivated,
+    },
     errors,
     durationMs,
   }

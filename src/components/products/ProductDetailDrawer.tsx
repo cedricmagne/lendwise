@@ -9,6 +9,7 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  ReferenceArea,
   ReferenceLine,
   XAxis,
   YAxis,
@@ -21,6 +22,7 @@ import {
 import {
   type ProductHistoryPoint,
   loadProductApyHistory,
+  loadProductAvailability,
 } from '@/app/actions/product-apy-history.actions'
 import { NetworkBadge } from '@/components/badge/NetworkBadge'
 import { ProtocolBadge } from '@/components/badge/ProtocolBadge'
@@ -53,6 +55,12 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { useCurrency } from '@/contexts'
 import { useIsMobile } from '@/hooks/useMobile'
+import {
+  type DeadStretch,
+  type Period,
+  deadStretches,
+  withGaps,
+} from '@/lib/chart-availability'
 import { formatCompactCurrency } from '@/lib/format-currency'
 import {
   type BorrowProduct,
@@ -101,27 +109,56 @@ function HistoryChart({
   timeframe,
   valueFormatter,
   height = 170,
+  dead = [],
 }: {
   data: ProductHistoryPoint[]
   series: SeriesDef[]
   timeframe: TimeframeLabel
   valueFormatter: (value: number) => string
   height?: number
+  /** Stretches during which the pool was not listed by its protocol. */
+  dead?: DeadStretch[]
 }) {
   const config = Object.fromEntries(
     series.map((s) => [s.key, { label: s.label, color: s.color }])
   ) satisfies ChartConfig
   const hasData = data.length > 0
 
+  // An empty point inside each dead stretch. Recharts breaks a line on a point
+  // that EXISTS with a nil value, and jumps over a timestamp that is simply
+  // absent — so this, plus connectNulls={false}, cuts the line at delistings and
+  // ONLY there. Collection gaps stay absent from the array and go on being
+  // bridged, which is right: the market existed then, we just missed the reading.
+  const chartData = withGaps(data, dead)
+
   return (
     <div className="relative w-full" style={{ height }}>
       <ChartContainer config={config} className="h-full w-full">
         <ComposedChart
           accessibilityLayer
-          data={data}
+          data={chartData}
           margin={{ top: 8, right: 8, left: 4, bottom: 0 }}
         >
           <CartesianGrid vertical={false} />
+          {/* Name the hole. A bare break reads as "the chart is broken"; the
+              band says the pool was not there. */}
+          {dead.map((d) => (
+            <ReferenceArea
+              key={`${d.from}-${d.to}`}
+              x1={d.from}
+              x2={d.to}
+              fill="var(--muted-foreground)"
+              fillOpacity={0.1}
+              stroke="none"
+              ifOverflow="hidden"
+              label={{
+                value: 'Not listed',
+                position: 'insideTop',
+                fontSize: 10,
+                fill: 'var(--muted-foreground)',
+              }}
+            />
+          ))}
           <XAxis
             dataKey="timestamp"
             tickLine={false}
@@ -174,7 +211,7 @@ function HistoryChart({
                 fillOpacity={0.25}
                 strokeWidth={2}
                 isAnimationActive={false}
-                connectNulls
+                connectNulls={false}
               />
             ) : (
               <Line
@@ -185,7 +222,7 @@ function HistoryChart({
                 strokeWidth={1.5}
                 dot={false}
                 isAnimationActive={false}
-                connectNulls
+                connectNulls={false}
               />
             )
           )}
@@ -226,12 +263,15 @@ function ApyBreakdownChart({
   timeframe,
   valueFormatter,
   height = 170,
+  dead = [],
 }: {
   data: ProductHistoryPoint[]
   kind: ProductKind
   timeframe: TimeframeLabel
   valueFormatter: (value: number) => string
   height?: number
+  /** Stretches during which the pool was not listed by its protocol. */
+  dead?: DeadStretch[]
 }) {
   const hasRewards = data.some((p) => p.rewards > 0)
   const hasFees = data.some((p) => p.fees > 0)
@@ -261,24 +301,27 @@ function ApyBreakdownChart({
 
   const chartData = useMemo(
     () =>
-      data.map((p) => {
-        const feeAbs = p.fees // absolute fee APY (pipeline-stored)
-        const rewardsSigned = kind === 'supply' ? p.rewards : -p.rewards
-        const feeSigned = kind === 'supply' ? -feeAbs : feeAbs
+      withGaps(
+        data.map((p) => {
+          const feeAbs = p.fees // absolute fee APY (pipeline-stored)
+          const rewardsSigned = kind === 'supply' ? p.rewards : -p.rewards
+          const feeSigned = kind === 'supply' ? -feeAbs : feeAbs
 
-        const netBase = visible.base ? p.base : 0
-        const netRewards = hasRewards && visible.rewards ? rewardsSigned : 0
-        const netFees = hasFees && visible.fees ? feeSigned : 0
+          const netBase = visible.base ? p.base : 0
+          const netRewards = hasRewards && visible.rewards ? rewardsSigned : 0
+          const netFees = hasFees && visible.fees ? feeSigned : 0
 
-        return {
-          timestamp: p.timestamp,
-          base: p.base,
-          rewards: rewardsSigned,
-          fees: feeSigned,
-          net: netBase + netRewards + netFees,
-        }
-      }),
-    [data, kind, visible, hasRewards, hasFees]
+          return {
+            timestamp: p.timestamp,
+            base: p.base,
+            rewards: rewardsSigned,
+            fees: feeSigned,
+            net: netBase + netRewards + netFees,
+          }
+        }),
+        dead
+      ),
+    [data, kind, visible, hasRewards, hasFees, dead]
   )
 
   const hasData = data.length > 0
@@ -347,6 +390,23 @@ function ApyBreakdownChart({
               tickFormatter={(value) => valueFormatter(Number(value))}
             />
             <ReferenceLine y={0} stroke="var(--border)" strokeWidth={1} />
+            {dead.map((d) => (
+              <ReferenceArea
+                key={`${d.from}-${d.to}`}
+                x1={d.from}
+                x2={d.to}
+                fill="var(--muted-foreground)"
+                fillOpacity={0.1}
+                stroke="none"
+                ifOverflow="hidden"
+                label={{
+                  value: 'Not listed',
+                  position: 'insideTop',
+                  fontSize: 10,
+                  fill: 'var(--muted-foreground)',
+                }}
+              />
+            ))}
             <ChartTooltip
               cursor={false}
               content={
@@ -379,7 +439,7 @@ function ApyBreakdownChart({
                   fillOpacity={0.3}
                   strokeWidth={1}
                   isAnimationActive={false}
-                  connectNulls
+                  connectNulls={false}
                 />
               ) : null
             )}
@@ -390,7 +450,7 @@ function ApyBreakdownChart({
               strokeWidth={2}
               dot={false}
               isAnimationActive={false}
-              connectNulls
+              connectNulls={false}
             />
           </ComposedChart>
         </ChartContainer>
@@ -473,6 +533,12 @@ export function ProductDetailDrawer({
   const isMobile = useIsMobile()
   const { baseCurrency, rate } = useCurrency()
   const [points, setPoints] = useState<ProductHistoryPoint[]>([])
+  const [periods, setPeriods] = useState<Period[]>([])
+  // NOT `window` — that would shadow the global inside a client component.
+  const [chartWindow, setChartWindow] = useState<{
+    from: number
+    to: number
+  } | null>(null)
   const [selectedTimeframe, setSelectedTimeframe] =
     useState<TimeframeLabel>('7d')
   const [usedFallback, setUsedFallback] = useState(false)
@@ -486,20 +552,27 @@ export function ProductDetailDrawer({
 
     startTransition(async () => {
       setSelectedTimeframe(label)
-      const fromTimestamp = option.days
-        ? Math.floor(Date.now() / 1000) - option.days * 24 * 60 * 60
-        : 0
+      const now = Math.floor(Date.now() / 1000)
+      const fromTimestamp = option.days ? now - option.days * 24 * 60 * 60 : 0
+      setChartWindow({ from: fromTimestamp, to: now })
 
       try {
         // Preferred: our own pipeline series (full breakdown + market state).
         if (item.productId) {
-          const pts = await loadProductApyHistory({
-            productId: item.productId,
-            interval: label,
-            fromTimestamp,
-          })
+          // Availability rides along with the series: the chart cannot know where
+          // to CUT its line without it, and would otherwise draw straight through
+          // a stretch in which the pool was not listed at all.
+          const [pts, avail] = await Promise.all([
+            loadProductApyHistory({
+              productId: item.productId,
+              interval: label,
+              fromTimestamp,
+            }),
+            loadProductAvailability(item.productId),
+          ])
           if (pts.length > 0) {
             setPoints(pts)
+            setPeriods(avail)
             setUsedFallback(false)
             return
           }
@@ -540,15 +613,33 @@ export function ProductDetailDrawer({
             rewardItems: [],
           }))
         )
+        // The provider's own history — it carries no availability, so no stretch
+        // is claimed dead and the chart behaves exactly as it did before.
+        setPeriods([])
         setUsedFallback(true)
       } catch (error) {
         console.error('Failed to load product history:', error)
         setPoints([])
+        setPeriods([])
       }
     })
   }
 
-  // Derived stats
+  /**
+   * Where the pool was NOT listed. Empty when we have no availability history —
+   * "we don't know" must not render as "it was dead" (see deadStretches).
+   */
+  const dead = useMemo(
+    () =>
+      chartWindow
+        ? deadStretches(periods, chartWindow.from, chartWindow.to)
+        : [],
+    [periods, chartWindow]
+  )
+
+  // Derived stats — computed over the REAL observations, never the chart array:
+  // the gap markers carry no values, and averaging them in would drag the mean
+  // toward zero for every pool that was ever delisted.
   const avgNet = mean(points.map((p) => p.net))
 
   // Utilization (used / supplied). Pipeline history doesn't carry it for every
@@ -722,6 +813,7 @@ export function ProductDetailDrawer({
                     series={NET_ONLY_SERIES}
                     timeframe={selectedTimeframe}
                     valueFormatter={(v) => fmtPct(v)}
+                    dead={dead}
                   />
                 </div>
               ) : (
@@ -730,6 +822,7 @@ export function ProductDetailDrawer({
                   kind={kind}
                   timeframe={selectedTimeframe}
                   valueFormatter={(v) => fmtPct(v)}
+                  dead={dead}
                 />
               )}
 
@@ -758,6 +851,7 @@ export function ProductDetailDrawer({
                     ]}
                     timeframe={selectedTimeframe}
                     valueFormatter={fmtUsd}
+                    dead={dead}
                   />
 
                   {/* Utilization */}
@@ -777,6 +871,7 @@ export function ProductDetailDrawer({
                     ]}
                     timeframe={selectedTimeframe}
                     valueFormatter={(v) => fmtPct(v, 1)}
+                    dead={dead}
                   />
 
                   {/* Reward breakdown */}

@@ -3,7 +3,12 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 
 import { MAX_PRODUCT_IDS, clampPage } from '@/lib/db/pagination'
 import { db } from '@/lib/db/postgres'
-import { apyDaily, apyHourly, products } from '@/lib/db/schema'
+import {
+  apyDaily,
+  apyHourly,
+  productDisplayFlags,
+  products,
+} from '@/lib/db/schema'
 import type {
   BorrowMarketState,
   RewardItem,
@@ -87,6 +92,34 @@ function hourlyValueTuple(p: SpotPayload, hour: Date, slotTime: Date) {
 }
 
 /**
+ * Only collect what the catalogue actually lists.
+ *
+ * The spot adapters and the catalogue fetchers enumerate their protocols
+ * independently, and they DISAGREE. Two ways:
+ *
+ *   - Aave's spot collector emits a borrow snapshot for every reserve, while the
+ *     catalogue (correctly) registers a borrow product only when
+ *     `borrowingState === 'ENABLED'`. Result: ~18,500 rows a week of borrow rates
+ *     for reserves nobody can borrow from, for product ids that have no `products`
+ *     row at all.
+ *   - A pool delisted by its provider keeps being collected until someone notices.
+ *
+ * Both kinds of row are invisible to every read path (they all INNER JOIN
+ * products), so they were pure waste — and they made the availability history lie,
+ * since a delisted pool went on producing observations after its period closed.
+ *
+ * Guarding here rather than in each adapter: this is the single write path for
+ * spot data, so a new protocol cannot forget it.
+ */
+async function listedProductIds(): Promise<Set<string>> {
+  const rows = await db
+    .select({ id: products.id })
+    .from(products)
+    .where(eq(products.active, true))
+  return new Set(rows.map((r) => r.id))
+}
+
+/**
  * Upsert many products' hourly rolling-average rows in chunked multi-row
  * statements. Each row's running mean resolves independently against its own
  * `excluded` values. ProductIds within a slot are unique, so no row is touched
@@ -101,9 +134,26 @@ export async function upsertHourlySlots(
   // same Comet productId once per collateral; collapse to the last occurrence
   // so a single multi-row statement never touches the same key twice
   // (Postgres: "ON CONFLICT DO UPDATE command cannot affect row a second time").
-  const deduped = Array.from(
+  const all = Array.from(
     new Map(payloads.map((p) => [p.productId, p])).values()
   )
+
+  const listed = await listedProductIds()
+  // An empty catalogue means the products table is broken, not that every pool was
+  // delisted. Collecting a superfluous row is recoverable; silently dropping a
+  // whole slot for every product is not — so fail open, and make it loud.
+  const deduped =
+    listed.size === 0 ? all : all.filter((p) => listed.has(p.productId))
+  if (listed.size === 0) {
+    console.error(
+      '[apy:upsert] products catalogue is empty — collecting unfiltered'
+    )
+  } else if (deduped.length < all.length) {
+    console.log(
+      `[apy:upsert] Skipped ${all.length - deduped.length} snapshots for unlisted products`
+    )
+  }
+
   for (let i = 0; i < deduped.length; i += UPSERT_CHUNK) {
     const chunk = deduped.slice(i, i + UPSERT_CHUNK)
     const rows = chunk.map((p) => hourlyValueTuple(p, hour, slotTime))
@@ -291,6 +341,12 @@ export interface ApyFilters {
   asset?: string // asset symbol — NOW actually applied
   collateral?: string // borrow only; matched against collaterals jsonb
   minTvlUsd?: number // floor on supply_assets_usd — thin markets are APY noise
+  /**
+   * Raw-data escape hatch: include pools withheld by display eligibility (empty
+   * markets, absurd rates). Off by default, so every public list is filtered
+   * unless a caller deliberately asks for the unvarnished table.
+   */
+  includeIneligible?: boolean
   from?: Date
   to?: Date
 }
@@ -410,7 +466,20 @@ function productConds(f: ApyFilters) {
     conds.push(
       sql`${products.collaterals} @> ${JSON.stringify([{ symbol: f.collateral }])}::jsonb`
     )
+  // Display eligibility. Applied here, at the product level, so that BOTH the
+  // count query and the data query inherit it and therefore agree — an ineligible
+  // pool must not distort the sort order, inflate countTotal, or occupy a slot in
+  // a page. Filtering it out client-side would leave all three wrong.
+  if (!f.includeIneligible) conds.push(displayEligible())
   return conds
+}
+
+/** No current entry in the withheld-pools projection. See lib/display-eligibility. */
+function displayEligible() {
+  return sql`NOT EXISTS (
+    SELECT 1 FROM ${productDisplayFlags}
+    WHERE ${productDisplayFlags.productId} = ${products.id}
+  )`
 }
 
 /**

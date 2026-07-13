@@ -10,6 +10,7 @@ import {
 } from '@/lib/db/repositories/apy'
 import {
   type ProductFilters,
+  listAvailabilityPeriods,
   queryProductFacets,
   queryProducts,
 } from '@/lib/db/repositories/products'
@@ -103,6 +104,7 @@ type AnyFilters = {
   asset?: string
   collateral?: string
   minTvlUsd?: number
+  includeIneligible?: boolean
   from?: string
   to?: string
   range?: string
@@ -231,6 +233,9 @@ function toApyFilters(
     asset: filters.asset,
     collateral: filters.collateral,
     minTvlUsd: filters.minTvlUsd,
+    // Absent → undefined → falsy → the repository filters. Only an explicit
+    // `true` opens the raw table; there is no way to get it by omission.
+    includeIneligible: filters.includeIneligible === true,
     from: filters.from ? new Date(filters.from) : undefined,
     to: filters.to ? new Date(filters.to) : undefined,
   }
@@ -376,6 +381,10 @@ export const resolvers = {
     },
     async latestBorrowApy(_: unknown, args: ResolverArgs) {
       return resolveLatest('borrow', args)
+    },
+
+    async productAvailability(_: unknown, args: { productId: string }) {
+      return listAvailabilityPeriods(args.productId)
     },
 
     async products(_: unknown, args: ProductQueryArgs) {

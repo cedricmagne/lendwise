@@ -99,6 +99,8 @@ interface SlotDetail {
   provider: string
   hour: string
   expected: number
+  /** Spots a pool could have reported by now: 6 settled, spots-so-far when live. */
+  expectedSpots: number
   full: number
   missing: PoolRow[]
   incomplete: PoolRow[]
@@ -427,7 +429,15 @@ function CopyButton({ value }: { value: string }) {
   )
 }
 
-function PoolList({ title, pools }: { title: string; pools: PoolRow[] }) {
+function PoolList({
+  title,
+  pools,
+  expectedSpots,
+}: {
+  title: string
+  pools: PoolRow[]
+  expectedSpots: number
+}) {
   if (pools.length === 0) return null
   return (
     <div>
@@ -461,7 +471,7 @@ function PoolList({ title, pools }: { title: string; pools: PoolRow[] }) {
               {p.kind}
             </Badge>
             <span className="text-muted-foreground w-12 shrink-0 self-start text-right font-mono">
-              {p.spots ?? 0}/6
+              {p.spots ?? 0}/{expectedSpots}
             </span>
             {p.healed && (
               <span className="shrink-0 self-start text-[10px] text-blue-400">
@@ -544,14 +554,20 @@ function SlotDetailPanel({
 
             {detail.missing.length === 0 && detail.incomplete.length === 0 ? (
               <p className="text-muted-foreground py-2 text-sm">
-                All {detail.expected} pools reported a full 6/6 this hour. 🎉
+                All {detail.expected} pools reported a full{' '}
+                {detail.expectedSpots}/{detail.expectedSpots} this hour. 🎉
               </p>
             ) : (
               <div className="space-y-4">
-                <PoolList title="Missing — no data" pools={detail.missing} />
                 <PoolList
-                  title="Incomplete — fewer than 6 spots"
+                  title="Missing — no data"
+                  pools={detail.missing}
+                  expectedSpots={detail.expectedSpots}
+                />
+                <PoolList
+                  title={`Incomplete — fewer than ${detail.expectedSpots} spots`}
                   pools={detail.incomplete}
+                  expectedSpots={detail.expectedSpots}
                 />
               </div>
             )}

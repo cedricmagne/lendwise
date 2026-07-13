@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { sql } from 'drizzle-orm'
 
 import { db } from '@/lib/db/postgres'
+import { expectedAt } from '@/lib/db/repositories/gaps'
 
 // ─── Slot drill-down ──────────────────────────────────────────────────────────
 // Per-pool data-quality breakdown for a single (provider, hour) cell, so the
@@ -33,6 +34,20 @@ async function slotHandler(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'invalid hour' }, { status: 400 })
   }
 
+  // Spots that could have landed by now: 6 for a settled hour, but only
+  // :00..:50-so-far for the live one. Scoring the in-progress hour against a
+  // hard 6 reports every pool of every provider as "incomplete" for the whole
+  // hour — which is what the heatmap cell already avoids via the same formula
+  // (see ../route.ts). Keep the two in step or the drill-down contradicts the
+  // cell it was opened from.
+  const now = new Date()
+  const currentHour = new Date(now)
+  currentHour.setUTCMinutes(0, 0, 0)
+  const expectedSpots =
+    hour.getTime() === currentHour.getTime()
+      ? Math.min(6, Math.floor(now.getUTCMinutes() / 10) + 1)
+      : 6
+
   const res = await db.execute(sql`
     SELECT
       pr.id,
@@ -44,11 +59,12 @@ async function slotHandler(req: NextRequest): Promise<NextResponse> {
       COALESCE(h.healed, false) AS healed
     FROM products pr
     LEFT JOIN apy_hourly h ON h.product_id = pr.id AND h.hour = ${hour}
-    WHERE pr.active AND pr.provider = ${provider}
-      -- Only pools that already existed this hour — a market created later must
-      -- not show as "missing" for hours before it was first collected (matches
-      -- the heatmap's created_at-scoped expected count).
-      AND date_trunc('hour', pr.created_at) <= ${hour}
+    WHERE pr.provider = ${provider}
+      -- Exactly the pools that were LISTED this hour — same predicate as the
+      -- heatmap and the healer. A market created later is not "missing" for the
+      -- hours before it existed; a delisted one still appears in the drill-down of
+      -- an hour inside its former life, and stops appearing after it.
+      AND ${expectedAt(sql.raw('pr'), sql`${hour}`)}
     ORDER BY (h.quality_count IS NULL) DESC, h.quality_count ASC, pr.asset_symbol ASC
   `)
 
@@ -77,7 +93,7 @@ async function slotHandler(req: NextRequest): Promise<NextResponse> {
   // `healed` also satisfies "complete". (Missing rows never have healed=true.)
   const missing = pools.filter((p) => p.spots == null)
   const incomplete = pools.filter(
-    (p) => p.spots != null && p.spots < 6 && !p.healed
+    (p) => p.spots != null && p.spots < expectedSpots && !p.healed
   )
   const full = pools.length - missing.length - incomplete.length
 
@@ -85,6 +101,7 @@ async function slotHandler(req: NextRequest): Promise<NextResponse> {
     provider,
     hour: hour.toISOString(),
     expected: pools.length,
+    expectedSpots,
     full,
     missing,
     incomplete,

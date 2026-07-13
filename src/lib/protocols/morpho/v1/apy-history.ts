@@ -1,3 +1,4 @@
+import { isFiniteApyBlock } from '@/lib/apy-validation'
 import type { BorrowMarketState, SupplyMarketState } from '@/lib/db/types'
 import type { HistoryDataPoint } from '@/lib/protocols/aave/v3/apy-history'
 import { MORPHO_CONFIG } from '@/lib/protocols/morpho/config'
@@ -227,18 +228,24 @@ export async function fetchMorphoHistory(opts?: {
         const rewards = netApy - baseApy * (1 - fee)
         const totalAssetsUsd = totalAssetsUsdMap.get(ts) ?? 0
 
+        const apy = {
+          base: baseApy,
+          rewards: Math.max(0, rewards),
+          // fee is the 0–1 fee rate → store fee-APY (= base × fee rate).
+          fees: baseApy * fee,
+          net: netApy,
+          rewardItems: [],
+        }
+        // Same finite-only contract as the spot job. Healed rows land in
+        // apy_hourly exactly like collected ones, so an unguarded heal was the
+        // one path by which a NaN could reach the table.
+        if (!isFiniteApyBlock(apy)) continue
+
         points.push({
           timestamp: new Date(ts * 1000),
           productId,
           kind: 'supply',
-          apy: {
-            base: baseApy,
-            rewards: Math.max(0, rewards),
-            // fee is the 0–1 fee rate → store fee-APY (= base × fee rate).
-            fees: baseApy * fee,
-            net: netApy,
-            rewardItems: [],
-          },
+          apy,
           market: {
             supplyAssets: 0,
             supplyAssetsUsd: totalAssetsUsd,
@@ -355,20 +362,23 @@ export async function fetchMorphoHistory(opts?: {
         const borrowApy = borrowApyMap.get(ts) ?? 0
         const netBorrowApy = netBorrowApyMap.get(ts) ?? borrowApy
 
+        const apy = {
+          base: borrowApy,
+          // Reward total derived from Morpho's own net (netBorrow = borrow −
+          // reward) so base − rewards === net exactly, matching the spot job.
+          rewards: Math.max(0, borrowApy - netBorrowApy),
+          // The market fee is taken from supplier interest, not a borrower cost.
+          fees: 0,
+          net: netBorrowApy,
+          rewardItems: [],
+        }
+        if (!isFiniteApyBlock(apy)) continue
+
         points.push({
           timestamp: new Date(ts * 1000),
           productId,
           kind: 'borrow',
-          apy: {
-            base: borrowApy,
-            // Reward total derived from Morpho's own net (netBorrow = borrow −
-            // reward) so base − rewards === net exactly, matching the spot job.
-            rewards: Math.max(0, borrowApy - netBorrowApy),
-            // The market fee is taken from supplier interest, not a borrower cost.
-            fees: 0,
-            net: netBorrowApy,
-            rewardItems: [],
-          },
+          apy,
           market: emptyBorrowMarket(),
         })
       }

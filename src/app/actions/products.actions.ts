@@ -4,7 +4,41 @@ import { unstable_cache } from 'next/cache'
 
 import { getProtocolAdapter, getProtocolIds } from '@/config/protocols'
 import { apyEnrichments, latestHourlyNet } from '@/lib/db/repositories/apy'
+import { listDisplayFlaggedIds } from '@/lib/db/repositories/display-flags'
+import { ineligibilityReason } from '@/lib/display-eligibility'
 import { BorrowProduct, SupplyProduct } from '@/types'
+
+/** The minimum a product must carry for the display policy to judge it. */
+type Judgeable = {
+  productId?: string
+  apy: number
+  assetAmountUsd: number
+}
+
+/**
+ * Drop pools that must not be ranked, in two layers.
+ *
+ * The persisted flags are the considered verdict, but they lag: a pool needs 3
+ * bad hours before the hourly job hides it. So the freshly-enriched values are
+ * ALSO judged directly — a market that empties out or starts quoting nonsense
+ * disappears at the next 60-second cache refresh instead of topping the table for
+ * three hours. The immediate check writes nothing; it cannot un-hide a flagged
+ * pool, only hide an extra one.
+ *
+ * Runs before the sort, so an ineligible pool cannot distort the ordering it is
+ * about to be excluded from.
+ */
+function eligibleForDisplay<T extends Judgeable>(
+  items: T[],
+  flagged: Set<string>
+): T[] {
+  return items.filter((p) => {
+    if (p.productId && flagged.has(p.productId)) return false
+    return (
+      ineligibilityReason({ tvlUsd: p.assetAmountUsd, apyNet: p.apy }) === null
+    )
+  })
+}
 
 async function _loadSupplyProducts(): Promise<SupplyProduct[]> {
   const protocolIds = getProtocolIds()
@@ -35,9 +69,10 @@ async function _loadSupplyProducts(): Promise<SupplyProduct[]> {
     .map((p) => p.productId)
     .filter(Boolean) as string[]
 
-  const [enrichments, latestHourly] = await Promise.all([
+  const [enrichments, latestHourly, flagged] = await Promise.all([
     apyEnrichments(productIds),
     latestHourlyNet(productIds),
+    listDisplayFlaggedIds(),
   ])
 
   const enriched = allSupplyProducts.map((p) => {
@@ -52,7 +87,7 @@ async function _loadSupplyProducts(): Promise<SupplyProduct[]> {
     }
   })
 
-  return enriched.sort((a, b) => b.apy - a.apy)
+  return eligibleForDisplay(enriched, flagged).sort((a, b) => b.apy - a.apy)
 }
 
 export const loadSupplyProducts = unstable_cache(
@@ -90,9 +125,10 @@ async function _loadBorrowProducts(): Promise<BorrowProduct[]> {
     .map((p) => p.productId)
     .filter(Boolean) as string[]
 
-  const [enrichments, latestHourly] = await Promise.all([
+  const [enrichments, latestHourly, flagged] = await Promise.all([
     apyEnrichments(productIds),
     latestHourlyNet(productIds),
+    listDisplayFlaggedIds(),
   ])
 
   const enriched = allBorrowProducts.map((p) => {
@@ -107,7 +143,7 @@ async function _loadBorrowProducts(): Promise<BorrowProduct[]> {
     }
   })
 
-  return enriched.sort((a, b) => b.apy - a.apy)
+  return eligibleForDisplay(enriched, flagged).sort((a, b) => b.apy - a.apy)
 }
 
 export const loadBorrowProducts = unstable_cache(

@@ -2,7 +2,9 @@
 
 import { cache } from 'react'
 
+import type { Period } from '@/lib/chart-availability'
 import { productApyHistory } from '@/lib/db/repositories/apy'
+import { listAvailabilityPeriods } from '@/lib/db/repositories/products'
 import type { RewardItem } from '@/lib/db/types'
 import { TIMEFRAME_OPTIONS, type TimeframeLabel } from '@/types'
 
@@ -65,3 +67,28 @@ export const loadProductApyHistory = cache(async function loadProductApyHistory(
     return []
   }
 })
+
+/**
+ * When the pool was listed — so the chart knows where to CUT its line rather than
+ * drawing one across a stretch in which the market did not exist.
+ *
+ * Returns [] on error, and [] is the safe value: `deadStretches` reads an empty
+ * history as "we don't know", not as "it was never listed", so a failure here
+ * degrades to today's behaviour instead of shading the whole chart grey.
+ */
+export const loadProductAvailability = cache(
+  async function loadProductAvailability(productId: string): Promise<Period[]> {
+    try {
+      const periods = await listAvailabilityPeriods(productId)
+      return periods.map((p) => ({
+        activatedAt: Math.floor(p.activatedAt.getTime() / 1000),
+        deactivatedAt: p.deactivatedAt
+          ? Math.floor(p.deactivatedAt.getTime() / 1000)
+          : null,
+      }))
+    } catch (err) {
+      console.error('Failed to load product availability:', err)
+      return []
+    }
+  }
+)

@@ -14,7 +14,7 @@
     "test:watch": "vitest",
     "products:sync": "dotenv -- tsx scripts/products-sync.ts",
     "fix:daily-nan": "dotenv -- tsx scripts/fix-daily-nan.ts",
-    "clean:insane-apy": "dotenv -- tsx scripts/clean-insane-apy.ts",
+    "clean:non-finite-apy": "dotenv -- tsx scripts/clean-non-finite-apy.ts",
     "dev": "next dev",
     "build": "pnpm codegen && next build",
     "start": "next start",

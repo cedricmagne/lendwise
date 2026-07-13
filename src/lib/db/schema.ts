@@ -126,6 +126,67 @@ export const apyDaily = pgTable(
   ]
 )
 
+// ─── product_availability_periods ───────────────────────────────────────────────
+/**
+ * Append-only history of when each product was listed. See lib/db/product-availability.
+ *
+ * `products.active` stays as the present-tense catalogue flag; this table is the
+ * past tense. A product may be listed, delisted and relisted any number of times
+ * — each cycle is its own row, and closing one never rewrites an older one.
+ *
+ * A partial unique index (in the migration, not expressible here) enforces at most
+ * one OPEN period per product: `... (product_id) WHERE deactivated_at IS NULL`.
+ */
+export const productAvailabilityPeriods = pgTable(
+  'product_availability_periods',
+  {
+    productId: text('product_id').notNull(),
+    activatedAt: timestamp('activated_at', { withTimezone: true }).notNull(),
+    /** null = open. Half-open interval: activated_at <= hour < deactivated_at. */
+    deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+    detectedBy: text('detected_by').notNull(), // 'product-sync' | 'migration'
+  },
+  (t) => [
+    primaryKey({ columns: [t.productId, t.activatedAt] }),
+    index('product_availability_periods_lookup').on(
+      t.productId,
+      t.activatedAt,
+      t.deactivatedAt
+    ),
+  ]
+)
+
+// ─── product_display_flags ──────────────────────────────────────────────────────
+/**
+ * Pools currently withheld from public APY rankings. A DYNAMIC projection, kept
+ * deliberately apart from the `products` registry: `products.active` is the
+ * catalogue's present-tense truth ("does this pool exist?"), and a pool hidden
+ * for quoting nonsense is still very much active and still collected. Conflating
+ * the two would make a display decision corrupt gap detection and /status.
+ *
+ * Holds only the pools hidden RIGHT NOW — clearing a flag deletes the row, so
+ * `flagged_at` is the start of the current episode, not an audit log. Rebuilt
+ * hourly by /api/yield/apy/eligibility; the observed values are stored so
+ * "why is my pool missing?" is answerable without re-deriving anything.
+ */
+export const productDisplayFlags = pgTable(
+  'product_display_flags',
+  {
+    productId: text('product_id').primaryKey(),
+    reason: text('reason').notNull(), // 'empty_market' | 'outlier_apy'
+    flaggedAt: timestamp('flagged_at', { withTimezone: true }).notNull(),
+    lastEvaluatedAt: timestamp('last_evaluated_at', {
+      withTimezone: true,
+    }).notNull(),
+    lastObservedHour: timestamp('last_observed_hour', {
+      withTimezone: true,
+    }).notNull(),
+    lastObservedApyNet: doublePrecision('last_observed_apy_net'),
+    lastObservedTvlUsd: doublePrecision('last_observed_tvl_usd'),
+  },
+  (t) => [index('product_display_flags_reason').on(t.reason)]
+)
+
 // ─── pipeline_reports ───────────────────────────────────────────────────────────
 export const pipelineReports = pgTable(
   'pipeline_reports',
@@ -147,3 +208,4 @@ export type ProductRow = typeof products.$inferSelect
 export type ApyHourlyRow = typeof apyHourly.$inferSelect
 export type ApyHourlyInsert = typeof apyHourly.$inferInsert
 export type ApyDailyRow = typeof apyDaily.$inferSelect
+export type ProductDisplayFlagRow = typeof productDisplayFlags.$inferSelect

@@ -8,15 +8,24 @@ import { type ProtocolName, getProtocolIds } from '@/config/protocols'
 /**
  * Pools sync endpoint.
  *
- * Fetches static pool metadata (collaterals, protocolMeta, addresses)
- * from AAVE and Morpho and upserts into the pools collection.
+ * Fetches static pool metadata (collaterals, protocolMeta, addresses) from every
+ * protocol, upserts it, and reconciles `product_availability_periods` — opening a
+ * period for a newly listed or relisted pool, closing one for a pool the provider
+ * no longer returns.
  *
  * Body (JSON):
- *   protocol (optional): 'aave_v3' | 'morpho_v1'
+ *   protocol (optional): 'aave_v3' | 'morpho_v1' | 'compound_v3'
  *   If omitted, all protocols are synced.
  *
- * Triggered by QStash once daily. Can be force-triggered by sending
- * a manual QStash message to this endpoint.
+ * Triggered by QStash HOURLY (`5 * * * *`). The cadence is the resolution of the
+ * availability history: this sync is a poll, not an event stream, so a listing
+ * change is only ever known to within one run of it. Daily meant a delisted pool
+ * stayed "expected" for up to 24 hours — a day of phantom gaps on /status, and a
+ * day of the heal job trying to refetch a market that no longer exists.
+ *
+ * A provider whose enumeration FAILS is skipped entirely. Its products keep their
+ * periods: an empty list from a broken fetch must never be read as "they delisted
+ * everything".
  */
 export const POST = verifySignatureAppRouter(async (req: NextRequest) => {
   const body = await req.json().catch(() => ({}))
