@@ -153,6 +153,10 @@ DATABASE_URL_UNPOOLED=              # direct URL — drizzle-kit migrations
 CRON_SECRET=                        # Bearer token for /api/cron/sync-history
 UPSTASH_QSTASH_TOKEN=               # QStash signature verification
 
+# Rate limiting — public endpoints (/api/graphql 60/min/IP, /api/optimizer 10/min/IP)
+UPSTASH_REDIS_REST_URL=             # unset → limiter is a no-op (allows everything)
+UPSTASH_REDIS_REST_TOKEN=           # REQUIRED in prod; fails OPEN if Redis is unreachable
+
 # External APIs
 THEGRAPH_API_KEY=
 NEXT_PUBLIC_INFURA_API_KEY=
