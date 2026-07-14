@@ -120,6 +120,12 @@ async function fetchMerklIncentives(
       const { marketName, underlyingAsset } = extractDepositUrlParams(
         opp.depositUrl
       )
+      // Some Merkl campaigns (Aave V4 hub/spoke, cross-market "Dutch" campaigns)
+      // don't carry a marketName — we can't safely attribute those to a single
+      // V3 market instance, so skip rather than risk misattributing rewards
+      // across markets/versions that happen to share a token address.
+      if (!marketName) continue
+
       const addresses = new Set(opp.tokens.map((t) => t.address.toLowerCase()))
       if (underlyingAsset) addresses.add(underlyingAsset.toLowerCase())
 
@@ -147,12 +153,8 @@ function lookupMerklIncentive(
   marketSlug: string | null,
   tokenAddress: string
 ): { apr: number; apy: number } | null {
-  const addr = tokenAddress.toLowerCase()
-  if (marketSlug) {
-    const scoped = map.get(`${marketSlug}:${addr}`)
-    if (scoped) return scoped
-  }
-  return map.get(addr) ?? null
+  if (!marketSlug) return null
+  return map.get(`${marketSlug}:${tokenAddress.toLowerCase()}`) ?? null
 }
 
 /**
