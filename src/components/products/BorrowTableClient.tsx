@@ -26,7 +26,7 @@ import { BorrowingOptimizerView } from '@/components/optimizer/BorrowingOptimize
 import { ProductDetailDrawer } from '@/components/products/ProductDetailDrawer'
 import { TableSkeleton } from '@/components/products/TableSkeleton'
 import { StatsBar } from '@/components/stats/StatsBar'
-import { FilterChip, HorizonPicker } from '@/components/table'
+import { FilterBar, FilterChip, HorizonPicker } from '@/components/table'
 import {
   DataTable,
   SortableHeader,
@@ -54,7 +54,14 @@ import { HORIZON_CONFIG, HorizonKey } from '@/config/horizon'
 import { getProtocolVersionNameById } from '@/config/protocols'
 import { useCurrency } from '@/contexts'
 import { formatCompactCurrency } from '@/lib/format-currency'
-import { analyze } from '@/lib/utils'
+import {
+  computeRateStats,
+  findOpportunity,
+  formatApy,
+  formatMarketLabel,
+  formatRateRange,
+  pluralize,
+} from '@/lib/product-stats'
 import { BorrowProduct } from '@/types'
 
 export type Horizon = HorizonKey
@@ -470,6 +477,25 @@ export function BorrowTableClient() {
     }
   }, [])
 
+  // Stats-bar CTA: narrow the table down to the one market the card names. The
+  // collateral filter is dropped on purpose — keeping it would filter the very
+  // market we are pointing the user at back out of the table.
+  const jumpToMarket = useCallback((market: BorrowProduct) => {
+    hasUserInteracted.current = true
+    setRowSelection({})
+    setSearchValue('')
+    setColumnFilters([
+      { id: 'protocol', value: [market.protocol] },
+      { id: 'network', value: [market.network] },
+      { id: 'assetSymbol', value: market.assetSymbol },
+    ])
+    posthog.capture('borrow_stats_opportunity_clicked', {
+      protocol: market.protocol,
+      network: market.network,
+      asset: market.assetSymbol,
+    })
+  }, [])
+
   // Selection lock: all selected rows must share the same loan asset and at
   // least one common collateral (running intersection across the selection).
   const selectedRows = (data ?? []).filter((row) => rowSelection[getRowId(row)])
@@ -507,6 +533,11 @@ export function BorrowTableClient() {
   )
 
   const isFiltered = columnFilters.length > 0 || searchValue !== ''
+  const activeFilterCount =
+    columnFilters.reduce(
+      (n, f) => n + (Array.isArray(f.value) ? f.value.length : 1),
+      0
+    ) + (searchValue !== '' ? 1 : 0)
 
   // Filter options
   const protocolOptions = getUniqueColumnValues(visibleMarkets, 'protocol').map(
@@ -613,7 +644,17 @@ export function BorrowTableClient() {
     new Map<string, number>()
   )
 
-  const result = analyze(markets, (i) => i.apy)
+  // The bar is deliberately market-wide, not table-wide: it is what tells a user
+  // filtering on USDC that another market borrows cheaper. `note` carries their
+  // filtered figure so the two can never be mistaken for one another, and the
+  // cheapest-rate card jumps them to the market it names.
+  const filteredMarkets = applyFiltersExcept('')
+  const stats = computeRateStats(visibleMarkets, horizon)
+  const filteredStats = computeRateStats(filteredMarkets, horizon)
+  const opportunity = isFiltered
+    ? findOpportunity(stats, filteredStats, 'lowest')
+    : null
+  const horizonLabel = HORIZON_CONFIG[horizon].label
 
   if (isPending) return <TableSkeleton variant="borrow" />
 
@@ -624,29 +665,51 @@ export function BorrowTableClient() {
       <StatsBar
         stats={[
           {
-            label: 'Total products',
-            value: markets.length.toString(),
-            sub: `across ${result.set.size} protocols`,
-          },
-          {
-            label: 'Worst rate',
-            value:
-              result.min === Infinity
-                ? '-'
-                : `${(result.min * 100).toFixed(2)}%`,
-            sub: result.minItem
-              ? `${result.minItem.poolName} · ${getProtocolVersionNameById(result.minItem.protocol)}`
+            label: 'All markets',
+            value: stats.count.toString(),
+            sub: `${pluralize(stats.protocols, 'protocol')} · ${pluralize(stats.networks, 'network')} · ${pluralize(stats.assets, 'asset')}`,
+            note: isFiltered
+              ? `${filteredStats.count} match your filter`
               : undefined,
-            accent: true,
           },
           {
-            label: 'Best rate',
-            value:
-              result.max === -Infinity
-                ? '-'
-                : `${(result.max * 100).toFixed(2)}%`,
-            sub: result.maxItem
-              ? `${result.maxItem.poolName} · ${getProtocolVersionNameById(result.maxItem.protocol)}`
+            label: `Cheapest rate · ${horizonLabel}`,
+            value: formatApy(stats.lowest?.value),
+            sub: formatMarketLabel(
+              stats.lowest?.item,
+              getProtocolVersionNameById
+            ),
+            accent: true,
+            note: opportunity
+              ? `your filter: ${formatApy(opportunity.filteredValue)} — ${opportunity.deltaPts.toFixed(2)} pts cheaper here`
+              : isFiltered
+                ? 'your filter holds the cheapest rate'
+                : undefined,
+            noteAccent: opportunity !== null,
+            onClick: opportunity
+              ? () => jumpToMarket(opportunity.item)
+              : undefined,
+          },
+          {
+            label: `Median rate · ${horizonLabel}`,
+            value: formatApy(stats.median),
+            sub: formatRateRange(stats),
+            note: isFiltered
+              ? `your filter: ${formatApy(filteredStats.median)}`
+              : undefined,
+          },
+          {
+            label: 'Available liquidity',
+            value: formatCompactCurrency(
+              stats.totalLiquidityUsd * rate,
+              baseCurrency
+            ),
+            sub:
+              stats.utilizationPct !== null
+                ? `${stats.utilizationPct.toFixed(1)}% of ${formatCompactCurrency(stats.totalDepositsUsd * rate, baseCurrency)} deposits borrowed`
+                : undefined,
+            note: isFiltered
+              ? `your filter: ${formatCompactCurrency(filteredStats.totalLiquidityUsd * rate, baseCurrency)}`
               : undefined,
           },
         ]}
@@ -660,7 +723,7 @@ export function BorrowTableClient() {
             All available borrowing markets across protocols and chains
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
           {/* Optimize */}
           {Object.keys(rowSelection).length > 0 && (
             <Dialog
@@ -884,79 +947,81 @@ export function BorrowTableClient() {
             </Dialog>
           )}
 
-          {/* Search */}
-          <div className="relative">
-            <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
-            <Input
-              placeholder="Filter..."
-              value={searchValue}
-              onChange={(e) => {
+          <FilterBar activeCount={activeFilterCount}>
+            {/* Search */}
+            <div className="relative">
+              <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
+              <Input
+                placeholder="Filter..."
+                value={searchValue}
+                onChange={(e) => {
+                  hasUserInteracted.current = true
+                  setRowSelection({})
+                  setSearchValue(e.target.value)
+                }}
+                className="h-9 w-36 pl-7 text-xs placeholder:text-xs"
+              />
+            </div>
+
+            {/* Horizon */}
+            <HorizonPicker value={horizon} onChange={setHorizon} />
+
+            {/* Filter chips */}
+            <FilterChip
+              title="Protocol"
+              columnId="protocol"
+              options={protocolOptions}
+              columnFilters={columnFilters}
+              onColumnFiltersChange={handleFiltersChange}
+              renderIcon={(v) => <ProtocolIcon protocol={v} />}
+              counts={protocolCounts}
+            />
+            <FilterChip
+              title="Network"
+              columnId="network"
+              options={networkOptions}
+              columnFilters={columnFilters}
+              onColumnFiltersChange={handleFiltersChange}
+              renderIcon={(v) => <NetworkIcon networkSlug={v} />}
+              counts={networkCounts}
+            />
+            <FilterChip
+              title="Loan"
+              columnId="assetSymbol"
+              options={tokenOptions}
+              multiSelect={false}
+              columnFilters={columnFilters}
+              onColumnFiltersChange={handleFiltersChange}
+              renderIcon={(v) => <TokenIcon symbol={v} />}
+              counts={tokenCounts}
+            />
+            <FilterChip
+              title="Collateral"
+              columnId="collaterals"
+              options={collateralOptions}
+              multiSelect={false}
+              columnFilters={columnFilters}
+              onColumnFiltersChange={handleFiltersChange}
+              renderIcon={(v) => <TokenIcon symbol={v} />}
+              counts={collateralCounts}
+            />
+
+            {/* Reset */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="bg-input/50 border-border h-9 cursor-pointer border px-2 text-xs"
+              onClick={() => {
                 hasUserInteracted.current = true
                 setRowSelection({})
-                setSearchValue(e.target.value)
+                setColumnFilters([])
+                setSearchValue('')
               }}
-              className="h-9 w-36 pl-7 text-xs placeholder:text-xs"
-            />
-          </div>
-
-          {/* Horizon */}
-          <HorizonPicker value={horizon} onChange={setHorizon} />
-
-          {/* Filter chips */}
-          <FilterChip
-            title="Protocol"
-            columnId="protocol"
-            options={protocolOptions}
-            columnFilters={columnFilters}
-            onColumnFiltersChange={handleFiltersChange}
-            renderIcon={(v) => <ProtocolIcon protocol={v} />}
-            counts={protocolCounts}
-          />
-          <FilterChip
-            title="Network"
-            columnId="network"
-            options={networkOptions}
-            columnFilters={columnFilters}
-            onColumnFiltersChange={handleFiltersChange}
-            renderIcon={(v) => <NetworkIcon networkSlug={v} />}
-            counts={networkCounts}
-          />
-          <FilterChip
-            title="Loan"
-            columnId="assetSymbol"
-            options={tokenOptions}
-            multiSelect={false}
-            columnFilters={columnFilters}
-            onColumnFiltersChange={handleFiltersChange}
-            renderIcon={(v) => <TokenIcon symbol={v} />}
-            counts={tokenCounts}
-          />
-          <FilterChip
-            title="Collateral"
-            columnId="collaterals"
-            options={collateralOptions}
-            multiSelect={false}
-            columnFilters={columnFilters}
-            onColumnFiltersChange={handleFiltersChange}
-            renderIcon={(v) => <TokenIcon symbol={v} />}
-            counts={collateralCounts}
-          />
-
-          {/* Reset */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="bg-input/50 border-border h-9 cursor-pointer border px-2 text-xs"
-            onClick={() => {
-              hasUserInteracted.current = true
-              setRowSelection({})
-              setColumnFilters([])
-              setSearchValue('')
-            }}
-            disabled={isFiltered ? false : true}
-          >
-            <X className="h-4 w-4" />
-          </Button>
+              disabled={isFiltered ? false : true}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </FilterBar>
         </div>
       </div>
 

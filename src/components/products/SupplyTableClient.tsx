@@ -25,7 +25,7 @@ import { SupplyingOptimizerView } from '@/components/optimizer/SupplyingOptimize
 import { ProductDetailDrawer } from '@/components/products/ProductDetailDrawer'
 import { TableSkeleton } from '@/components/products/TableSkeleton'
 import { StatsBar } from '@/components/stats/StatsBar'
-import { FilterChip, HorizonPicker } from '@/components/table'
+import { FilterBar, FilterChip, HorizonPicker } from '@/components/table'
 import {
   DataTable,
   SortableHeader,
@@ -53,7 +53,14 @@ import { HORIZON_CONFIG, HorizonKey } from '@/config/horizon'
 import { getProtocolVersionNameById } from '@/config/protocols'
 import { useCurrency } from '@/contexts'
 import { formatCompactCurrency } from '@/lib/format-currency'
-import { analyze } from '@/lib/utils'
+import {
+  computeRateStats,
+  findOpportunity,
+  formatApy,
+  formatMarketLabel,
+  formatRateRange,
+  pluralize,
+} from '@/lib/product-stats'
 import { SupplyProduct } from '@/types'
 
 export type Horizon = HorizonKey
@@ -367,6 +374,23 @@ export function SupplyTableClient() {
     }
   }, [])
 
+  // Stats-bar CTA: narrow the table down to the one market the card names.
+  const jumpToMarket = useCallback((market: SupplyProduct) => {
+    hasUserInteracted.current = true
+    setRowSelection({})
+    setSearchValue('')
+    setColumnFilters([
+      { id: 'protocol', value: [market.protocol] },
+      { id: 'network', value: [market.network] },
+      { id: 'assetSymbol', value: market.assetSymbol },
+    ])
+    posthog.capture('supply_stats_opportunity_clicked', {
+      protocol: market.protocol,
+      network: market.network,
+      asset: market.assetSymbol,
+    })
+  }, [])
+
   const selectedAsset = (() => {
     if (!data) return null
     const selectedRows = data.filter((row) => rowSelection[getRowId(row)])
@@ -396,6 +420,11 @@ export function SupplyTableClient() {
   )
 
   const isFiltered = columnFilters.length > 0 || searchValue !== ''
+  const activeFilterCount =
+    columnFilters.reduce(
+      (n, f) => n + (Array.isArray(f.value) ? f.value.length : 1),
+      0
+    ) + (searchValue !== '' ? 1 : 0)
 
   // Filter options
   const protocolOptions = getUniqueColumnValues(visibleMarkets, 'protocol').map(
@@ -476,7 +505,17 @@ export function SupplyTableClient() {
       ])
   )
 
-  const result = analyze(markets, (i) => i.apy)
+  // The bar is deliberately market-wide, not table-wide: it is what tells a user
+  // filtering on USDC that ETH pays more somewhere else. `note` carries their
+  // filtered figure so the two can never be mistaken for one another, and the
+  // best-rate card jumps them to the market it names.
+  const filteredMarkets = applyFiltersExcept('')
+  const stats = computeRateStats(visibleMarkets, horizon)
+  const filteredStats = computeRateStats(filteredMarkets, horizon)
+  const opportunity = isFiltered
+    ? findOpportunity(stats, filteredStats, 'highest')
+    : null
+  const horizonLabel = HORIZON_CONFIG[horizon].label
 
   if (isPending) return <TableSkeleton variant="supply" />
 
@@ -487,30 +526,52 @@ export function SupplyTableClient() {
       <StatsBar
         stats={[
           {
-            label: 'Total products',
-            value: markets.length.toString(),
-            sub: `across ${result.set.size} protocols`,
+            label: 'All markets',
+            value: stats.count.toString(),
+            sub: `${pluralize(stats.protocols, 'protocol')} · ${pluralize(stats.networks, 'network')} · ${pluralize(stats.assets, 'asset')}`,
+            note: isFiltered
+              ? `${filteredStats.count} match your filter`
+              : undefined,
           },
           {
-            label: 'Worst rate',
-            value:
-              result.min === Infinity
-                ? '-'
-                : `${(result.min * 100).toFixed(2)}%`,
-            sub: result.minItem
-              ? `${result.minItem.poolName} · ${getProtocolVersionNameById(result.minItem.protocol)}`
-              : undefined,
+            label: `Best APY · ${horizonLabel}`,
+            value: formatApy(stats.highest?.value),
+            sub: formatMarketLabel(
+              stats.highest?.item,
+              getProtocolVersionNameById
+            ),
             accent: true,
+            note: opportunity
+              ? `your filter: ${formatApy(opportunity.filteredValue)} — +${opportunity.deltaPts.toFixed(2)} pts here`
+              : isFiltered
+                ? 'your filter holds the best rate'
+                : undefined,
+            noteAccent: opportunity !== null,
+            onClick: opportunity
+              ? () => jumpToMarket(opportunity.item)
+              : undefined,
           },
           {
-            label: 'Best rate',
-            value:
-              result.max === -Infinity
-                ? '-'
-                : `${(result.max * 100).toFixed(2)}%`,
-            sub: result.maxItem
-              ? `${result.maxItem.poolName} · ${getProtocolVersionNameById(result.maxItem.protocol)}`
+            label: `Median APY · ${horizonLabel}`,
+            value: formatApy(stats.median),
+            sub: formatRateRange(stats),
+            note: isFiltered
+              ? `your filter: ${formatApy(filteredStats.median)}`
               : undefined,
+          },
+          {
+            label: 'Total deposits',
+            value: formatCompactCurrency(
+              stats.totalDepositsUsd * rate,
+              baseCurrency
+            ),
+            note: isFiltered
+              ? `your filter: ${formatCompactCurrency(filteredStats.totalDepositsUsd * rate, baseCurrency)}`
+              : undefined,
+            sub:
+              stats.utilizationPct !== null
+                ? `${stats.utilizationPct.toFixed(1)}% utilized · ${formatCompactCurrency(stats.totalLiquidityUsd * rate, baseCurrency)} withdrawable`
+                : undefined,
           },
         ]}
       />
@@ -523,7 +584,7 @@ export function SupplyTableClient() {
             All available supplying products across protocols and chains
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
           {/* Optimize */}
           {Object.keys(rowSelection).length > 0 && (
             <Dialog
@@ -707,69 +768,71 @@ export function SupplyTableClient() {
             </Dialog>
           )}
 
-          {/* Search */}
-          <div className="relative">
-            <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
-            <Input
-              placeholder="Filter..."
-              value={searchValue}
-              onChange={(e) => {
+          <FilterBar activeCount={activeFilterCount}>
+            {/* Search */}
+            <div className="relative">
+              <Search className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
+              <Input
+                placeholder="Filter..."
+                value={searchValue}
+                onChange={(e) => {
+                  hasUserInteracted.current = true
+                  setRowSelection({})
+                  setSearchValue(e.target.value)
+                }}
+                className="h-9 w-36 pl-7 text-xs placeholder:text-xs"
+              />
+            </div>
+
+            {/* Horizon */}
+            <HorizonPicker value={horizon} onChange={setHorizon} />
+
+            {/* Filter chips */}
+            <FilterChip
+              title="Protocol"
+              columnId="protocol"
+              options={protocolOptions}
+              columnFilters={columnFilters}
+              onColumnFiltersChange={handleFiltersChange}
+              renderIcon={(v) => <ProtocolIcon protocol={v} />}
+              counts={protocolCounts}
+            />
+            <FilterChip
+              title="Network"
+              columnId="network"
+              options={networkOptions}
+              columnFilters={columnFilters}
+              onColumnFiltersChange={handleFiltersChange}
+              renderIcon={(v) => <NetworkIcon networkSlug={v} />}
+              counts={networkCounts}
+            />
+            <FilterChip
+              title="Token"
+              columnId="assetSymbol"
+              options={tokenOptions}
+              multiSelect={false}
+              columnFilters={columnFilters}
+              onColumnFiltersChange={handleFiltersChange}
+              renderIcon={(v) => <TokenIcon symbol={v} />}
+              counts={tokenCounts}
+            />
+
+            {/* Reset */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="bg-input/50 border-border h-9 cursor-pointer border px-2 text-xs"
+              onClick={() => {
                 hasUserInteracted.current = true
                 setRowSelection({})
-                setSearchValue(e.target.value)
+                setColumnFilters([])
+                setSearchValue('')
               }}
-              className="h-9 w-36 pl-7 text-xs placeholder:text-xs"
-            />
-          </div>
-
-          {/* Horizon */}
-          <HorizonPicker value={horizon} onChange={setHorizon} />
-
-          {/* Filter chips */}
-          <FilterChip
-            title="Protocol"
-            columnId="protocol"
-            options={protocolOptions}
-            columnFilters={columnFilters}
-            onColumnFiltersChange={handleFiltersChange}
-            renderIcon={(v) => <ProtocolIcon protocol={v} />}
-            counts={protocolCounts}
-          />
-          <FilterChip
-            title="Network"
-            columnId="network"
-            options={networkOptions}
-            columnFilters={columnFilters}
-            onColumnFiltersChange={handleFiltersChange}
-            renderIcon={(v) => <NetworkIcon networkSlug={v} />}
-            counts={networkCounts}
-          />
-          <FilterChip
-            title="Token"
-            columnId="assetSymbol"
-            options={tokenOptions}
-            multiSelect={false}
-            columnFilters={columnFilters}
-            onColumnFiltersChange={handleFiltersChange}
-            renderIcon={(v) => <TokenIcon symbol={v} />}
-            counts={tokenCounts}
-          />
-
-          {/* Reset */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="bg-input/50 border-border h-9 cursor-pointer border px-2 text-xs"
-            onClick={() => {
-              hasUserInteracted.current = true
-              setRowSelection({})
-              setColumnFilters([])
-              setSearchValue('')
-            }}
-            disabled={isFiltered ? false : true}
-          >
-            <X className="h-4 w-4" />
-          </Button>
+              disabled={isFiltered ? false : true}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </FilterBar>
         </div>
       </div>
 

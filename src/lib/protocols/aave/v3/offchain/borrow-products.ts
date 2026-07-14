@@ -1,5 +1,6 @@
 import { cache } from 'react'
 
+import { toNumber } from '@/lib/utils'
 import { BorrowProduct } from '@/types'
 
 import { client } from '.'
@@ -45,15 +46,16 @@ const _formatBorrowProducts = cache(
               assetSymbol: reserve.underlyingToken.symbol,
               assetDecimals: reserve.underlyingToken.decimals,
               assetAmount: reserve.size.amount.raw.toString(),
-              assetAmountUsd: reserve.size.usd,
+              assetAmountUsd: toNumber(reserve.size.usd),
               liquidityAmount: String(
                 (reserve.supplyInfo.total.raw ?? 0) -
                   (reserve.borrowInfo?.total?.amount?.raw ?? 0)
               ),
               liquidityAmountUsd:
-                reserve.size.usd - (reserve.borrowInfo?.total?.usd ?? 0),
+                toNumber(reserve.size.usd) -
+                toNumber(reserve.borrowInfo?.total?.usd ?? 0),
               collaterals: collateralReserves,
-              apy: reserve.borrowInfo?.apy.value || 0,
+              apy: toNumber(reserve.borrowInfo?.apy.value),
               productId: `aave:v3:${buildProductNetworkSlug(market.name)}:reserve:${reserve.underlyingToken.address.toLowerCase()}:borrow`,
               link: `https://app.aave.com/reserve-overview/?underlyingAsset=${reserve.underlyingToken.address.toLowerCase()}&marketName=proto_${market.chain.name.toLowerCase()}_v3`,
             }

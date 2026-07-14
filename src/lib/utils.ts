@@ -1,8 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
-import { BorrowProduct, SupplyProduct } from '@/types'
-
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
@@ -10,6 +8,19 @@ export function cn(...inputs: ClassValue[]) {
 export const formatAddress = (address: string): string => {
   if (!address) return ''
   return `${address.slice(0, 6)}...${address.slice(-4)}`
+}
+
+/**
+ * Adapter boundary coercion for GraphQL `BigDecimal` fields.
+ *
+ * Codegen maps `BigDecimal` to `any`, and Aave/Compound serialize those as
+ * decimal strings. Assigning one straight into a `number` field compiles, then
+ * breaks anything that adds or compares instead of multiplying. Every
+ * BigDecimal read in an adapter goes through here.
+ */
+export const toNumber = (value: unknown): number => {
+  const n = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(n) ? n : 0
 }
 
 export function generateSlug(name: string): string {
@@ -102,31 +113,4 @@ export function apyToAprMorpho(apy: number): number {
 export function aprToApyDaily(apr: number): number {
   if (apr <= 0) return 0
   return Math.pow(1 + apr / 365, 365) - 1
-}
-
-export const analyze = <T>(items: T[], selector: (item: T) => number) => {
-  return items.reduce(
-    (acc, item) => {
-      const val = selector(item)
-
-      if (val < acc.min) {
-        acc.min = val
-        acc.minItem = item
-      }
-      if (val > acc.max) {
-        acc.max = val
-        acc.maxItem = item
-      }
-      acc.set.add((item as SupplyProduct | BorrowProduct).protocol)
-
-      return acc
-    },
-    {
-      min: Infinity,
-      max: -Infinity,
-      minItem: null as T | null,
-      maxItem: null as T | null,
-      set: new Set<string>(),
-    }
-  )
 }

@@ -1,7 +1,7 @@
 import { cache } from 'react'
 
 import { CHAIN_NAME_MAPPING } from '@/lib/protocols/utils'
-import { aprToApyPerSecond } from '@/lib/utils'
+import { aprToApyPerSecond, toNumber } from '@/lib/utils'
 import { SupplyProduct } from '@/types'
 
 import { getChainClients } from '.'
@@ -36,15 +36,15 @@ const _formatSupplyProducts = cache(
         assetSymbol: token.symbol,
         assetDecimals: token.decimals ?? 18,
         assetAmount: market.accounting.totalBaseSupply.toString(),
-        assetAmountUsd: market.accounting.totalBaseSupplyUsd,
+        assetAmountUsd: toNumber(market.accounting.totalBaseSupplyUsd),
         liquidityAmount: String(
           BigInt(market.accounting.totalBaseSupply) -
             BigInt(market.accounting.totalBaseBorrow)
         ),
         liquidityAmountUsd:
-          market.accounting.totalBaseSupplyUsd -
-          market.accounting.totalBaseBorrowUsd,
-        apy: aprToApyPerSecond(market.accounting.netSupplyApr),
+          toNumber(market.accounting.totalBaseSupplyUsd) -
+          toNumber(market.accounting.totalBaseBorrowUsd),
+        apy: aprToApyPerSecond(toNumber(market.accounting.netSupplyApr)),
         productId: buildProductId(
           market.id,
           { id: chainId, name: chainName! },

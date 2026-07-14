@@ -1,7 +1,7 @@
 import { cache } from 'react'
 
 import { CHAIN_NAME_MAPPING } from '@/lib/protocols/utils'
-import { aprToApyPerSecond } from '@/lib/utils'
+import { aprToApyPerSecond, toNumber } from '@/lib/utils'
 import { BorrowProduct } from '@/types'
 
 import { getChainClients } from '.'
@@ -37,14 +37,14 @@ const _formatBorrowProducts = cache(
         assetSymbol: token.symbol,
         assetDecimals: token.decimals || 18,
         assetAmount: totalSupply.toString(),
-        assetAmountUsd: market.accounting.totalBaseSupplyUsd,
+        assetAmountUsd: toNumber(market.accounting.totalBaseSupplyUsd),
         liquidityAmount: String(
           BigInt(market.accounting.totalBaseSupply) -
             BigInt(market.accounting.totalBaseBorrow)
         ),
         liquidityAmountUsd:
-          market.accounting.totalBaseSupplyUsd -
-          market.accounting.totalBaseBorrowUsd,
+          toNumber(market.accounting.totalBaseSupplyUsd) -
+          toNumber(market.accounting.totalBaseBorrowUsd),
         collaterals: market.configuration.collateralTokens.map((ct) => ({
           address: ct.token.address,
           symbol: ct.token.symbol,
@@ -54,7 +54,7 @@ const _formatBorrowProducts = cache(
           ltv: Number(ct.borrowCollateralFactor),
           lltv: Number(ct.liquidateCollateralFactor),
         })),
-        apy: aprToApyPerSecond(market.accounting.netBorrowApr),
+        apy: aprToApyPerSecond(toNumber(market.accounting.netBorrowApr)),
         productId: buildProductId(
           market.id,
           { id: chainId, name: chainName! },

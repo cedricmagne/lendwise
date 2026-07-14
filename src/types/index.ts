@@ -241,5 +241,11 @@ export interface StatCard {
   label: string
   value: string
   sub?: string
+  /** Comparison against the rows currently filtered in the table. */
+  note?: string
+  /** Colours the note — reserved for the one card carrying an action. */
+  noteAccent?: boolean
   accent?: boolean
+  /** Makes the card a button — used to filter the table down to the market it names. */
+  onClick?: () => void
 }

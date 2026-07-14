@@ -2,6 +2,7 @@ import type { Address } from 'viem'
 
 import { createGraphQLClient } from '@/lib/protocols/shared'
 import type { DataAdapter } from '@/lib/protocols/types'
+import { toNumber } from '@/lib/utils'
 import { BorrowPosition, SupplyPosition } from '@/types'
 
 import { AAVE_CONFIG } from '../../config'
@@ -122,9 +123,9 @@ async function getUserSupplyPositions({
               assetSymbol: position.currency.symbol,
               assetDecimals: position.currency.decimals,
               assetAmount: position.balance.amount.raw.toString(),
-              assetAmountUsd: position.balance.usd,
-              assetLiveAmountUsd: position.balance.usd,
-              apy: position.apy.formatted,
+              assetAmountUsd: toNumber(position.balance.usd),
+              assetLiveAmountUsd: toNumber(position.balance.usd),
+              apy: toNumber(position.apy.formatted),
               link: `https://app.aave.com/reserve-overview/?underlyingAsset=${position.currency.address.toLowerCase()}&marketName=proto_${position.market.chain.name.toLowerCase()}_v3`,
             })
           )
@@ -302,14 +303,14 @@ async function getUserBorrowPositions({
             loanAssetSymbol: position.currency.symbol,
             loanAssetDecimals: position.currency.decimals,
             loanAssetAmount: position.debt.amount.value,
-            loanAssetAmountUsd: position.debt.usd,
-            loanLiveAssetAmountUsd: position.debt.usd,
+            loanAssetAmountUsd: toNumber(position.debt.usd),
+            loanLiveAssetAmountUsd: toNumber(position.debt.usd),
             loanTimestamp: 0,
             collaterals:
               markets_collaterals[
                 `${position.market.chain.chainId}-${position.market.address}`
               ],
-            apy: position.apy.formatted,
+            apy: toNumber(position.apy.formatted),
             link: `https://app.aave.com/reserve-overview/?underlyingAsset=${position.currency.address.toLowerCase()}&marketName=proto_${position.market.chain.name.toLowerCase()}_v3`,
           })
         )

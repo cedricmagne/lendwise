@@ -1,5 +1,6 @@
 import { cache } from 'react'
 
+import { toNumber } from '@/lib/utils'
 import { SupplyProduct } from '@/types'
 
 import { client } from '.'
@@ -25,14 +26,15 @@ const _formatSupplyProducts = cache(
           assetSymbol: reserve.underlyingToken.symbol,
           assetDecimals: reserve.underlyingToken.decimals,
           assetAmount: String(reserve.supplyInfo.total.raw ?? 0),
-          assetAmountUsd: reserve.size.usd,
+          assetAmountUsd: toNumber(reserve.size.usd),
           liquidityAmount: String(
             (reserve.supplyInfo.total.raw ?? 0) -
               (reserve.borrowInfo?.total?.amount?.raw ?? 0)
           ),
           liquidityAmountUsd:
-            reserve.size.usd - (reserve.borrowInfo?.total?.usd ?? 0),
-          apy: reserve.supplyInfo.apy.value,
+            toNumber(reserve.size.usd) -
+            toNumber(reserve.borrowInfo?.total?.usd ?? 0),
+          apy: toNumber(reserve.supplyInfo.apy.value),
           productId: `aave:v3:${buildProductNetworkSlug(market.name)}:reserve:${reserve.underlyingToken.address.toLowerCase()}:supply`,
           link: `https://app.aave.com/reserve-overview/?underlyingAsset=${reserve.underlyingToken.address.toLowerCase()}&marketName=proto_${market.chain.name.toLowerCase()}_v3`,
         })

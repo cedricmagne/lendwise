@@ -2,6 +2,7 @@ import { type Address } from 'viem'
 
 import type { DataAdapter } from '@/lib/protocols/types'
 import { CHAIN_NAME_MAPPING } from '@/lib/protocols/utils'
+import { toNumber } from '@/lib/utils'
 import {
   BorrowPosition,
   MarketRate,
@@ -227,7 +228,7 @@ async function getUserSupplyPositions({
                       marketAccounting.baseSupplyIndex) /
                     BASE_INDEX_SCALE /
                     10 ** (token.decimals || 18),
-                  apy: position.market.accounting.netSupplyApr,
+                  apy: toNumber(position.market.accounting.netSupplyApr),
                   link: `https://app.compound.finance/?market=${token.symbol.toLowerCase()}-${CHAIN_NAME_MAPPING[chainId] ? SLUG_MAPPING[chainId] : 'mainnet'}`,
                 }
               })
@@ -315,7 +316,7 @@ async function getUserBorrowPositions({
                           collateral.collateralToken.token.decimals || 18,
                         address: collateral.collateralToken.token.address,
                         amount: collateral.balance,
-                        amountUsd: collateral.balanceUsd,
+                        amountUsd: toNumber(collateral.balanceUsd),
                       }
                     })
                     .filter((c) => c !== null)
