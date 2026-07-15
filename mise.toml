@@ -3,4 +3,4 @@ run = "pnpm dev"
 
 [tools]
 node = "24"
-pnpm = "11.4.0"
+pnpm = "11.13.0"
