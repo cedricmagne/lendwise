@@ -13,6 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "products:sync": "dotenv -- tsx scripts/products-sync.ts",
+    "adapter:test": "dotenv -- tsx scripts/adapter-test.ts",
+    "collect:apy": "dotenv -- tsx scripts/collect-apy.ts",
     "fix:daily-nan": "dotenv -- tsx scripts/fix-daily-nan.ts",
     "clean:non-finite-apy": "dotenv -- tsx scripts/clean-non-finite-apy.ts",
     "clean:reward-spikes": "dotenv -- tsx scripts/clean-reward-spikes.ts",

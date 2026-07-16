@@ -1,4 +1,4 @@
-import { MORPHO_CONFIG } from '@/lib/protocols/morpho/config'
+import { MORPHO_V1_INGESTION } from './config'
 
 /**
  * What Morpho lists — the single answer, for every caller.
@@ -32,7 +32,7 @@ import { MORPHO_CONFIG } from '@/lib/protocols/morpho/config'
  * where changing your mind is a one-line, retroactive edit rather than a hole in
  * the history you can never fill.
  */
-const floors = MORPHO_CONFIG.morpho_v1.ingestion ?? {}
+const floors = MORPHO_V1_INGESTION
 
 /** The markets (Morpho Blue) we list — i.e. the borrow side. */
 export function morphoMarketWhere(chainIds: number[]) {

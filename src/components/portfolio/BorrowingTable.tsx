@@ -56,7 +56,7 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { WalletAvatar } from '@/components/wallet/WalletAvatar'
-import { getProtocolVersionNameById } from '@/config'
+import { protocolVersionName } from '@/config/protocols-meta'
 import { useCurrency } from '@/contexts'
 import { useIsMobile } from '@/hooks/useMobile'
 import { formatCompactCurrency } from '@/lib/format-currency'
@@ -477,7 +477,7 @@ export function BorrowingTable({ data }: { data: BorrowPosition[] }) {
     label: (
       <div className="flex items-center gap-2">
         <ProtocolIcon protocol={v as string} />
-        {getProtocolVersionNameById(v)}
+        {protocolVersionName(v)}
       </div>
     ),
   }))

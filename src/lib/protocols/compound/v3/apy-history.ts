@@ -1,12 +1,15 @@
 import type { BorrowMarketState, SupplyMarketState } from '@/lib/db/types'
 import type { HistoryDataPoint } from '@/lib/protocols/aave/v3/apy-history'
-import { COMPOUND_CONFIG } from '@/lib/protocols/compound/config'
+import { COMPOUND_V3_CHAINS } from '@/lib/protocols/compound/v3/config'
 import {
   MARKET_DAILY_ACCOUNTING,
   MARKET_HOURLY_ACCOUNTING,
-} from '@/lib/protocols/compound/v3/onchain/queries'
+} from '@/lib/protocols/compound/v3/queries'
 import { buildProductId } from '@/lib/protocols/compound/v3/utils'
-import { createGraphQLClient, processBatches } from '@/lib/protocols/shared'
+import {
+  createGraphQLClient,
+  processBatches,
+} from '@/lib/protocols/core/toolkit'
 
 // ─── Response types ───────────────────────────────────────────────────────────
 
@@ -165,13 +168,12 @@ export async function fetchCompoundDailyHistory(opts?: {
   onProgress?: (msg: string) => void
 }): Promise<HistoryDataPoint[]> {
   const log = opts?.onProgress ?? console.log
-  const config = COMPOUND_CONFIG.compound_v3
   const allPoints: HistoryDataPoint[] = []
 
-  let chainIds = Object.keys(config.chains).map(Number)
+  let chainIds = Object.keys(COMPOUND_V3_CHAINS).map(Number)
 
   if (opts?.chainFilter) {
-    const found = Object.entries(config.chains).find(
+    const found = Object.entries(COMPOUND_V3_CHAINS).find(
       ([, c]) => c.name.toLowerCase() === opts.chainFilter!.toLowerCase()
     )
     if (!found) {
@@ -182,7 +184,7 @@ export async function fetchCompoundDailyHistory(opts?: {
   }
 
   const validChains = chainIds
-    .map((id) => ({ chainId: id, chainConfig: config.chains[id] }))
+    .map((id) => ({ chainId: id, chainConfig: COMPOUND_V3_CHAINS[id] }))
     .filter((c) => c.chainConfig?.custom?.subgraphUrl)
 
   log(
@@ -259,13 +261,12 @@ export async function fetchCompoundHourlyHistory(opts?: {
   onProgress?: (msg: string) => void
 }): Promise<HistoryDataPoint[]> {
   const log = opts?.onProgress ?? console.log
-  const config = COMPOUND_CONFIG.compound_v3
   const allPoints: HistoryDataPoint[] = []
 
-  let chainIds = Object.keys(config.chains).map(Number)
+  let chainIds = Object.keys(COMPOUND_V3_CHAINS).map(Number)
 
   if (opts?.chainFilter) {
-    const found = Object.entries(config.chains).find(
+    const found = Object.entries(COMPOUND_V3_CHAINS).find(
       ([, c]) => c.name.toLowerCase() === opts.chainFilter!.toLowerCase()
     )
     if (!found) {
@@ -276,7 +277,7 @@ export async function fetchCompoundHourlyHistory(opts?: {
   }
 
   const validChains = chainIds
-    .map((id) => ({ chainId: id, chainConfig: config.chains[id] }))
+    .map((id) => ({ chainId: id, chainConfig: COMPOUND_V3_CHAINS[id] }))
     .filter((c) => c.chainConfig?.custom?.subgraphUrl)
 
   log(

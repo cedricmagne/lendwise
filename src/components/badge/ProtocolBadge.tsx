@@ -1,6 +1,6 @@
 import { ProtocolIcon } from '@/components/icon'
 import { Badge } from '@/components/ui/badge'
-import { getProtocolVersionNameById } from '@/config/protocols'
+import { protocolVersionName } from '@/config/protocols-meta'
 
 export function ProtocolBadge({ protocol }: { protocol: string }) {
   return (
@@ -10,7 +10,7 @@ export function ProtocolBadge({ protocol }: { protocol: string }) {
     >
       <ProtocolIcon protocol={protocol} />
       <span className="text-muted-foreground text-xs whitespace-nowrap">
-        {getProtocolVersionNameById(protocol)}
+        {protocolVersionName(protocol)}
       </span>
     </Badge>
   )

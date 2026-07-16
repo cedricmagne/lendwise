@@ -1,11 +1,10 @@
-import { AAVE_CONFIG } from '@/lib/protocols/aave/config'
-import { MarketsApyQuery } from '@/lib/protocols/aave/v3/offchain/generated/graphql'
-import { MARKETS_APY } from '@/lib/protocols/aave/v3/offchain/queries'
-import { createGraphQLClient } from '@/lib/protocols/shared'
+import { AAVE_V3_API_URL } from '@/lib/protocols/aave/v3/config'
+import { MarketsApyQuery } from '@/lib/protocols/aave/v3/generated/graphql'
+import { MARKETS_APY } from '@/lib/protocols/aave/v3/queries'
+import { createGraphQLClient } from '@/lib/protocols/core/toolkit'
 
 async function main() {
-  const config = AAVE_CONFIG.aave_v3
-  const client = createGraphQLClient(config.offchainApiUrl!)
+  const client = createGraphQLClient(AAVE_V3_API_URL)
 
   // Polygon, Avalanche, Optimism often have native incentives
   const chainIds = [137, 43114, 10]

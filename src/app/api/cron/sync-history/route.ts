@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { fetchAaveHistory } from '@/lib/protocols/aave'
-import { fetchCompoundDailyHistory } from '@/lib/protocols/compound'
-import { fetchMorphoHistory } from '@/lib/protocols/morpho'
+import { YIELD_ADAPTERS } from '@/config/protocols-server'
+// Compound has no history in the YieldAdapter contract (see compound/v3/index.ts) —
+// its one-time daily backfill is served by this direct import, a documented exception.
+import { fetchCompoundDailyHistory } from '@/lib/protocols/compound/v3/apy-history'
 
 /**
  * One-time historical APY sync endpoint.
@@ -25,14 +26,25 @@ export async function GET(request: NextRequest) {
     let total = 0
     const errors: string[] = []
 
+    // Reproduces today's defaults: Aave LAST_YEAR window, Morpho DAY interval,
+    // both anchored to a one-year lookback ending now.
+    const now = Math.floor(Date.now() / 1000)
+    const yearRange = {
+      startTimestamp: now - 365 * 86400,
+      endTimestamp: now,
+      interval: 'DAY' as const,
+    }
+
     switch (protocol) {
       case 'aave': {
-        const points = await fetchAaveHistory()
+        const adapter = await YIELD_ADAPTERS['aave_v3']()
+        const points = await adapter.getApyHistory!(yearRange)
         total = points.length
         break
       }
       case 'morpho': {
-        const points = await fetchMorphoHistory()
+        const adapter = await YIELD_ADAPTERS['morpho_v1']()
+        const points = await adapter.getApyHistory!(yearRange)
         total = points.length
         break
       }

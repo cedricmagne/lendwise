@@ -1,15 +1,19 @@
-import type {
-  ApyBreakdown,
-  BorrowMarketState,
-  SupplyMarketState,
-} from '@/lib/db/types'
-import { AAVE_CONFIG } from '@/lib/protocols/aave/config'
+import type { BorrowMarketState, SupplyMarketState } from '@/lib/db/types'
 import {
   APY_HISTORY,
   MARKETS_WITH_TOKENS,
-} from '@/lib/protocols/aave/v3/offchain/queries'
+} from '@/lib/protocols/aave/v3/queries'
 import { buildProductNetworkSlug } from '@/lib/protocols/aave/v3/utils'
-import { createGraphQLClient, processBatches } from '@/lib/protocols/shared'
+import {
+  createGraphQLClient,
+  processBatches,
+} from '@/lib/protocols/core/toolkit'
+import type {
+  HistoryDataPoint,
+  HistoryParams,
+} from '@/lib/protocols/core/types'
+
+import { AAVE_V3_API_URL, AAVE_V3_CHAINS } from './config'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,13 +33,9 @@ type ApyHistoryQuery = {
   borrowAPYHistory: { date: string; avgRate: { value: number } }[]
 }
 
-export type HistoryDataPoint = {
-  timestamp: Date
-  productId: string
-  kind: 'supply' | 'borrow'
-  apy: ApyBreakdown
-  market: SupplyMarketState | BorrowMarketState
-}
+// Re-export the contract type from its new home, so callers still importing
+// `HistoryDataPoint` from this module keep compiling until Task 8.
+export type { HistoryDataPoint }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -70,25 +70,17 @@ function emptyBorrowMarket(): BorrowMarketState {
  * Returns daily data points with supply and borrow APY per reserve.
  */
 export async function fetchAaveHistory(opts?: {
-  chainFilter?: string
+  chainIds?: number[]
   /** AAVE API window — e.g. 'LAST_DAY' (hourly points) or 'LAST_YEAR' (daily). Default: 'LAST_YEAR'. */
   window?: string
   onProgress?: (msg: string) => void
 }): Promise<HistoryDataPoint[]> {
   const log = opts?.onProgress ?? console.log
-  const config = AAVE_CONFIG.aave_v3
-  const client = createGraphQLClient(config.offchainApiUrl!)
-  let chainIds = Object.keys(config.chains).map(Number)
+  const client = createGraphQLClient(AAVE_V3_API_URL)
 
-  if (opts?.chainFilter) {
-    const found = Object.entries(config.chains).find(
-      ([, c]) => c.name.toLowerCase() === opts.chainFilter!.toLowerCase()
-    )
-    if (!found) {
-      log(`[history:aave] Chain filter '${opts.chainFilter}' not found`)
-      return []
-    }
-    chainIds = [Number(found[0])]
+  let chainIds = Object.keys(AAVE_V3_CHAINS).map(Number)
+  if (opts?.chainIds?.length) {
+    chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
   }
 
   // Step 1: List all markets and their reserves
@@ -237,6 +229,51 @@ export async function fetchAaveHistory(opts?: {
 
   log(`[history:aave] Total: ${allPoints.length} data points`)
   return allPoints
+}
+
+// ─── Contract mapping ─────────────────────────────────────────────────────────
+
+/**
+ * Pick the smallest Aave API window that still covers the requested lookback.
+ *
+ * The Aave GraphQL history endpoint only accepts fixed windows anchored to now
+ * (LAST_DAY / LAST_WEEK / LAST_YEAR). Map a caller's `startTimestamp` onto the
+ * tightest one so we fetch no more than we need.
+ */
+export function aaveWindowForRange(
+  startTimestamp: number,
+  nowTimestamp: number
+): 'LAST_DAY' | 'LAST_WEEK' | 'LAST_YEAR' {
+  const lookbackHours = (nowTimestamp - startTimestamp) / 3600
+  if (lookbackHours <= 24) return 'LAST_DAY'
+  if (lookbackHours <= 7 * 24) return 'LAST_WEEK'
+  return 'LAST_YEAR'
+}
+
+/**
+ * YieldAdapter.getApyHistory implementation for Aave v3.
+ *
+ * Maps the contract's (startTimestamp, endTimestamp) range onto an Aave API
+ * window, delegates to `fetchAaveHistory`, then trims the (now-anchored) points
+ * back down to the requested range.
+ */
+export async function getAaveApyHistory(
+  params: HistoryParams
+): Promise<HistoryDataPoint[]> {
+  const window = aaveWindowForRange(
+    params.startTimestamp,
+    Math.floor(Date.now() / 1000)
+  )
+  const points = await fetchAaveHistory({
+    window,
+    chainIds: params.chainIds,
+    onProgress: params.onProgress,
+  })
+  // The API windows are anchored to now — trim to the requested range.
+  return points.filter((p) => {
+    const t = p.timestamp.getTime() / 1000
+    return t >= params.startTimestamp && t <= params.endTimestamp
+  })
 }
 
 // Re-export for backwards compatibility

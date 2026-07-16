@@ -1,4 +1,4 @@
-import { ReserveBorrowingState } from '@/lib/protocols/aave/v3/offchain/generated/graphql'
+import { ReserveBorrowingState } from '@/lib/protocols/aave/v3/generated/graphql'
 
 /**
  * What Aave lists — the single answer, for every caller.

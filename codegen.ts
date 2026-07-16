@@ -5,47 +5,27 @@
  *
  * IMPORTANT: All schema URLs are imported from protocol config files to maintain
  * a single source of truth. Never hardcode URLs here - update the config files instead:
- * - AAVE: src/lib/protocols/aave/config.ts (offchainApiUrl)
- * - Morpho: src/lib/protocols/morpho/config.ts (offchainApiUrl)
- * - Compound: src/lib/protocols/compound/config.ts (chains[chainId].custom.subgraphUrl)
+ * - AAVE: src/lib/protocols/aave/v3/config.ts (AAVE_V3_API_URL)
+ * - Morpho: src/lib/protocols/morpho/v1/config.ts (MORPHO_V1_API_URL)
+ * - Compound: src/lib/protocols/compound/v3/config.ts (COMPOUND_V3_CHAINS[chainId].custom.subgraphUrl)
  */
 import type { CodegenConfig } from '@graphql-codegen/cli'
 import { config as loadEnv } from 'dotenv'
 import { mainnet, optimism } from 'viem/chains'
 
-import { AAVE_CONFIG } from './src/lib/protocols/aave/config'
-import { COMPOUND_CONFIG } from './src/lib/protocols/compound/config'
-import { MORPHO_CONFIG } from './src/lib/protocols/morpho/config'
+import { AAVE_V3_API_URL } from './src/lib/protocols/aave/v3/config'
+import { COMPOUND_V3_CHAINS } from './src/lib/protocols/compound/v3/config'
+import { MORPHO_V1_API_URL } from './src/lib/protocols/morpho/v1/config'
 
 // Load environment variables from .env file
 loadEnv({ path: ['.env', '.env.local'] })
 
 // Extract API URLs from configs (single source of truth)
-const aaveV3ApiUrl = AAVE_CONFIG.aave_v3.offchainApiUrl
-const aaveV3EthereumSubgraphUrl =
-  AAVE_CONFIG.aave_v3.chains[mainnet.id]?.custom?.subgraphUrl
-
-const morphoV1ApiUrl = MORPHO_CONFIG.morpho_v1.offchainApiUrl
-const morphoV1EthereumSubgraphUrl =
-  MORPHO_CONFIG.morpho_v1.chains[mainnet.id]?.custom?.subgraphUrl
-
 const compoundV3EthereumSubgraphUrl =
-  COMPOUND_CONFIG.compound_v3.chains[mainnet.id]?.custom?.subgraphUrl
+  COMPOUND_V3_CHAINS[mainnet.id]?.custom?.subgraphUrl
 
 const compoundV3OptimismSubgraphUrl =
-  COMPOUND_CONFIG.compound_v3.chains[optimism.id]?.custom?.subgraphUrl
-
-if (!aaveV3ApiUrl || !aaveV3EthereumSubgraphUrl) {
-  throw new Error(
-    'AAVE V3 API URL not found in config. Please update src/lib/protocols/aave/config.ts'
-  )
-}
-
-if (!morphoV1ApiUrl || !morphoV1EthereumSubgraphUrl) {
-  throw new Error(
-    'Morpho V1 API URL not found in config. Please update src/lib/protocols/morpho/config.ts'
-  )
-}
+  COMPOUND_V3_CHAINS[optimism.id]?.custom?.subgraphUrl
 
 if (!compoundV3EthereumSubgraphUrl || !compoundV3OptimismSubgraphUrl) {
   throw new Error(
@@ -61,30 +41,10 @@ const config: CodegenConfig = {
   },
   generates: {
     // AAVE V3 - Offchain (GraphQL API)
-    // Schema URL is imported from src/lib/protocols/aave/config.ts
-    'src/lib/protocols/aave/v3/offchain/generated/': {
-      schema: aaveV3ApiUrl,
-      documents: 'src/lib/protocols/aave/v3/offchain/queries.ts',
-      preset: 'client',
-      presetConfig: {
-        fragmentMasking: false,
-      },
-    },
-    // AAVE V3 - Onchain (Subgraph)
-    // Schema URL is imported from src/lib/protocols/aave/config.ts
-    'src/lib/protocols/aave/v3/onchain/generated/': {
-      schema: [
-        {
-          [aaveV3EthereumSubgraphUrl]: {
-            headers: process.env.THEGRAPH_API_KEY
-              ? {
-                  Authorization: `Bearer ${process.env.THEGRAPH_API_KEY}`,
-                }
-              : {},
-          },
-        },
-      ],
-      documents: 'src/lib/protocols/aave/v3/onchain/queries.ts',
+    // Schema URL is imported from src/lib/protocols/aave/v3/config.ts
+    'src/lib/protocols/aave/v3/generated/': {
+      schema: AAVE_V3_API_URL,
+      documents: 'src/lib/protocols/aave/v3/queries.ts',
       preset: 'client',
       presetConfig: {
         fragmentMasking: false,
@@ -110,8 +70,8 @@ const config: CodegenConfig = {
     // },
 
     // COMPOUND V3 - Onchain (Subgraph)
-    // Schema URL is imported from src/lib/protocols/compound/config.ts
-    'src/lib/protocols/compound/v3/onchain/generated/': {
+    // Schema URL is imported from src/lib/protocols/compound/v3/config.ts
+    'src/lib/protocols/compound/v3/generated/': {
       schema: [
         {
           [compoundV3EthereumSubgraphUrl]: {
@@ -123,17 +83,17 @@ const config: CodegenConfig = {
           },
         },
       ],
-      documents: 'src/lib/protocols/compound/v3/onchain/queries.ts',
+      documents: 'src/lib/protocols/compound/v3/queries.ts',
       preset: 'client',
       presetConfig: {
         fragmentMasking: false,
       },
     },
     // MORPHO V1 - Offchain (GraphQL API)
-    // Schema URL is imported from src/lib/protocols/morpho/config.ts
-    'src/lib/protocols/morpho/v1/offchain/generated/': {
-      schema: morphoV1ApiUrl,
-      documents: 'src/lib/protocols/morpho/v1/offchain/queries.ts',
+    // Schema URL is imported from src/lib/protocols/morpho/v1/config.ts
+    'src/lib/protocols/morpho/v1/generated/': {
+      schema: MORPHO_V1_API_URL,
+      documents: 'src/lib/protocols/morpho/v1/queries.ts',
       preset: 'client',
       presetConfig: {
         fragmentMasking: false,
@@ -142,26 +102,6 @@ const config: CodegenConfig = {
         namingConvention: {
           enumValues: 'keep',
         },
-      },
-    },
-    // MORPHO V1 - Onchain (Subgraph)
-    // Schema URL is imported from src/lib/protocols/morpho/config.ts
-    'src/lib/protocols/morpho/v1/onchain/generated/': {
-      schema: [
-        {
-          [morphoV1EthereumSubgraphUrl]: {
-            headers: process.env.THEGRAPH_API_KEY
-              ? {
-                  Authorization: `Bearer ${process.env.THEGRAPH_API_KEY}`,
-                }
-              : {},
-          },
-        },
-      ],
-      documents: 'src/lib/protocols/morpho/v1/onchain/queries.ts',
-      preset: 'client',
-      presetConfig: {
-        fragmentMasking: false,
       },
     },
     // 'src/lib/protocols/morpho/subgraph/ethereum/generated/': {

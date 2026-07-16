@@ -1,12 +1,35 @@
-import { createVersionAdapter } from '../../utils'
-import { compoundV3OnchainAdapter } from './onchain'
+import { defineYieldAdapter } from '@/lib/protocols/core/define'
+import type { AppAdapter } from '@/lib/protocols/core/types'
 
-/**
- * Compound V3 Adapter
- * - Positions: Subgraph (no official GraphQL API available)
- * - Stats: Subgraph (same source for historical data)
- */
-export const compoundV3Adapter = createVersionAdapter('v3', {
-  positions: compoundV3OnchainAdapter,
-  rates: compoundV3OnchainAdapter,
+import { fetchCompoundV3ApySpot } from './apy-spot'
+import { getBorrowProducts } from './borrow-products'
+import { COMPOUND_V3_CHAINS } from './config'
+import {
+  getMarketBorrowHistoryRates,
+  getMarketSupplyHistoryRates,
+  getUserBorrowPositions,
+  getUserSupplyPositions,
+} from './positions'
+import { fetchCompoundV3Products } from './products'
+import { getSupplyProducts } from './supply-products'
+
+export const adapter = defineYieldAdapter({
+  id: 'compound_v3',
+  name: 'Compound v3',
+  provider: 'compound',
+  version: 'v3',
+  chains: COMPOUND_V3_CHAINS,
+  getProducts: fetchCompoundV3Products,
+  getApySpot: fetchCompoundV3ApySpot,
+  // no getApyHistory: subgraph history serves the one-time sync route only;
+  // heal deliberately uses nearest-neighbor donors for Compound (spec §3).
 })
+
+export const appAdapter: AppAdapter = {
+  getUserSupplyPositions,
+  getUserBorrowPositions,
+  getMarketSupplyHistoryRates,
+  getMarketBorrowHistoryRates,
+  getSupplyProducts,
+  getBorrowProducts,
+}

@@ -8,7 +8,7 @@
  *   bun run --env-file=.env products:sync -- --protocol morpho_v1
  */
 import { syncProducts } from '@/app/actions/products-sync.actions'
-import type { ProtocolName } from '@/config/protocols'
+import type { ProtocolName } from '@/config/protocols-meta'
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2)

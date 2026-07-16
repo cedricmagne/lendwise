@@ -1,9 +1,10 @@
 import type { BorrowProduct, Collateral, SupplyProduct } from '@/lib/db/types'
-import { AAVE_CONFIG } from '@/lib/protocols/aave/config'
-import type { MarketsApyQuery } from '@/lib/protocols/aave/v3/offchain/generated/graphql'
-import { MARKETS_APY } from '@/lib/protocols/aave/v3/offchain/queries'
-import { createGraphQLClient } from '@/lib/protocols/shared'
+import type { MarketsApyQuery } from '@/lib/protocols/aave/v3/generated/graphql'
+import { MARKETS_APY } from '@/lib/protocols/aave/v3/queries'
+import { createGraphQLClient } from '@/lib/protocols/core/toolkit'
+import type { FetchOpts } from '@/lib/protocols/core/types'
 
+import { AAVE_V3_API_URL, AAVE_V3_CHAINS } from './config'
 import { listsBorrow } from './listing'
 import { buildProductId } from './utils'
 
@@ -18,24 +19,13 @@ import { buildProductId } from './utils'
  * Reuses MARKETS_APY query — aToken/vToken fields must be present.
  */
 export async function fetchAaveV3Products(
-  chainFilter?: string
+  opts?: FetchOpts
 ): Promise<(SupplyProduct | BorrowProduct)[]> {
-  const config = AAVE_CONFIG.aave_v3
-  const client = createGraphQLClient(config.offchainApiUrl!)
+  const client = createGraphQLClient(AAVE_V3_API_URL)
 
-  let chainIds = Object.keys(config.chains).map(Number)
-
-  if (chainFilter) {
-    const found = Object.entries(config.chains).find(
-      ([, c]) => c.name.toLowerCase() === chainFilter.toLowerCase()
-    )
-    if (!found) {
-      console.warn(
-        `[products:aave] Chain filter '${chainFilter}' not found in config`
-      )
-      return []
-    }
-    chainIds = [Number(found[0])]
+  let chainIds = Object.keys(AAVE_V3_CHAINS).map(Number)
+  if (opts?.chainIds?.length) {
+    chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
   }
 
   const { data, error } = await client
@@ -88,7 +78,7 @@ export async function fetchAaveV3Products(
           provider: 'aave',
           type: 'reserve',
           version: 'v3',
-          subgraphUrl: config.offchainApiUrl!,
+          subgraphUrl: AAVE_V3_API_URL,
           name: reserve.market.name,
           chain: {
             id: reserve.market.chain.chainId,
@@ -123,7 +113,7 @@ export async function fetchAaveV3Products(
             provider: 'aave',
             type: 'reserve',
             version: 'v3',
-            subgraphUrl: config.offchainApiUrl!,
+            subgraphUrl: AAVE_V3_API_URL,
             name: reserve.market.name,
             chain: {
               id: reserve.market.chain.chainId,

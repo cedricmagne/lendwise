@@ -1,5 +1,8 @@
 import type { Kind } from '@/lib/db/types'
-import { CHAIN_NAME_MAPPING } from '@/lib/protocols/utils'
+import {
+  CHAIN_SLUG_MAP,
+  type RegisteredChainId,
+} from '@/lib/protocols/core/toolkit'
 
 // ─── Product ID builder ───────────────────────────────────────────────────────
 // Unified Morpho productId — same single-builder shape as aave/compound:
@@ -13,7 +16,7 @@ export function buildProductId(
   address: string,
   kind: Kind
 ): string {
-  const network = CHAIN_NAME_MAPPING[chainId]
+  const network = CHAIN_SLUG_MAP[chainId as RegisteredChainId]
   if (!network)
     throw new Error(
       `No slug registered for chainId ${chainId} — add it to chain-slugs.ts`

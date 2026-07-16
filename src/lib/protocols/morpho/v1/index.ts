@@ -1,14 +1,36 @@
-import { createVersionAdapter } from '../../utils'
-import { morphoV1OffchainAdapter } from './offchain'
+import { defineYieldAdapter } from '@/lib/protocols/core/define'
+import type { AppAdapter } from '@/lib/protocols/core/types'
 
-// import { morphoV1OnchainAdapter } from './onchain'
+import { getMorphoApyHistory } from './apy-history'
+import { fetchMorphoV1ApySpot } from './apy-spot'
+import { getBorrowProducts } from './borrow-products'
+import { MORPHO_V1_CHAINS, MORPHO_V1_INGESTION } from './config'
+import {
+  getMarketBorrowHistoryRates,
+  getMarketSupplyHistoryRates,
+  getUserBorrowPositions,
+  getUserSupplyPositions,
+} from './positions'
+import { fetchMorphoV1Products } from './products'
+import { getSupplyProducts } from './supply-products'
 
-/**
- * Morpho V1 Adapter
- * - Positions: GraphQL API (real-time user positions)
- * - Stats: Subgraph (historical/statistical data) - To be implemented
- */
-export const morphoV1Adapter = createVersionAdapter('v1', {
-  positions: morphoV1OffchainAdapter,
-  rates: morphoV1OffchainAdapter,
+export const adapter = defineYieldAdapter({
+  id: 'morpho_v1',
+  name: 'Morpho v1',
+  provider: 'morpho',
+  version: 'v1',
+  chains: MORPHO_V1_CHAINS,
+  ingestion: MORPHO_V1_INGESTION,
+  getProducts: fetchMorphoV1Products,
+  getApySpot: fetchMorphoV1ApySpot,
+  getApyHistory: getMorphoApyHistory,
 })
+
+export const appAdapter: AppAdapter = {
+  getUserSupplyPositions,
+  getUserBorrowPositions,
+  getMarketSupplyHistoryRates,
+  getMarketBorrowHistoryRates,
+  getSupplyProducts,
+  getBorrowProducts,
+}

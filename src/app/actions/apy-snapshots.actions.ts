@@ -1,21 +1,10 @@
 'use server'
 
-import type { ProtocolName } from '@/config/protocols'
+import { type ProtocolName } from '@/config/protocols-meta'
+import { YIELD_ADAPTERS } from '@/config/protocols-server'
 import { upsertHourlySlots } from '@/lib/db/repositories/apy'
 import type { SpotPayload } from '@/lib/db/types'
-import { fetchAaveV3ApySpot } from '@/lib/protocols/aave'
-import { fetchCompoundV3ApySpot } from '@/lib/protocols/compound'
-import { fetchMorphoV1ApySpot } from '@/lib/protocols/morpho'
-
-// ─── Protocol tasks ───────────────────────────────────────────────────────────
-
-const PROTOCOL_TASKS: Partial<
-  Record<ProtocolName, () => Promise<SpotPayload[]>>
-> = {
-  aave_v3: fetchAaveV3ApySpot,
-  morpho_v1: fetchMorphoV1ApySpot,
-  compound_v3: fetchCompoundV3ApySpot,
-}
+import { spotPayloadSoftSchema } from '@/lib/protocols/core/validation'
 
 // ─── Hour standardization ───────────────────────────────────────────────────────
 
@@ -83,24 +72,22 @@ export type CollectApyResult = {
  * Each call contributes one slot to the current hour's rolling average.
  *
  * @param protocol - Optional — run a single protocol fetcher only.
+ * @param opts.dryRun - Fetch and validate but skip the apy_hourly write
+ *   (scripts/collect-apy.ts verification mode).
  */
 export async function collectApySpot(
-  protocol?: ProtocolName
+  protocol?: ProtocolName,
+  opts?: { dryRun?: boolean }
 ): Promise<CollectApyResult> {
   const start = Date.now()
   const slotTime = new Date()
   const errors: string[] = []
 
-  const tasks: [ProtocolName, () => Promise<SpotPayload[]>][] = protocol
-    ? PROTOCOL_TASKS[protocol]
-      ? [[protocol, PROTOCOL_TASKS[protocol]]]
-      : []
-    : (Object.entries(PROTOCOL_TASKS) as [
-        ProtocolName,
-        () => Promise<SpotPayload[]>,
-      ][])
+  const ids = (Object.keys(YIELD_ADAPTERS) as ProtocolName[]).filter(
+    (id) => !protocol || id === protocol
+  )
 
-  if (tasks.length === 0) {
+  if (ids.length === 0) {
     return {
       success: false,
       counts: { total: 0 },
@@ -109,21 +96,32 @@ export async function collectApySpot(
     }
   }
 
-  const results = await Promise.allSettled(tasks.map(([, fetch]) => fetch()))
+  const results = await Promise.allSettled(
+    ids.map(async (id) => (await YIELD_ADAPTERS[id]()).getApySpot())
+  )
 
   const allPayloads: SpotPayload[] = []
   const protoCounts: Partial<Record<ProtocolName, number>> = {}
 
   for (let i = 0; i < results.length; i++) {
     const result = results[i]
-    const protoId = tasks[i][0]
+    const protoId = ids[i]
 
     if (result.status === 'fulfilled') {
-      protoCounts[protoId] = result.value.length
-      allPayloads.push(...result.value)
-      console.log(
-        `[cron:${protoId}] Fetched ${result.value.length} spot payloads`
-      )
+      // Soft-validate each payload (shape + finiteness only). A finite-but-extreme
+      // rate is kept — dropping it at ingestion manufactures the gap heal then fills.
+      const valid: SpotPayload[] = []
+      for (const payload of result.value) {
+        const parsed = spotPayloadSoftSchema.safeParse(payload)
+        if (parsed.success) valid.push(payload)
+        else
+          console.warn(
+            `[cron:${protoId}] Skipping invalid payload ${payload?.productId ?? '<no id>'}: ${parsed.error.issues[0]?.message}`
+          )
+      }
+      protoCounts[protoId] = valid.length
+      allPayloads.push(...valid)
+      console.log(`[cron:${protoId}] Fetched ${valid.length} spot payloads`)
     } else {
       const msg =
         result.reason instanceof Error
@@ -134,7 +132,11 @@ export async function collectApySpot(
     }
   }
 
-  if (allPayloads.length > 0) {
+  if (opts?.dryRun) {
+    console.log(
+      `[cron:collect-apy] DRY RUN — ${allPayloads.length} payloads validated, apy_hourly untouched`
+    )
+  } else if (allPayloads.length > 0) {
     await writeApySlot(allPayloads, slotTime)
   }
 

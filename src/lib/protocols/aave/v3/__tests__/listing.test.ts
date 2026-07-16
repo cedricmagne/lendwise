@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { ReserveBorrowingState } from '@/lib/protocols/aave/v3/generated/graphql'
 import { listsBorrow } from '@/lib/protocols/aave/v3/listing'
-import { ReserveBorrowingState } from '@/lib/protocols/aave/v3/offchain/generated/graphql'
 
 describe('listsBorrow', () => {
   it('lists a reserve whose borrowing is enabled', () => {

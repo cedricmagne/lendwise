@@ -1,393 +1,194 @@
-# Protocol Protocols Architecture
+# Protocol Adapters
 
-This document describes the architecture for protocol protocols in the Yield Optimizer platform.
-
-## Overview
-
-The protocol architecture is designed to:
-
-1. **Support multiple protocol versions** (e.g., AAVE v2, v3)
-2. **Abstract data sources** (GraphQL API vs Subgraph)
-3. **Provide a unified interface** for fetching user positions
-4. **Enable easy extension** for new protocols and versions
+How Lendwise ingests yield data, and how to contribute a new protocol.
 
 ## Architecture
 
-### Directory Structure
+One adapter per **protocol + version** (`aave_v3`, `morpho_v1`, `compound_v3`). There is no
+abstraction layer between an adapter and the platform: **the Lendwise data model is the
+contract**. An adapter transforms its source — a protocol GraphQL API, a subgraph, RPC calls,
+anything — into the existing DB domain types (`SpotPayload`, `SupplyProduct`, `BorrowProduct`,
+`HistoryDataPoint` from `src/lib/db/types.ts` / `core/types.ts`), and the pipeline takes it
+from there.
 
 ```
 src/lib/protocols/
-├── types.ts                    # Core protocol interfaces
-├── utils.ts                    # Helper functions for creating protocols
-├── [protocol]/                 # e.g., aave, morpho, compound
-│   ├── index.ts               # Protocol-level exports and main protocol
-│   ├── config.ts              # Protocol configuration (chains, contracts, markets)
-│   │
-│   ├── v2/                    # Version-specific protocol (if applicable)
-│   │   ├── index.ts           # Version protocol assembler
-│   │   ├── graphql/           # GraphQL API protocol (if available)
-│   │   │   ├── index.ts       # Adapter implementation
-│   │   │   ├── queries.ts     # GraphQL queries
-│   │   │   └── generated/     # Auto-generated types (gitignored)
-│   │   └── subgraph/          # Subgraph protocol (if available)
-│   │       ├── index.ts       # Adapter implementation
-│   │       ├── queries.ts     # GraphQL queries for subgraph
-│   │       └── generated/     # Auto-generated types (gitignored)
-│   │
-│   └── v3/                    # Another version
-│       ├── index.ts
-│       ├── graphql/
-│       └── subgraph/
+├── core/                      # Lendwise-owned contract — an adapter imports FROM here
+│   ├── types.ts               #   YieldAdapter, AppAdapter, FetchOpts, HistoryParams, …
+│   ├── define.ts              #   defineYieldAdapter() — typed identity for inference
+│   ├── validation.ts          #   zod schemas: soft (runtime) + strict (CI harness)
+│   └── toolkit/               #   OPTIONAL helpers — use them or don't
+│       ├── graphql-client.ts  #     createGraphQLClient (timeout, error normalization)
+│       ├── batch.ts           #     processBatches (bounded concurrency)
+│       ├── chain-registry.ts  #     createChainRegistry (per-chain module overrides)
+│       ├── chain-slugs.ts     #     CHAIN_SLUG_MAP — canonical chainId → productId slug
+│       └── merkl.ts           #     fetchMerklIncentives / lookupMerklIncentive
+├── aave/v3/                   # one folder per adapter — flat, no offchain/onchain split
+│   ├── index.ts               #   exports `adapter` (YieldAdapter) + `appAdapter` (AppAdapter)
+│   ├── config.ts              #   AAVE_V3_API_URL, AAVE_V3_CHAINS
+│   ├── listing.ts             #   THE listing predicate (see Conventions)
+│   ├── products.ts            #   getProducts impl
+│   ├── apy-spot.ts            #   getApySpot impl
+│   ├── apy-history.ts         #   getApyHistory impl
+│   ├── positions.ts           #   wallet positions (AppAdapter)
+│   ├── queries.ts + generated/  # GraphQL documents + codegen output
+│   └── …
+├── morpho/v1/                 # same shape; config.ts also owns MORPHO_V1_INGESTION
+└── compound/v3/               # same shape; per-chain subgraph overrides live in
+    └── {ethereum,polygon,…}/  #   chain dirs consumed via createChainRegistry
 ```
 
-### Key Concepts
+Two registries wire adapters into the app:
 
-#### 1. Data Source Abstraction
+- **`src/config/protocols-meta.ts`** — client-safe metadata (`PROTOCOLS_META`,
+  `protocolVersionName()`, `adapterIdsForProvider()`). Zero server deps; UI components import
+  this.
+- **`src/config/protocols-server.ts`** — server-only loaders (`YIELD_ADAPTERS`,
+  `APP_ADAPTERS`) that dynamic-import the heavy adapter modules. The pipeline (spot collector,
+  products sync, heal, sync-history) and wallet features import this.
 
-Each protocol can use either:
+`YIELD_ADAPTERS` is typed `Record<ProtocolName, …>`, so every `PROTOCOLS_META` entry **must**
+have a loader — the compiler enforces registry completeness. Registration is explicit; there
+is no filesystem auto-discovery.
 
-- **GraphQL API**: Direct API provided by the protocol (e.g., AAVE V3 API, Morpho API)
-- **Subgraph**: The Graph protocol subgraph (e.g., Compound community subgraphs)
+Every aggregation point uses `Promise.allSettled` — one failing adapter never blocks the
+others.
 
-The `BaseDataAdapter` interface abstracts these differences:
+## The contract
 
-```typescript
-interface BaseDataAdapter {
-  readonly dataSourceType: 'graphql' | 'subgraph'
-  getUserSupplyPositions(params: {
-    addresses: Address[]
-  }): Promise<SupplyPosition[]>
-  getUserBorrowPositions(params: {
-    addresses: Address[]
-  }): Promise<BorrowPosition[]>
+```ts
+export interface YieldAdapter {
+  id: string //  registry key = products.protocol_name  ('aave_v3')
+  name: string //  display                                ('Aave v3')
+  provider: string //  products.provider — groups versions    ('aave')
+  version: string //                                          ('v3')
+  chains: Record<number, AdapterChain> // chainId → { slug, …extras }
+  ingestion?: IngestionFloors
+
+  getProducts(opts?: FetchOpts): Promise<(SupplyProduct | BorrowProduct)[]>
+  getApySpot(opts?: FetchOpts): Promise<SpotPayload[]>
+  /** OPTIONAL — omit it and the heal job falls back to donor hours. */
+  getApyHistory?(params: HistoryParams): Promise<HistoryDataPoint[]>
 }
 ```
 
-#### 2. Version Management
+- `getProducts` — full catalogue of listed markets (hourly sync into the `products` table).
+- `getApySpot` — one rate snapshot per product (10-minute collector into `apy_hourly`).
+- `getApyHistory` — backfill source for gap healing. Optional: Compound omits it (its
+  subgraph history only serves the one-time `/api/cron/sync-history` route, via plain module
+  exports `fetchCompoundDailyHistory`/`fetchCompoundHourlyHistory`).
 
-Each protocol can have multiple versions. A `VersionAdapter` wraps a data protocol:
+`AppAdapter` (also in `core/types.ts`) powers the app UI — wallet positions, market-rate
+charts, and the live `/supply` / `/borrow` product lists. It is optional per protocol: a
+yield-only contribution is a valid contribution.
 
-```typescript
-interface VersionAdapter {
-  readonly version: string
-  readonly dataAdapter: BaseDataAdapter
-  readonly stats?: StatsAdapter
-}
-```
+## How to add a protocol
 
-#### 3. Protocol Adapter
+1. **Create `src/lib/protocols/{name}/{version}/`** with an `index.ts` exporting the adapter:
 
-The main `ProtocolAdapter` manages all versions for a protocol:
+   ```ts
+   // src/lib/protocols/acme/v2/index.ts
+   import { defineYieldAdapter } from '@/lib/protocols/core/define'
+   import { CHAIN_SLUG_MAP } from '@/lib/protocols/core/toolkit/chain-slugs'
 
-```typescript
-interface ProtocolAdapter {
-  readonly protocol: string
-  readonly versions: Record<string, VersionAdapter>
-  readonly defaultVersion: string
+   import { fetchAcmeApySpot } from './apy-spot'
+   import { fetchAcmeProducts } from './products'
 
-  getVersion(version?: string): VersionAdapter
-  getUserSupplyPositions(
-    params: { addresses: Address[] },
-    version?: string
-  ): Promise<SupplyPosition[]>
-  getUserBorrowPositions(
-    params: { addresses: Address[] },
-    version?: string
-  ): Promise<BorrowPosition[]>
-}
-```
+   export const adapter = defineYieldAdapter({
+     id: 'acme_v2',
+     name: 'Acme v2',
+     provider: 'acme',
+     version: 'v2',
+     chains: {
+       1: { slug: CHAIN_SLUG_MAP[1] }, // extras allowed: subgraphUrl, marketName, …
+     },
+     getProducts: fetchAcmeProducts,
+     getApySpot: fetchAcmeApySpot,
+     // getApyHistory: optional
+   })
+   ```
 
-## Usage Examples
+2. **Register it** — one entry in each registry:
 
-### Basic Usage (Default Version)
+   ```ts
+   // src/config/protocols-meta.ts
+   acme_v2: { displayName: 'Acme', versionName: 'Acme v2', provider: 'acme' },
 
-```typescript
-import { AaveAdapter } from '@/lib/protocols/aave'
+   // src/config/protocols-server.ts
+   acme_v2: () => import('@/lib/protocols/acme/v2').then((m) => m.adapter),
+   ```
 
-// Uses default version (v3)
-const positions = await AaveAdapter.getUserSupplyPositions({
-  addresses: ['0x...'],
-})
-```
+   `APP_ADAPTERS` entry only if you also implement `AppAdapter`.
 
-### Specific Version
+3. **Prove it** — `pnpm adapter:test acme_v2` (see Validation below).
 
-```typescript
-import { AaveAdapter } from '@/lib/protocols/aave'
+That's it. No DB migration: productIds, tables, and repositories are protocol-agnostic.
 
-// Explicitly use v3
-const v3Positions = await AaveAdapter.getUserSupplyPositions(
-  { addresses: ['0x...'] },
-  'v3'
-)
+## Conventions
 
-// Use v2 (when implemented)
-const v2Positions = await AaveAdapter.getUserSupplyPositions(
-  { addresses: ['0x...'] },
-  'v2'
-)
-```
+- **`listing.ts` is the single enumeration predicate.** `getProducts` and `getApySpot` run
+  independently on different schedules — they MUST enumerate the exact same productId set.
+  When two callers each carried their own "is this market listed?" rule, Aave's drifted three
+  ways and wrote ~18,500 orphan `apy_hourly` rows a week for markets that had no `products`
+  row (invisible to every read path — they all INNER JOIN `products`). One module answers the
+  question; every caller imports it. Read `aave/v3/listing.ts` for the full war story.
+- **Filter by `chainIds` (canonical `chain_id`), never by chain name.** `FetchOpts.chainIds`
+  is the only filter shape. Chain names are inconsistent across adapters (`Ethereum` vs
+  `ethereum` vs `op mainnet`); only the numeric id is canonical. The productId slug comes from
+  `CHAIN_SLUG_MAP`.
+- **`IngestionFloors` exist to skip noise, not to curate.** Ingestion is the one irreversible
+  filter in the pipeline — a skipped market is a permanent hole in history that healing cannot
+  fill. Keep floors LOW (Morpho: `minBorrowAssetsUsd: 10_000`, just enough to skip the
+  thousands of permissionless markets that never saw a borrow). Display-side curation belongs
+  in `src/lib/display-eligibility.ts`, which is revisable retroactively.
+- **Rates are stored as APY.** Convert APR before emitting: `(1 + APR/365)^365 - 1`
+  (helpers in `src/lib/utils.ts`: `aprToApyDaily`, `aprToApyPerSecond`, `aprToApyMorpho`).
+  Net APY: supply `base - fees + rewards`, borrow `base + fees - rewards`.
+- **Never parse a productId.** It is an opaque key. Provider/chain/asset/kind live as typed
+  columns on `products` — resolve by JOIN (see `productProviders()` in
+  `src/lib/db/repositories/gaps.ts`).
+- TypeScript strict, no `any`, no classes, functional only. Group RPC calls into multicalls
+  where possible.
 
-### Access Version Details
+## Validation — two severities
 
-```typescript
-import { AaveAdapter } from '@/lib/protocols/aave'
+`core/validation.ts` defines both:
 
-// Get version protocol
-const v3 = AaveAdapter.getVersion('v3')
-console.log(v3.dataAdapter.dataSourceType) // 'graphql'
+- **Soft (runtime)** — `spotPayloadSoftSchema`. Shape + finiteness ONLY. The collector and
+  products-sync skip-and-warn a failing payload; a slot never crashes. It deliberately has
+  **no magnitude bound**: dropping a finite extreme rate at ingestion manufactures the exact
+  gap that the heal job then fills with the same value unguarded (see
+  `src/lib/apy-validation.ts` — every `apy_hourly` row above 100 was `healed = true`).
+  Extreme-but-finite rates are handled on the read side by `lib/display-eligibility.ts`.
+- **Strict (CI harness)** — `spotPayloadStrictSchema` + `productStrictSchema`. Soft rules
+  plus `|net| < 10` (1000%) and `chainId ∈ adapter.chains`. A new adapter quoting >1000% is
+  almost always a unit bug (raw percentage vs decimal) — CI is where that dies. One exemption:
+  markets at `utilizationRate >= 0.999` legitimately quote the protocol's rate-curve maximum
+  (drained Morpho markets hit ~298,000% APY, reporting utilization 0.9999997…), so
+  effectively-drained markets skip the bound.
 
-// Direct access to data protocol
-const positions = await v3.dataAdapter.getUserSupplyPositions({
-  addresses: ['0x...'],
-})
-```
+The harness (`scripts/adapter-test.ts`) runs `getProducts` + `getApySpot` live and fails on:
 
-## Adding a New Protocol
-
-### 1. Create Protocol Directory Structure
+- any strict validation failure,
+- **products/spot productId set drift** (each side must cover the other exactly),
+- an empty result set.
 
 ```bash
-mkdir -p src/lib/protocols/[protocol]/v1/graphql
+pnpm adapter:test aave_v3     # needs network; compound_v3 also needs THEGRAPH_API_KEY
 ```
 
-### 2. Create Configuration File
+It ends with a DefiLlama-style human-review summary — market counts per chain × kind, net APY
+min/median/max, supply TVL — paste it in your PR.
 
-Create `src/lib/protocols/[protocol]/config.ts`:
+## PR checklist
 
-```typescript
-export const PROTOCOL_ID = 'myprotocol' as const
+- [ ] `pnpm adapter:test <id>` exits 0
+- [ ] `pnpm typecheck && pnpm lint && pnpm test && pnpm build` green
+- [ ] Harness summary table pasted in the PR description
+- [ ] New protocol: `PROTOCOLS_META` + `YIELD_ADAPTERS` entries added together
 
-export const MY_PROTOCOL_V1_CONFIG: Record<number, ProtocolConfig> = {
-  [mainnet.id]: {
-    name: PROTOCOL_ID,
-    displayName: 'My Protocol V1',
-    chainId: mainnet.id,
-    contracts: {
-      /* ... */
-    },
-    markets: [
-      /* ... */
-    ],
-    blockExplorer: 'https://etherscan.io',
-  },
-}
-```
+## Disabling a protocol
 
-### 3. Create GraphQL Queries
-
-Create `src/lib/protocols/[protocol]/v1/graphql/queries.ts`:
-
-```typescript
-import { gql } from 'urql'
-
-export const USER_SUPPLY_POSITIONS = gql`
-  query UserSupplyPositions($address: String!) {
-    // Your query here
-  }
-`
-```
-
-### 4. Implement Data Adapter
-
-Create `src/lib/protocols/[protocol]/v1/graphql/index.ts`:
-
-```typescript
-import type { BaseDataAdapter } from '@/lib/protocols/types'
-
-export const myProtocolV1GraphqlAdapter: BaseDataAdapter = {
-  dataSourceType: 'graphql',
-  async getUserSupplyPositions({ addresses }) {
-    // Implementation
-  },
-  async getUserBorrowPositions({ addresses }) {
-    // Implementation
-  },
-}
-```
-
-### 5. Create Version Adapter
-
-Create `src/lib/protocols/[protocol]/v1/index.ts`:
-
-```typescript
-import { createVersionAdapter } from '../../utils'
-import { myProtocolV1GraphqlAdapter } from './graphql'
-
-export const myProtocolV1Adapter = createVersionAdapter(
-  'v1',
-  myProtocolV1GraphqlAdapter
-)
-```
-
-### 6. Create Protocol Adapter
-
-Create `src/lib/protocols/[protocol]/index.ts`:
-
-```typescript
-import { createProtocolAdapter } from '../utils'
-import { PROTOCOL_ID } from './config'
-import { myProtocolV1Adapter } from './v1'
-
-export const MyProtocolAdapter = createProtocolAdapter(
-  PROTOCOL_ID,
-  {
-    v1: myProtocolV1Adapter,
-  },
-  'v1' // default version
-)
-
-export { PROTOCOL_ID }
-```
-
-### 7. Update CodeGen Configuration
-
-Add to `codegen.ts`:
-
-```typescript
-'src/lib/protocols/[protocol]/v1/graphql/generated/': {
-  schema: 'https://api.myprotocol.com/graphql',
-  documents: 'src/lib/protocols/[protocol]/v1/graphql/queries.ts',
-  preset: 'client',
-  presetConfig: {
-    fragmentMasking: false,
-  },
-},
-```
-
-### 8. Generate Types
-
-```bash
-pnpm run codegen
-```
-
-### 9. Register in Protocol Registry
-
-Update `src/config/protocols.ts`:
-
-```typescript
-import {
-  MY_PROTOCOL_CONFIG,
-  PROTOCOL_ID as MY_PROTOCOL_ID,
-} from '@/lib/protocols/myprotocol'
-
-export const PROTOCOL_REGISTRY = {
-  // ... existing protocols
-  [MY_PROTOCOL_ID]: {
-    displayName: 'My Protocol',
-    config: MY_PROTOCOL_CONFIG,
-    protocol: () =>
-      import('@/lib/protocols/myprotocol').then((m) => m.MyProtocolAdapter),
-  },
-}
-```
-
-## Adding a New Version to Existing Protocol
-
-### 1. Create Version Directory
-
-```bash
-mkdir -p src/lib/protocols/[protocol]/v2/graphql
-```
-
-### 2. Implement Version Adapter
-
-Follow steps 3-5 from "Adding a New Protocol" above.
-
-### 3. Update Protocol Adapter
-
-Update `src/lib/protocols/[protocol]/index.ts`:
-
-```typescript
-export const MyProtocolAdapter = createProtocolAdapter(
-  PROTOCOL_ID,
-  {
-    v1: myProtocolV1Adapter,
-    v2: myProtocolV2Adapter, // Add new version
-  },
-  'v2' // Update default version if needed
-)
-```
-
-## Protocol-Specific Notes
-
-### AAVE
-
-- **Current Versions**: v3 (default)
-- **Data Source**: GraphQL API (`https://api.v3.aave.com/graphql`)
-- **Features**: Multi-chain support, health factor tracking
-- **Future**: v2 support via subgraph
-
-### Morpho
-
-- **Current Versions**: v1 (default)
-- **Data Source**: GraphQL API (`https://api.morpho.org/graphql`)
-- **Features**: Vault-based supplying
-
-### Compound
-
-- **Current Versions**: v3 (default)
-- **Data Source**: Community Subgraph (no official GraphQL API)
-- **Note**: Relies entirely on The Graph subgraphs
-
-## Type Generation
-
-All GraphQL types are auto-generated using GraphQL Code Generator:
-
-```bash
-# Generate types for all protocols
-pnpm run codegen
-
-# Types are generated in [protocol]/[version]/[source]/generated/
-# These directories are gitignored
-```
-
-## Testing
-
-When testing protocols:
-
-1. **Unit Tests**: Test individual protocol methods
-2. **Integration Tests**: Test against real APIs (with rate limiting)
-3. **Mock Data**: Use generated types to create mock responses
-
-## Best Practices
-
-1. **Always use generated types** from GraphQL Code Generator
-2. **Handle errors gracefully** - APIs can timeout or fail
-3. **Implement rate limiting** for API calls
-4. **Cache responses** when appropriate
-5. **Log errors** but return empty arrays instead of throwing
-6. **Document protocol-specific quirks** in code comments
-7. **Keep backward compatibility** when updating protocols
-
-## Migration Guide
-
-### From Old Architecture to New
-
-The old architecture used a flat structure:
-
-```
-aave/
-  gql/
-  subgraph/
-```
-
-The new architecture uses versioned structure:
-
-```
-aave/
-  config.ts
-  v3/
-    graphql/
-    subgraph/
-```
-
-**Backward Compatibility**: The old `gqlAdapter` export is maintained as a deprecated wrapper around the new `AaveAdapter`.
-
-## Future Enhancements
-
-1. **Cross-chain aggregation**: Aggregate positions across multiple chains
-2. **Historical data**: Add time-series data support via stats protocols
-3. **Real-time updates**: WebSocket support for live position updates
-4. **Caching layer**: Redis/memory cache for frequently accessed data
-5. **Rate limiting**: Built-in rate limiting for API calls
+Comment out its entries in **both** `PROTOCOLS_META` and `YIELD_ADAPTERS` (and
+`APP_ADAPTERS` if present) — the `Record<ProtocolName, …>` typing forces them to move in
+lockstep. Existing DB rows are untouched; the pipeline simply stops collecting.

@@ -1,24 +1,13 @@
 import { Address } from 'viem'
 
-import type {
-  ProtocolChain,
-  ProtocolConfig,
-  ProtocolName,
-} from '@/config/protocols'
-import {
-  getProtocolAdapter,
-  getProtocolConfig,
-  getProtocolIds,
-} from '@/config/protocols'
+import type { ProtocolName } from '@/config/protocols-meta'
 
 // ============================================================================
 // PROTOCOL TYPES
 // ============================================================================
-// Re-export protocol-related types from config for convenience
-// These are auto-generated from PROTOCOL_REGISTRY (single source of truth)
+// Re-export the adapter-id union so consumers can `import { ProtocolName } from '@/types'`.
 // ============================================================================
-export type { ProtocolName, ProtocolConfig, ProtocolChain }
-export { getProtocolAdapter, getProtocolConfig, getProtocolIds }
+export type { ProtocolName }
 
 export type PositionType = 'supply' | 'borrow'
 export type AssetType = 'stable' | 'volatile' | 'liquid-staking'

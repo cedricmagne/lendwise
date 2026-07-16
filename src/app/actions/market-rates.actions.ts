@@ -4,7 +4,8 @@ import { cache } from 'react'
 
 import { Address } from 'viem'
 
-import { getProtocolAdapter } from '@/config/protocols'
+import { type ProtocolName } from '@/config/protocols-meta'
+import { APP_ADAPTERS } from '@/config/protocols-server'
 import type { MarketRate, TimeframeLabel } from '@/types'
 
 /**
@@ -31,14 +32,12 @@ export const loadMarketBorrowHistoryRates = cache(async function loadMarketRate(
     params
 
   try {
-    const adapterLoader = getProtocolAdapter(protocolId)
-    if (!adapterLoader) {
-      throw new Error(`No adapter found for protocol ${protocolId}`)
-    }
+    const load = APP_ADAPTERS[protocolId as ProtocolName]
+    if (!load) throw new Error(`No app adapter for protocol ${protocolId}`)
 
-    const protocolAdapter = await adapterLoader()
+    const adapter = await load()
 
-    const rates = await protocolAdapter.getMarketBorrowHistoryRates({
+    const rates = await adapter.getMarketBorrowHistoryRates({
       chainId,
       poolId,
       tokenId,
@@ -65,14 +64,12 @@ export const loadMarketSupplyHistoryRates = cache(async function loadMarketRate(
     params
 
   try {
-    const adapterLoader = getProtocolAdapter(protocolId)
-    if (!adapterLoader) {
-      throw new Error(`No adapter found for protocol ${protocolId}`)
-    }
+    const load = APP_ADAPTERS[protocolId as ProtocolName]
+    if (!load) throw new Error(`No app adapter for protocol ${protocolId}`)
 
-    const protocolAdapter = await adapterLoader()
+    const adapter = await load()
 
-    const rates = await protocolAdapter.getMarketSupplyHistoryRates({
+    const rates = await adapter.getMarketSupplyHistoryRates({
       chainId,
       poolId,
       interval,

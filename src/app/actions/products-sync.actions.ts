@@ -1,24 +1,20 @@
 'use server'
 
-import type { ProtocolName } from '@/config/protocols'
+import { z } from 'zod'
+
+import { PROTOCOLS_META, type ProtocolName } from '@/config/protocols-meta'
+import { YIELD_ADAPTERS } from '@/config/protocols-server'
 import {
   syncProviderProducts,
   upsertProducts,
 } from '@/lib/db/repositories/products'
 import type { BorrowProduct, Product, SupplyProduct } from '@/lib/db/types'
-import { fetchAaveV3Products } from '@/lib/protocols/aave'
-import { fetchCompoundV3Products } from '@/lib/protocols/compound'
-import { fetchMorphoV1Products } from '@/lib/protocols/morpho'
 
-// ─── Protocol tasks ───────────────────────────────────────────────────────────
-
-const PROTOCOL_TASKS: Partial<
-  Record<ProtocolName, () => Promise<(SupplyProduct | BorrowProduct)[]>>
-> = {
-  aave_v3: fetchAaveV3Products,
-  morpho_v1: fetchMorphoV1Products,
-  compound_v3: fetchCompoundV3Products,
-}
+// ─── Product shape guard ─────────────────────────────────────────────────────
+// Non-crashing shape only: a product without a usable `_id` would corrupt the
+// upsert (the slug is the PK). NO magnitude rules here — this is not the strict
+// CI harness, only a runtime guard against a malformed row poisoning the batch.
+const productShapeSchema = z.object({ _id: z.string().min(1) }).loose()
 
 // ─── Upsert ───────────────────────────────────────────────────────────────────
 
@@ -65,19 +61,11 @@ export async function syncProducts(
   const start = Date.now()
   const errors: string[] = []
 
-  const tasks: [
-    ProtocolName,
-    () => Promise<(SupplyProduct | BorrowProduct)[]>,
-  ][] = protocol
-    ? PROTOCOL_TASKS[protocol]
-      ? [[protocol, PROTOCOL_TASKS[protocol]]]
-      : []
-    : (Object.entries(PROTOCOL_TASKS) as [
-        ProtocolName,
-        () => Promise<(SupplyProduct | BorrowProduct)[]>,
-      ][])
+  const ids = (Object.keys(YIELD_ADAPTERS) as ProtocolName[]).filter(
+    (id) => !protocol || id === protocol
+  )
 
-  if (tasks.length === 0) {
+  if (ids.length === 0) {
     return {
       success: false,
       counts: { total: 0, activated: 0, deactivated: 0 },
@@ -86,19 +74,34 @@ export async function syncProducts(
     }
   }
 
-  const results = await Promise.allSettled(tasks.map(([, fetch]) => fetch()))
+  const results = await Promise.allSettled(
+    ids.map(async (id) => (await YIELD_ADAPTERS[id]()).getProducts())
+  )
 
   const allProducts: Product[] = []
   const protoCounts: Partial<Record<ProtocolName, number>> = {}
+  // Valid (id-bearing) products kept per fulfilled index — reused by the
+  // availability reconciliation below so a dropped product is never re-listed.
+  const validByIndex: (SupplyProduct | BorrowProduct)[][] = []
 
   for (let i = 0; i < results.length; i++) {
     const result = results[i]
-    const protoId = tasks[i][0]
+    const protoId = ids[i]
 
     if (result.status === 'fulfilled') {
-      protoCounts[protoId] = result.value.length
-      allProducts.push(...result.value)
+      const valid: (SupplyProduct | BorrowProduct)[] = []
+      for (const product of result.value) {
+        if (productShapeSchema.safeParse(product).success) valid.push(product)
+        else
+          console.warn(
+            `[sync:${protoId}] Skipping malformed product ${(product as { _id?: string })._id ?? '<no id>'}: missing or empty _id`
+          )
+      }
+      validByIndex[i] = valid
+      protoCounts[protoId] = valid.length
+      allProducts.push(...valid)
     } else {
+      validByIndex[i] = []
       const msg =
         result.reason instanceof Error
           ? result.reason.message
@@ -130,13 +133,12 @@ export async function syncProducts(
   // expectations for hundreds of live pools.
   const fetchedByProvider = new Map<string, string[]>()
   for (let i = 0; i < results.length; i++) {
-    const result = results[i]
-    if (result.status !== 'fulfilled') continue
-    const provider = tasks[i][0].split('_')[0] // "aave_v3" → "aave"
-    const ids = result.value.map((p) => p._id)
+    if (results[i].status !== 'fulfilled') continue
+    const provider = PROTOCOLS_META[ids[i]].provider // no id parsing
+    const productIds = validByIndex[i].map((p) => p._id)
     const existing = fetchedByProvider.get(provider)
-    if (existing) existing.push(...ids)
-    else fetchedByProvider.set(provider, ids)
+    if (existing) existing.push(...productIds)
+    else fetchedByProvider.set(provider, productIds)
   }
 
   let deactivated = 0

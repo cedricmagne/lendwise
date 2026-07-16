@@ -4,8 +4,10 @@ import { cache } from 'react'
 
 import { Address } from 'viem'
 
-import { getProtocolAdapter, getProtocolIds } from '@/config/protocols'
-import { ProtocolName, SupplyPosition } from '@/types'
+import { type ProtocolName } from '@/config/protocols-meta'
+import { APP_ADAPTERS } from '@/config/protocols-server'
+import type { AppAdapter } from '@/lib/protocols/core/types'
+import { SupplyPosition } from '@/types'
 
 // Generate return type dynamically from supported protocols
 type ProtocolPositions = Record<ProtocolName, SupplyPosition[]>
@@ -14,11 +16,14 @@ export const loadUserSupplyPositions = cache(
   async function loadUserSupplyPositions(
     addresses: Address[]
   ): Promise<ProtocolPositions> {
-    // Get all protocol IDs from registry
-    const protocolIds = getProtocolIds()
+    // All registered app adapters
+    const entries = Object.entries(APP_ADAPTERS) as [
+      ProtocolName,
+      () => Promise<AppAdapter>,
+    ][]
 
     // Create empty positions object for all supported protocols
-    const emptyPositions = protocolIds.reduce((acc, protocolId) => {
+    const emptyPositions = entries.reduce((acc, [protocolId]) => {
       acc[protocolId] = []
       return acc
     }, {} as ProtocolPositions)
@@ -29,29 +34,21 @@ export const loadUserSupplyPositions = cache(
     }
 
     try {
-      // Dynamically load all protocol adapters and fetch positions
+      // Dynamically load all app adapters and fetch positions
       const results = await Promise.allSettled(
-        protocolIds.map(async (protocolId) => {
-          const adapterLoader = getProtocolAdapter(protocolId)
-          if (!adapterLoader) {
-            throw new Error(`No adapter found for ${protocolId}`)
-          }
-          const protocolAdapter = await adapterLoader()
-          const positions = await protocolAdapter.getUserSupplyPositions({
-            addresses,
-          })
-          return { protocolId, positions }
-        })
+        entries.map(async ([, load]) =>
+          (await load()).getUserSupplyPositions({ addresses })
+        )
       )
 
       // Build the result object from all protocol results
       const positions: ProtocolPositions = { ...emptyPositions }
 
       results.forEach((result, index) => {
-        const protocolId = protocolIds[index]
+        const protocolId = entries[index][0]
 
         if (result.status === 'fulfilled') {
-          positions[result.value.protocolId] = result.value.positions
+          positions[protocolId] = result.value
         } else {
           console.error(`${protocolId} adapter failed:`, result.reason)
           positions[protocolId] = []

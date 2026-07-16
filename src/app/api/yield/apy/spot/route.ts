@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifySignatureAppRouter } from '@upstash/qstash/nextjs'
 
 import { collectApySpot } from '@/app/actions/apy-snapshots.actions'
-import { type ProtocolName, getProtocolIds } from '@/config/protocols'
+import { PROTOCOLS_META, type ProtocolName } from '@/config/protocols-meta'
 
 /**
  * Spot APY snapshot endpoint.
@@ -27,7 +27,7 @@ export const POST = verifySignatureAppRouter(async (req: NextRequest) => {
     )
   }
 
-  const validIds = getProtocolIds() as string[]
+  const validIds = Object.keys(PROTOCOLS_META)
   if (!validIds.includes(protocol)) {
     return NextResponse.json(
       {

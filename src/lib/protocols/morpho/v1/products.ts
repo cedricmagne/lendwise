@@ -1,15 +1,16 @@
 import type { BorrowProduct, SupplyProduct } from '@/lib/db/types'
-import { MORPHO_CONFIG } from '@/lib/protocols/morpho/config'
+import { createGraphQLClient } from '@/lib/protocols/core/toolkit'
+import type { FetchOpts } from '@/lib/protocols/core/types'
 import type {
   ListSupplyProductsQuery,
   MarketsApyQuery,
-} from '@/lib/protocols/morpho/v1/offchain/generated/graphql'
+} from '@/lib/protocols/morpho/v1/generated/graphql'
 import {
   LIST_SUPPLY_PRODUCTS,
   MARKETS_APY,
-} from '@/lib/protocols/morpho/v1/offchain/queries'
-import { createGraphQLClient } from '@/lib/protocols/shared'
+} from '@/lib/protocols/morpho/v1/queries'
 
+import { MORPHO_V1_API_URL, MORPHO_V1_CHAINS } from './config'
 import { morphoMarketWhere, morphoVaultWhere } from './listing'
 import { buildProductId } from './utils'
 
@@ -21,24 +22,13 @@ import { buildProductId } from './utils'
  * Called by the daily pools sync job.
  */
 export async function fetchMorphoV1Products(
-  chainFilter?: string
+  opts?: FetchOpts
 ): Promise<(SupplyProduct | BorrowProduct)[]> {
-  const config = MORPHO_CONFIG.morpho_v1
-  const client = createGraphQLClient(config.offchainApiUrl || '')
+  const client = createGraphQLClient(MORPHO_V1_API_URL)
 
-  let chainIds = Object.keys(config.chains).map(Number)
-
-  if (chainFilter) {
-    const found = Object.entries(config.chains).find(
-      ([, c]) => c.name.toLowerCase() === chainFilter.toLowerCase()
-    )
-    if (!found) {
-      console.warn(
-        `[pools:morpho] Chain filter '${chainFilter}' not found in config`
-      )
-      return []
-    }
-    chainIds = [Number(found[0])]
+  let chainIds = Object.keys(MORPHO_V1_CHAINS).map(Number)
+  if (opts?.chainIds?.length) {
+    chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
   }
 
   const products: (SupplyProduct | BorrowProduct)[] = []
@@ -102,7 +92,7 @@ export async function fetchMorphoV1Products(
           type: 'market',
           version: 'v1',
           name: 'morphoblue', // display name — kept stable despite unified `morpho:` id prefix
-          subgraphUrl: config.offchainApiUrl || '',
+          subgraphUrl: MORPHO_V1_API_URL,
           chain,
           address: market.morphoBlue.address,
           meta: {
@@ -192,7 +182,7 @@ export async function fetchMorphoV1Products(
           version: 'v1',
           type: 'vault',
           name: `MorphoBlueV1${vault.asset.chain.network.replace(' ', '')}`,
-          subgraphUrl: config.offchainApiUrl || '',
+          subgraphUrl: MORPHO_V1_API_URL,
           chain,
           address: vault.address,
           meta: {

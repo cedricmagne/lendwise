@@ -1,9 +1,10 @@
 import type { BorrowProduct, SupplyProduct } from '@/lib/db/types'
-import { COMPOUND_CONFIG } from '@/lib/protocols/compound/config'
-import type { MarketsAllQuery } from '@/lib/protocols/compound/v3/onchain/generated/graphql'
-import { MARKETS_ALL } from '@/lib/protocols/compound/v3/onchain/queries'
-import { createGraphQLClient } from '@/lib/protocols/shared'
+import type { MarketsAllQuery } from '@/lib/protocols/compound/v3/generated/graphql'
+import { MARKETS_ALL } from '@/lib/protocols/compound/v3/queries'
+import { createGraphQLClient } from '@/lib/protocols/core/toolkit'
+import type { FetchOpts } from '@/lib/protocols/core/types'
 
+import { COMPOUND_V3_CHAINS } from './config'
 import { buildProductId } from './utils'
 
 /**
@@ -16,23 +17,11 @@ import { buildProductId } from './utils'
  * Uses Compound V3 subgraph to fetch market data.
  */
 export async function fetchCompoundV3Products(
-  chainFilter?: string
+  opts?: FetchOpts
 ): Promise<(SupplyProduct | BorrowProduct)[]> {
-  const config = COMPOUND_CONFIG.compound_v3
-
-  let chainIds = Object.keys(config.chains).map(Number)
-
-  if (chainFilter) {
-    const found = Object.entries(config.chains).find(
-      ([, c]) => c.name.toLowerCase() === chainFilter.toLowerCase()
-    )
-    if (!found) {
-      console.warn(
-        `[products:compound] Chain filter '${chainFilter}' not found in config`
-      )
-      return []
-    }
-    chainIds = [Number(found[0])]
+  let chainIds = Object.keys(COMPOUND_V3_CHAINS).map(Number)
+  if (opts?.chainIds?.length) {
+    chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
   }
 
   const products: (SupplyProduct | BorrowProduct)[] = []
@@ -40,7 +29,7 @@ export async function fetchCompoundV3Products(
 
   // Fetch markets for each chain separately since Compound uses separate subgraphs per chain
   for (const chainId of chainIds) {
-    const chainConfig = config.chains[chainId]
+    const chainConfig = COMPOUND_V3_CHAINS[chainId]
     if (!chainConfig?.custom.subgraphUrl) {
       console.warn(`[products:compound] No subgraph URL for chain ${chainId}`)
       continue

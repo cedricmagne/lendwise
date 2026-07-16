@@ -8,7 +8,7 @@ import { useAccount } from 'wagmi'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { WalletNotConnected } from '@/components/wallet'
-import { getProtocolVersionNameById } from '@/config'
+import { protocolVersionName } from '@/config/protocols-meta'
 import { useCurrency } from '@/contexts'
 import { useLoadUserPositions } from '@/hooks/useLoadUserPositions'
 import { useWalletStore } from '@/stores/walletStore'
@@ -78,7 +78,7 @@ export function Portfolio() {
           0
         )
         return {
-          name: getProtocolVersionNameById(protocol),
+          name: protocolVersionName(protocol),
           value:
             totalSupplyingValue > 0 ? (total / totalSupplyingValue) * 100 : 0,
           color: PROTOCOL_COLORS[idx % PROTOCOL_COLORS.length],
@@ -93,7 +93,7 @@ export function Portfolio() {
           0
         )
         return {
-          name: getProtocolVersionNameById(protocol),
+          name: protocolVersionName(protocol),
           value:
             totalBorrowingValue > 0 ? (total / totalBorrowingValue) * 100 : 0,
           color: PROTOCOL_COLORS[idx % PROTOCOL_COLORS.length],

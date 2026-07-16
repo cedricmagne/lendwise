@@ -1,7 +1,17 @@
 import { isFiniteApyBlock } from '@/lib/apy-validation'
 import type { BorrowMarketState, SupplyMarketState } from '@/lib/db/types'
-import type { HistoryDataPoint } from '@/lib/protocols/aave/v3/apy-history'
-import { MORPHO_CONFIG } from '@/lib/protocols/morpho/config'
+import {
+  createGraphQLClient,
+  processBatches,
+} from '@/lib/protocols/core/toolkit'
+import type {
+  HistoryDataPoint,
+  HistoryParams,
+} from '@/lib/protocols/core/types'
+import {
+  MORPHO_V1_API_URL,
+  MORPHO_V1_CHAINS,
+} from '@/lib/protocols/morpho/v1/config'
 import {
   morphoMarketWhere,
   morphoVaultWhere,
@@ -11,9 +21,8 @@ import {
   MARKET_BORROW_HISTORY,
   VAULTS_APY,
   VAULT_SUPPLY_HISTORY,
-} from '@/lib/protocols/morpho/v1/offchain/queries'
+} from '@/lib/protocols/morpho/v1/queries'
 import { buildProductId } from '@/lib/protocols/morpho/v1/utils'
-import { createGraphQLClient, processBatches } from '@/lib/protocols/shared'
 
 // ─── Response types ───────────────────────────────────────────────────────────
 
@@ -132,27 +141,18 @@ function toMap(series: FloatDataPoint[]): Map<number, number> {
  * The Morpho API supports custom start/end timestamps with configurable interval.
  */
 export async function fetchMorphoHistory(opts?: {
-  chainFilter?: string
+  chainIds?: number[]
   startTimestamp?: number
   endTimestamp?: number
   interval?: string
   onProgress?: (msg: string) => void
 }): Promise<HistoryDataPoint[]> {
   const log = opts?.onProgress ?? console.log
-  const config = MORPHO_CONFIG.morpho_v1
-  const client = createGraphQLClient(config.offchainApiUrl!, undefined, 60_000)
+  const client = createGraphQLClient(MORPHO_V1_API_URL, undefined, 60_000)
 
-  let chainIds = Object.keys(config.chains).map(Number)
-
-  if (opts?.chainFilter) {
-    const found = Object.entries(config.chains).find(
-      ([, c]) => c.name.toLowerCase() === opts.chainFilter!.toLowerCase()
-    )
-    if (!found) {
-      log(`[history:morpho] Chain filter '${opts.chainFilter}' not found`)
-      return []
-    }
-    chainIds = [Number(found[0])]
+  let chainIds = Object.keys(MORPHO_V1_CHAINS).map(Number)
+  if (opts?.chainIds?.length) {
+    chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
   }
 
   const timeseriesOptions: Record<string, unknown> = {}
@@ -418,4 +418,25 @@ export async function fetchMorphoHistory(opts?: {
     `[history:morpho] Total: ${allPoints.length} data points (${allPoints.filter((p) => p.kind === 'supply').length} supply, ${allPoints.filter((p) => p.kind === 'borrow').length} borrow)`
   )
   return allPoints
+}
+
+// ─── Contract mapping ─────────────────────────────────────────────────────────
+
+/**
+ * YieldAdapter.getApyHistory implementation for Morpho v1.
+ *
+ * The Morpho API already accepts a custom (startTimestamp, endTimestamp, interval)
+ * window, so this is a thin passthrough onto `fetchMorphoHistory` — no window
+ * remapping or post-fetch trimming is needed the way Aave's does.
+ */
+export async function getMorphoApyHistory(
+  params: HistoryParams
+): Promise<HistoryDataPoint[]> {
+  return fetchMorphoHistory({
+    startTimestamp: params.startTimestamp,
+    endTimestamp: params.endTimestamp,
+    interval: params.interval,
+    chainIds: params.chainIds,
+    onProgress: params.onProgress,
+  })
 }

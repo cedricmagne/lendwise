@@ -1,6 +1,5 @@
 export * from './useWalletInfo'
 export * from './useTransaction'
-export * from './useMarketStats'
 export * from './useLoadUserPositions'
 export * from './useMobile'
 export * from './useCurrencyConverter'

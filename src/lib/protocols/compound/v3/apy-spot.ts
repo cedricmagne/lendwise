@@ -3,11 +3,12 @@ import type {
   SpotPayload,
   SupplyMarketState,
 } from '@/lib/db/types'
-import { COMPOUND_CONFIG } from '@/lib/protocols/compound/config'
-import { MarketsApyQuery } from '@/lib/protocols/compound/v3/onchain/generated/graphql'
-import { MARKETS_APY } from '@/lib/protocols/compound/v3/onchain/queries'
-import { createGraphQLClient } from '@/lib/protocols/shared'
+import { MarketsApyQuery } from '@/lib/protocols/compound/v3/generated/graphql'
+import { MARKETS_APY } from '@/lib/protocols/compound/v3/queries'
+import { createGraphQLClient } from '@/lib/protocols/core/toolkit'
+import type { FetchOpts } from '@/lib/protocols/core/types'
 
+import { COMPOUND_V3_CHAINS } from './config'
 import { buildProductId } from './utils'
 
 /**
@@ -17,29 +18,18 @@ import { buildProductId } from './utils'
  * independently and aggregate the results.
  */
 export async function fetchCompoundV3ApySpot(
-  chainFilter?: string
+  opts?: FetchOpts
 ): Promise<SpotPayload[]> {
-  const config = COMPOUND_CONFIG.compound_v3
   const snapshots: SpotPayload[] = []
 
-  let chainIds = Object.keys(config.chains).map(Number)
-
-  if (chainFilter) {
-    const found = Object.entries(config.chains).find(
-      ([, c]) => c.name.toLowerCase() === chainFilter.toLowerCase()
-    )
-    if (!found) {
-      console.warn(
-        `[products:compound] Chain filter '${chainFilter}' not found in config`
-      )
-      return []
-    }
-    chainIds = [Number(found[0])]
+  let chainIds = Object.keys(COMPOUND_V3_CHAINS).map(Number)
+  if (opts?.chainIds?.length) {
+    chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
   }
 
   const results = await Promise.allSettled(
     chainIds.map(async (chainId) => {
-      const chainConfig = config.chains[chainId]
+      const chainConfig = COMPOUND_V3_CHAINS[chainId]
       if (!chainConfig?.custom.subgraphUrl) {
         console.warn(`[products:compound] No subgraph URL for chain ${chainId}`)
         return []
@@ -56,7 +46,7 @@ export async function fetchCompoundV3ApySpot(
 
       if (error) {
         throw new Error(
-          `[cron:compound] Failed to fetch ${chainConfig.name} rates: ${error.message}`
+          `[cron:compound_v3] Failed to fetch ${chainConfig.name} rates: ${error.message}`
         )
       }
 
@@ -143,6 +133,6 @@ export async function fetchCompoundV3ApySpot(
     throw new Error(chainErrors.join(' | '))
   }
 
-  console.log(`[cron:compound] Fetched ${snapshots.length} APY snapshots`)
+  console.log(`[cron:compound_v3] Fetched ${snapshots.length} APY snapshots`)
   return snapshots
 }

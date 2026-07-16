@@ -2,10 +2,12 @@
 
 import { unstable_cache } from 'next/cache'
 
-import { getProtocolAdapter, getProtocolIds } from '@/config/protocols'
+import { type ProtocolName } from '@/config/protocols-meta'
+import { APP_ADAPTERS } from '@/config/protocols-server'
 import { apyEnrichments, latestHourlyNet } from '@/lib/db/repositories/apy'
 import { listDisplayFlaggedIds } from '@/lib/db/repositories/display-flags'
 import { ineligibilityReason } from '@/lib/display-eligibility'
+import type { AppAdapter } from '@/lib/protocols/core/types'
 import { BorrowProduct, SupplyProduct } from '@/types'
 
 /** The minimum a product must carry for the display policy to judge it. */
@@ -41,22 +43,19 @@ function eligibleForDisplay<T extends Judgeable>(
 }
 
 async function _loadSupplyProducts(): Promise<SupplyProduct[]> {
-  const protocolIds = getProtocolIds()
+  const entries = Object.entries(APP_ADAPTERS) as [
+    ProtocolName,
+    () => Promise<AppAdapter>,
+  ][]
 
   const results = await Promise.allSettled(
-    protocolIds.map(async (protocolId) => {
-      const adapterLoader = getProtocolAdapter(protocolId)
-      if (!adapterLoader) throw new Error(`No adapter found for ${protocolId}`)
-
-      const protocolAdapter = await adapterLoader()
-      return protocolAdapter.getSupplyProducts()
-    })
+    entries.map(async ([, load]) => (await load()).getSupplyProducts())
   )
 
   const allSupplyProducts: SupplyProduct[] = []
 
   results.forEach((result, index) => {
-    const protocolId = protocolIds[index]
+    const protocolId = entries[index][0]
     if (result.status === 'fulfilled') {
       allSupplyProducts.push(...result.value)
     } else {
@@ -97,22 +96,19 @@ export const loadSupplyProducts = unstable_cache(
 )
 
 async function _loadBorrowProducts(): Promise<BorrowProduct[]> {
-  const protocolIds = getProtocolIds()
+  const entries = Object.entries(APP_ADAPTERS) as [
+    ProtocolName,
+    () => Promise<AppAdapter>,
+  ][]
 
   const results = await Promise.allSettled(
-    protocolIds.map(async (protocolId) => {
-      const adapterLoader = getProtocolAdapter(protocolId)
-      if (!adapterLoader) throw new Error(`No adapter found for ${protocolId}`)
-
-      const protocolAdapter = await adapterLoader()
-      return protocolAdapter.getBorrowProducts()
-    })
+    entries.map(async ([, load]) => (await load()).getBorrowProducts())
   )
 
   const allBorrowProducts: BorrowProduct[] = []
 
   results.forEach((result, index) => {
-    const protocolId = protocolIds[index]
+    const protocolId = entries[index][0]
     if (result.status === 'fulfilled') {
       allBorrowProducts.push(...result.value)
     } else {

@@ -4,34 +4,21 @@ import type {
   SpotPayload,
   SupplyMarketState,
 } from '@/lib/db/types'
-import { AAVE_CONFIG } from '@/lib/protocols/aave/config'
-import type { MarketsApyQuery } from '@/lib/protocols/aave/v3/offchain/generated/graphql'
-import { MARKETS_APY } from '@/lib/protocols/aave/v3/offchain/queries'
-import { createGraphQLClient } from '@/lib/protocols/shared'
+import type { MarketsApyQuery } from '@/lib/protocols/aave/v3/generated/graphql'
+import { MARKETS_APY } from '@/lib/protocols/aave/v3/queries'
+import { createGraphQLClient } from '@/lib/protocols/core/toolkit'
+import {
+  fetchMerklIncentives,
+  lookupMerklIncentive,
+} from '@/lib/protocols/core/toolkit/merkl'
+import type { FetchOpts } from '@/lib/protocols/core/types'
 import { aprToApyDaily, aprToApyPerSecond } from '@/lib/utils'
 
+import { AAVE_V3_API_URL, AAVE_V3_CHAINS } from './config'
 import { listsBorrow } from './listing'
 import { buildProductId } from './utils'
 
-// ─── Merkl types ──────────────────────────────────────────────────────────────
-
-type MerklOpportunity = {
-  chainId: number
-  status: string
-  action: string
-  apr: number
-  depositUrl?: string
-  tokens: { address: string }[]
-}
-
-type MerklIncentiveMap = Map<string, { apr: number; apy: number }>
-
-type MerklIncentives = {
-  supply: MerklIncentiveMap
-  borrow: MerklIncentiveMap
-}
-
-// ─── Merkl helpers ────────────────────────────────────────────────────────────
+// ─── Merkl market slugs ─────────────────────────────────────────────────────
 
 /**
  * Map Aave GraphQL market names to Merkl depositUrl slugs.
@@ -54,109 +41,6 @@ const AAVE_MARKET_TO_MERKL_SLUG: Record<string, string> = {
   AaveV3ZkSync: 'proto_zksync_v3',
 }
 
-function extractDepositUrlParams(depositUrl?: string): {
-  marketName: string | null
-  underlyingAsset: string | null
-} {
-  if (!depositUrl) return { marketName: null, underlyingAsset: null }
-  try {
-    const url = new URL(depositUrl)
-    return {
-      marketName: url.searchParams.get('marketName'),
-      underlyingAsset: url.searchParams.get('underlyingAsset'),
-    }
-  } catch {
-    return { marketName: null, underlyingAsset: null }
-  }
-}
-
-function incentiveKey(marketName: string | null, tokenAddress: string): string {
-  const addr = tokenAddress.toLowerCase()
-  return marketName ? `${marketName}:${addr}` : addr
-}
-
-/**
- * Fetch Merkl incentive APRs for AAVE opportunities (LEND + BORROW).
- * Returns maps of composite key (marketName:tokenAddress) → { apr, apy }.
- * Merkl APR values are raw percentage (e.g. 1.5 = 1.5%) — converted to decimal APY.
- */
-async function fetchMerklIncentives(
-  chainIds: number[]
-): Promise<MerklIncentives> {
-  const incentives: MerklIncentives = {
-    supply: new Map(),
-    borrow: new Map(),
-  }
-
-  try {
-    const url = `https://api.merkl.xyz/v4/opportunities/?name=aave&chainId=${chainIds.join(',')}`
-    const response = await fetch(url)
-
-    if (!response.ok) {
-      console.warn(
-        `[cron:aave:merkl] API returned ${response.status}: ${response.statusText}`
-      )
-      return incentives
-    }
-
-    const opportunities: MerklOpportunity[] = await response.json()
-
-    for (const opp of opportunities) {
-      if (opp.status !== 'LIVE') continue
-
-      const targetMap =
-        opp.action === 'LEND'
-          ? incentives.supply
-          : opp.action === 'BORROW'
-            ? incentives.borrow
-            : null
-
-      if (!targetMap) continue
-
-      // Merkl returns APR as a percentage — convert to decimal APY
-      const aprDecimal = opp.apr / 100
-      const apy = aprToApyDaily(aprDecimal)
-
-      const { marketName, underlyingAsset } = extractDepositUrlParams(
-        opp.depositUrl
-      )
-      // Some Merkl campaigns (Aave V4 hub/spoke, cross-market "Dutch" campaigns)
-      // don't carry a marketName — we can't safely attribute those to a single
-      // V3 market instance, so skip rather than risk misattributing rewards
-      // across markets/versions that happen to share a token address.
-      if (!marketName) continue
-
-      const addresses = new Set(opp.tokens.map((t) => t.address.toLowerCase()))
-      if (underlyingAsset) addresses.add(underlyingAsset.toLowerCase())
-
-      for (const addr of addresses) {
-        const key = incentiveKey(marketName, addr)
-        const current = targetMap.get(key)
-        targetMap.set(key, {
-          apr: (current?.apr ?? 0) + aprDecimal,
-          apy: (current?.apy ?? 0) + apy,
-        })
-      }
-    }
-  } catch (err) {
-    console.error(
-      '[cron:aave:merkl] Failed to fetch Merkl incentives:',
-      err instanceof Error ? err.message : err
-    )
-  }
-
-  return incentives
-}
-
-function lookupMerklIncentive(
-  map: MerklIncentiveMap,
-  marketSlug: string | null,
-  tokenAddress: string
-): { apr: number; apy: number } | null {
-  if (!marketSlug) return null
-  return map.get(`${marketSlug}:${tokenAddress.toLowerCase()}`) ?? null
-}
-
 /**
  * Fetch current APY snapshots for all active AAVE v3 markets.
  * Returns SupplyApySpot and BorrowApySpot documents ready for MongoDB upsert.
@@ -165,24 +49,13 @@ function lookupMerklIncentive(
  * One reserve → two documents (supply + borrow).
  */
 export async function fetchAaveV3ApySpot(
-  chainFilter?: string
+  opts?: FetchOpts
 ): Promise<SpotPayload[]> {
-  const config = AAVE_CONFIG.aave_v3
-  const client = createGraphQLClient(config.offchainApiUrl!)
+  const client = createGraphQLClient(AAVE_V3_API_URL)
 
-  let chainIds = Object.keys(config.chains).map(Number)
-
-  if (chainFilter) {
-    const found = Object.entries(config.chains).find(
-      ([, c]) => c.name.toLowerCase() === chainFilter.toLowerCase()
-    )
-    if (!found) {
-      console.warn(
-        `[cron:aave] Chain filter '${chainFilter}' not found in config`
-      )
-      return []
-    }
-    chainIds = [Number(found[0])]
+  let chainIds = Object.keys(AAVE_V3_CHAINS).map(Number)
+  if (opts?.chainIds?.length) {
+    chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
   }
 
   // Fetch AAVE GraphQL and Merkl in parallel
@@ -190,13 +63,13 @@ export async function fetchAaveV3ApySpot(
     client
       .query<MarketsApyQuery>(MARKETS_APY, { request: { chainIds } })
       .toPromise(),
-    fetchMerklIncentives(chainIds),
+    fetchMerklIncentives({ name: 'aave', chainIds, logPrefix: 'cron:aave_v3' }),
   ])
 
   const { data, error } = graphqlResult
 
   if (error) {
-    throw new Error(`[cron:aave] Failed to fetch APY: ${error.message}`)
+    throw new Error(`[cron:aave_v3] Failed to fetch APY: ${error.message}`)
   }
 
   if (!data?.markets) return []
@@ -453,7 +326,7 @@ export async function fetchAaveV3ApySpot(
 
   const borrows = snapshots.filter((s) => s.kind === 'borrow').length
   console.log(
-    `[cron:aave] Fetched ${snapshots.length} spot documents (${snapshots.length - borrows} supply + ${borrows} borrow)`
+    `[cron:aave_v3] Fetched ${snapshots.length} spot documents (${snapshots.length - borrows} supply + ${borrows} borrow)`
   )
   return snapshots
 }

@@ -51,7 +51,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { HORIZON_CONFIG, HorizonKey } from '@/config/horizon'
-import { getProtocolVersionNameById } from '@/config/protocols'
+import { protocolVersionName } from '@/config/protocols-meta'
 import { useCurrency } from '@/contexts'
 import { formatCompactCurrency } from '@/lib/format-currency'
 import {
@@ -545,8 +545,7 @@ export function BorrowTableClient() {
       value: v as string,
       label: (
         <div className="flex items-center gap-2">
-          <ProtocolIcon protocol={v as string} />{' '}
-          {getProtocolVersionNameById(v)}
+          <ProtocolIcon protocol={v as string} /> {protocolVersionName(v)}
         </div>
       ),
     })
@@ -675,10 +674,7 @@ export function BorrowTableClient() {
           {
             label: `Cheapest rate · ${horizonLabel}`,
             value: formatApy(stats.lowest?.value),
-            sub: formatMarketLabel(
-              stats.lowest?.item,
-              getProtocolVersionNameById
-            ),
+            sub: formatMarketLabel(stats.lowest?.item, protocolVersionName),
             accent: true,
             note: opportunity
               ? `your filter: ${formatApy(opportunity.filteredValue)} — ${opportunity.deltaPts.toFixed(2)} pts cheaper here`

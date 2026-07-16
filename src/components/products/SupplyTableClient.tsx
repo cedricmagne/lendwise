@@ -50,7 +50,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { HORIZON_CONFIG, HorizonKey } from '@/config/horizon'
-import { getProtocolVersionNameById } from '@/config/protocols'
+import { protocolVersionName } from '@/config/protocols-meta'
 import { useCurrency } from '@/contexts'
 import { formatCompactCurrency } from '@/lib/format-currency'
 import {
@@ -433,7 +433,7 @@ export function SupplyTableClient() {
       label: (
         <div className="flex items-center gap-2">
           <ProtocolIcon protocol={v as string} />
-          {getProtocolVersionNameById(v)}
+          {protocolVersionName(v)}
         </div>
       ),
     })
@@ -536,10 +536,7 @@ export function SupplyTableClient() {
           {
             label: `Best APY · ${horizonLabel}`,
             value: formatApy(stats.highest?.value),
-            sub: formatMarketLabel(
-              stats.highest?.item,
-              getProtocolVersionNameById
-            ),
+            sub: formatMarketLabel(stats.highest?.item, protocolVersionName),
             accent: true,
             note: opportunity
               ? `your filter: ${formatApy(opportunity.filteredValue)} — +${opportunity.deltaPts.toFixed(2)} pts here`

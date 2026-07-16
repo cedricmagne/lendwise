@@ -1,6 +1,7 @@
-import { type SQL, sql } from 'drizzle-orm'
+import { type SQL, inArray, sql } from 'drizzle-orm'
 
 import { db } from '@/lib/db/postgres'
+import { products } from '@/lib/db/schema'
 
 export interface GapRow {
   productId: string
@@ -238,6 +239,18 @@ export async function fetchDonors(
     WHERE product_id IN ${ids} AND hour >= ${start} AND hour <= ${end}
   `)
   return res.rows as Record<string, unknown>[]
+}
+
+/** productId → products.provider, resolved by exact id — NEVER by parsing. */
+export async function productProviders(
+  productIds: string[]
+): Promise<Map<string, string>> {
+  if (productIds.length === 0) return new Map()
+  const rows = await db
+    .select({ id: products.id, provider: products.provider })
+    .from(products)
+    .where(inArray(products.id, productIds))
+  return new Map(rows.map((r) => [r.id, r.provider]))
 }
 
 /** TTL replacement — delete hourly rows older than 180 days. Returns count. */

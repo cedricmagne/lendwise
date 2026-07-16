@@ -1,7 +1,10 @@
 import { arbitrum, base, mainnet, optimism, polygon } from 'viem/chains'
 
 import type { Kind } from '@/lib/db/types'
-import { CHAIN_NAME_MAPPING } from '@/lib/protocols/utils'
+import {
+  CHAIN_SLUG_MAP,
+  type RegisteredChainId,
+} from '@/lib/protocols/core/toolkit'
 
 // ─── Pool ID builder ──────────────────────────────────────────────────────────
 export function buildProductId(
@@ -11,7 +14,7 @@ export function buildProductId(
 ): string {
   // market prefix prevents collision — same token can exist on multiple Compound markets
   // on the same chain (e.g. different versions or deployments)
-  const network = CHAIN_NAME_MAPPING[chain.id]
+  const network = CHAIN_SLUG_MAP[chain.id as RegisteredChainId]
   if (!network)
     throw new Error(
       `No slug registered for chainId ${chain.id} — add it to chain-slugs.ts`

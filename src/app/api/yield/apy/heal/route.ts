@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { verifySignatureAppRouter } from '@upstash/qstash/nextjs'
 
+import { adapterIdsForProvider } from '@/config/protocols-meta'
+import { YIELD_ADAPTERS } from '@/config/protocols-server'
 import {
   type HealRow,
   fetchDonors,
+  productProviders,
   writeHealed,
 } from '@/lib/db/repositories/gaps'
 import {
@@ -12,9 +15,7 @@ import {
   latestReport,
   reportById,
 } from '@/lib/db/repositories/reports'
-import type { HistoryDataPoint } from '@/lib/protocols/aave/v3/apy-history'
-import { fetchAaveHistory } from '@/lib/protocols/aave/v3/apy-history'
-import { fetchMorphoHistory } from '@/lib/protocols/morpho/v1/apy-history'
+import type { HistoryDataPoint } from '@/lib/protocols/core/types'
 
 // Healing fetches protocol history then writes thousands of rows; the default
 // Vercel function limit is too short. Pro plan allows up to 300s.
@@ -69,16 +70,6 @@ function normalizeHour(d: Date): Date {
   const n = new Date(d)
   n.setUTCMinutes(0, 0, 0)
   return n
-}
-
-/** Detect protocol family from a productId prefix. */
-function detectProtocol(
-  productId: string
-): 'morpho' | 'aave' | 'compound' | 'unknown' {
-  if (productId.startsWith('morpho:')) return 'morpho'
-  if (productId.startsWith('aave:')) return 'aave'
-  if (productId.startsWith('compoundcomet:')) return 'compound'
-  return 'unknown'
 }
 
 /** Lookup key `${productId}:${YYYY-MM-DDTHH}`. */
@@ -211,50 +202,48 @@ async function healHandler(req: NextRequest): Promise<NextResponse> {
     })
   }
 
-  // Categorize by protocol + compute gap time boundaries
-  const gapsByProtocol = new Map<string, { productId: string; hour: Date }[]>()
+  // Resolve provider per productId via the products JOIN — NEVER by parsing the id.
+  const providerOf = await productProviders([
+    ...new Set(allEntries.map((e) => e.productId)),
+  ])
+
+  // Group entries by provider + compute gap time boundaries.
+  const gapsByProvider = new Map<string, { productId: string; hour: Date }[]>()
   let minTs = Infinity
   let maxTs = -Infinity
   for (const entry of allEntries) {
-    const proto = detectProtocol(entry.productId)
-    const list = gapsByProtocol.get(proto) ?? []
+    const provider = providerOf.get(entry.productId) ?? 'unknown'
+    const list = gapsByProvider.get(provider) ?? []
     list.push({ productId: entry.productId, hour: new Date(entry.hour) })
-    gapsByProtocol.set(proto, list)
+    gapsByProvider.set(provider, list)
     const t = new Date(entry.hour).getTime()
     if (t < minTs) minTs = t
     if (t > maxTs) maxTs = t
   }
 
-  // Phase 1: re-fetch historical data (Morpho + AAVE)
+  // Phase 1: re-fetch historical data via the adapter registry (generic).
+  // Each provider resolves to its adapter ids; an adapter without getApyHistory
+  // (Compound) is skipped here and left to the donor phase below — unchanged. Aave
+  // gap ranges within the last week map to its LAST_WEEK window inside
+  // getApyHistory (via aaveWindowForRange), the same window this route used before.
   const historyLookup = new Map<string, HistoryDataPoint>()
-  if ((gapsByProtocol.get('morpho') ?? []).length > 0) {
-    try {
-      const startTs = Math.floor(minTs / 1000) - 3600
-      const endTs = Math.floor(maxTs / 1000) + 3600
-      const points = await fetchMorphoHistory({
-        interval: 'HOUR',
-        startTimestamp: startTs,
-        endTimestamp: endTs,
-        onProgress: (m) => console.log(`[cron:heal] ${m}`),
-      })
-      for (const [k, v] of buildHistoryLookup(points)) historyLookup.set(k, v)
-    } catch (err) {
-      errors.push(
-        `morpho-history: ${err instanceof Error ? err.message : String(err)}`
-      )
-    }
-  }
-  if ((gapsByProtocol.get('aave') ?? []).length > 0) {
-    try {
-      const points = await fetchAaveHistory({
-        window: 'LAST_WEEK',
-        onProgress: (m) => console.log(`[cron:heal] ${m}`),
-      })
-      for (const [k, v] of buildHistoryLookup(points)) historyLookup.set(k, v)
-    } catch (err) {
-      errors.push(
-        `aave-history: ${err instanceof Error ? err.message : String(err)}`
-      )
+  for (const provider of gapsByProvider.keys()) {
+    for (const adapterId of adapterIdsForProvider(provider)) {
+      try {
+        const adapter = await YIELD_ADAPTERS[adapterId]()
+        if (!adapter.getApyHistory) continue
+        const points = await adapter.getApyHistory({
+          startTimestamp: Math.floor(minTs / 1000) - 3600,
+          endTimestamp: Math.floor(maxTs / 1000) + 3600,
+          interval: 'HOUR',
+          onProgress: (m) => console.log(`[cron:heal] ${m}`),
+        })
+        for (const [k, v] of buildHistoryLookup(points)) historyLookup.set(k, v)
+      } catch (err) {
+        errors.push(
+          `${adapterId}-history: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
     }
   }
 

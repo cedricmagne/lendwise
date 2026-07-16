@@ -4,17 +4,15 @@ import type {
   SpotPayload,
   SupplyMarketState,
 } from '@/lib/db/types'
-import { MORPHO_CONFIG } from '@/lib/protocols/morpho/config'
+import { createGraphQLClient } from '@/lib/protocols/core/toolkit'
+import type { FetchOpts } from '@/lib/protocols/core/types'
 import type {
   MarketsApyQuery,
   VaultsApyQuery,
-} from '@/lib/protocols/morpho/v1/offchain/generated/graphql'
-import {
-  MARKETS_APY,
-  VAULTS_APY,
-} from '@/lib/protocols/morpho/v1/offchain/queries'
-import { createGraphQLClient } from '@/lib/protocols/shared'
+} from '@/lib/protocols/morpho/v1/generated/graphql'
+import { MARKETS_APY, VAULTS_APY } from '@/lib/protocols/morpho/v1/queries'
 
+import { MORPHO_V1_API_URL, MORPHO_V1_CHAINS } from './config'
 import { morphoMarketWhere, morphoVaultWhere } from './listing'
 import { buildProductId } from './utils'
 
@@ -26,24 +24,13 @@ import { buildProductId } from './utils'
  * Returns SpotPayload documents ready for hourly upsert.
  */
 export async function fetchMorphoV1ApySpot(
-  chainFilter?: string
+  opts?: FetchOpts
 ): Promise<SpotPayload[]> {
-  const config = MORPHO_CONFIG.morpho_v1
-  const client = createGraphQLClient(config.offchainApiUrl || '')
+  const client = createGraphQLClient(MORPHO_V1_API_URL)
 
-  let chainIds = Object.keys(config.chains).map(Number)
-
-  if (chainFilter) {
-    const found = Object.entries(config.chains).find(
-      ([, c]) => c.name.toLowerCase() === chainFilter.toLowerCase()
-    )
-    if (!found) {
-      console.warn(
-        `[cron:morpho] Chain filter '${chainFilter}' not found in config`
-      )
-      return []
-    }
-    chainIds = [Number(found[0])]
+  let chainIds = Object.keys(MORPHO_V1_CHAINS).map(Number)
+  if (opts?.chainIds?.length) {
+    chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
   }
 
   const snapshots: SpotPayload[] = []
@@ -64,7 +51,7 @@ export async function fetchMorphoV1ApySpot(
 
     if (error) {
       throw new Error(
-        `[cron:morpho] Failed to fetch vault APY: ${error.message}`
+        `[cron:morpho_v1] Failed to fetch vault APY: ${error.message}`
       )
     }
 
@@ -76,7 +63,7 @@ export async function fetchMorphoV1ApySpot(
 
       const chainId = vault.asset.chain.id
       const assetSymbol = vault.asset.symbol
-      // Canonical slug (CHAIN_NAME_MAPPING) — must match the products registry,
+      // Canonical slug (CHAIN_SLUG_MAP) — must match the products registry,
       // NOT the human chain label ("Arbitrum One" → "arbitrumone" would orphan
       // the apy_hourly rows from the product row built in products.ts).
       const productId = buildProductId(chainId, vault.address, 'supply')
@@ -117,7 +104,7 @@ export async function fetchMorphoV1ApySpot(
       const grossGlitched = Math.abs(grossApy - baseImplied) > 0.1
       if (grossGlitched) {
         console.warn(
-          `[cron:morpho] Rebuilding glitched supply base ${productId}: gross=${grossApy} implied=${baseImplied}`
+          `[cron:morpho_v1] Rebuilding glitched supply base ${productId}: gross=${grossApy} implied=${baseImplied}`
         )
       }
       const baseApy = grossGlitched ? baseImplied : grossApy
@@ -155,7 +142,7 @@ export async function fetchMorphoV1ApySpot(
       if (!isFiniteApyBlock(supplyPayload.apy)) {
         const { base, rewards, fees, net } = supplyPayload.apy
         console.warn(
-          `[cron:morpho] Dropping non-finite supply APY ${productId}: base=${base} rewards=${rewards} fees=${fees} net=${net}`
+          `[cron:morpho_v1] Dropping non-finite supply APY ${productId}: base=${base} rewards=${rewards} fees=${fees} net=${net}`
         )
         continue
       }
@@ -187,7 +174,7 @@ export async function fetchMorphoV1ApySpot(
 
     if (error) {
       throw new Error(
-        `[cron:morpho] Failed to fetch market APY: ${error.message}`
+        `[cron:morpho_v1] Failed to fetch market APY: ${error.message}`
       )
     }
 
@@ -265,7 +252,7 @@ export async function fetchMorphoV1ApySpot(
       if (!isFiniteApyBlock(borrowPayload.apy)) {
         const { base, rewards, fees, net } = borrowPayload.apy
         console.warn(
-          `[cron:morpho] Dropping non-finite borrow APY ${borrowProductId}: base=${base} rewards=${rewards} fees=${fees} net=${net}`
+          `[cron:morpho_v1] Dropping non-finite borrow APY ${borrowProductId}: base=${base} rewards=${rewards} fees=${fees} net=${net}`
         )
         continue
       }
@@ -284,7 +271,7 @@ export async function fetchMorphoV1ApySpot(
   const supplyCount = snapshots.filter((s) => s.kind === 'supply').length
   const borrowCount = snapshots.filter((s) => s.kind === 'borrow').length
   console.log(
-    `[cron:morpho] Fetched ${snapshots.length} snapshots (${supplyCount} vaults, ${borrowCount} markets)`
+    `[cron:morpho_v1] Fetched ${snapshots.length} snapshots (${supplyCount} vaults, ${borrowCount} markets)`
   )
   return snapshots
 }

@@ -1,5 +1,5 @@
 import type { Kind } from '@/lib/db/types'
-import type { MarketsApyQuery } from '@/lib/protocols/aave/v3/offchain/generated/graphql'
+import type { MarketsApyQuery } from '@/lib/protocols/aave/v3/generated/graphql'
 
 const SPECIAL_ETHEREUM_MARKETS = [
   'AaveV3EthereumEtherFi',
