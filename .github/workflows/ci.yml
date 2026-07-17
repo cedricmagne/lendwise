@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    env:
+      # Needed by codegen to introspect the Compound V3 subgraph (The Graph gateway).
+      # Aave and Morpho schemas are public. Without this secret the typecheck step is skipped.
+      THEGRAPH_API_KEY: ${{ secrets.THEGRAPH_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      # Tests and typecheck import codegen output, and codegen introspects the
+      # Compound V3 subgraph through The Graph gateway — hence the secret guard.
+      - name: Codegen, test, typecheck
+        run: |
+          if [ -z "$THEGRAPH_API_KEY" ]; then
+            echo "::warning::THEGRAPH_API_KEY secret not set — skipping codegen, test, and typecheck"
+            exit 0
+          fi
+          pnpm codegen
+          pnpm test
+          pnpm typecheck

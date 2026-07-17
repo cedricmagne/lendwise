@@ -1,6 +1,11 @@
 # APY Pipeline — Gap Detection & Healing
 
 > Complete documentation of the data quality assurance process for the hourly APY pipeline.
+>
+> **Storage note:** the live store is PostgreSQL (Neon) — tables `apy_hourly`, `apy_daily`,
+> `pipeline_reports` in `src/lib/db/schema.ts` (Drizzle). This document predates the
+> MongoDB → Postgres migration; collection names like `apy.hourly` map to the tables above,
+> and the semantics carry over unchanged.
 
 ---
 

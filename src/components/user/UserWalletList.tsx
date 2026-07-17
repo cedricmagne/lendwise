@@ -88,7 +88,11 @@ const WalletRow = ({ wallet }: { wallet: Wallet }) => {
         <div className="flex flex-col">
           <span className="text-sm font-medium">{displayName}</span>
           <span className="text-muted-foreground text-xs">
-            {wallet.chainFamily === 'stellar' ? 'Stellar' : !hasClient ? 'No client' : null}
+            {wallet.chainFamily === 'stellar'
+              ? 'Stellar'
+              : !hasClient
+                ? 'No client'
+                : null}
           </span>
         </div>
       </div>
@@ -167,4 +171,3 @@ export const UserWalletList = () => {
     </div>
   )
 }
-

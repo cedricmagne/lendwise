@@ -77,7 +77,7 @@ export function WalletNotConnected() {
 
           <button
             onClick={() => setShowNetworkDialog(true)}
-            className="group bg-primary text-primary-foreground shadow-primary/20 hover:bg-primary/90 inline-flex items-center gap-2.5 rounded-xl px-6 py-3 text-sm font-semibold shadow-lg transition-all cursor-pointer"
+            className="group bg-primary text-primary-foreground shadow-primary/20 hover:bg-primary/90 inline-flex cursor-pointer items-center gap-2.5 rounded-xl px-6 py-3 text-sm font-semibold shadow-lg transition-all"
           >
             <Wallet className="h-4 w-4" />
             Connect wallet

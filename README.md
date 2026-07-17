@@ -1,214 +1,147 @@
-# LendWise - DeFi Portfolio Optimization Platform
+<div align="center">
+  <a href="https://lendwise.fi">
+    <img src="public/logo.jpg" alt="Lendwise logo" width="380" />
+  </a>
 
-A modern Next.js 16 application for optimizing DeFi supplying and borrowing positions across multiple protocols and blockchains.
+<br />
 
-![LendWise](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=next.js)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?style=flat-square&logo=typescript)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38bdf8?style=flat-square&logo=tailwind-css)
+# Unified layer for DeFi lending. One standard.
 
-## Features
+Lendwise compares and monitors 700+ lending markets across **Aave**, **Morpho**, **Compound**, **Blend** and more. It standardizes rates to net APY (base ± fees ± rewards) and optimizes your capital allocation.
 
-- 📊 **Dashboard**: Real-time portfolio overview with key metrics
-- 💰 **Supplying Optimization**: Find the best supplying rates across protocols
-- 💳 **Borrowing Optimization**: Minimize borrowing costs with intelligent protocol selection
-- 📈 **Portfolio Tracker**: Monitor all positions across chains in one place
-- 🛡️ **Risk Monitor**: Track health factors and manage liquidation risks
-- 🎨 **Modern UI**: Built with Shadcn UI components and Tailwind CSS
-- ⚡ **Fast**: Powered by Next.js 16 with App Router
+[![CI](https://github.com/lendwise-fi/lendwise/actions/workflows/ci.yml/badge.svg)](https://github.com/lendwise-fi/lendwise/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](tsconfig.json)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-## Tech Stack
+[**Live App**](https://lendwise.fi) · [Documentation](docs/) · [X / Twitter](https://x.com/Lendwisefi) · [Farcaster](https://farcaster.xyz/lendwise) · [Discussions](https://github.com/lendwise-fi/lendwise/discussions)
 
-- **Framework**: Next.js 16.2.6
-- **Language**: TypeScript 5.7
-- **Styling**: Tailwind CSS 3.4 + Shadcn UI
-- **Charts**: Recharts 2.13
-- **Icons**: Lucide React
-- **UI Components**: Radix UI primitives
+<img src=".github/assets/app-demo.gif" alt="Lendwise app — DeFi supply rates compared across protocols and chains" width="900" />
 
-## Getting Started
+</div>
 
-### Prerequisites
+> ⭐ **If Lendwise helps you find better yields, [star the repo](https://github.com/lendwise-fi/lendwise/stargazers)** — it helps other DeFi users discover it.
 
-- pnpm 9.x or higher
+## Why Lendwise?
 
-### Installation
+Comparing lending yields across protocols is harder than it looks: every protocol quotes
+rates differently (APR vs APY, per-second vs daily compounding), rewards live in separate
+systems (protocol emissions, Merkl campaigns), and fees quietly eat into headline numbers.
 
-1. **Clone or navigate to the project directory**
+Lendwise reduces it to two promises:
+
+### 📏 One standard
+
+Here are standardized APYs — now you can actually compare them.
+
+- **One net APY** — every rate converted to APY and netted: supply
+  `base − fees + rewards`, borrow `base + fees − rewards`. Headline numbers that mean
+  the same thing on every protocol.
+- **Fresh** — every market re-sampled every 10 minutes.
+- **Historical** — hourly averages and daily aggregates for 180 days, with a
+  gap-detection + self-healing pipeline behind them.
+- **Complete** — ~700 active markets, ~120 assets, supply _and_ borrow sides,
+  collateral parameters included.
+
+### 🎯 One allocation
+
+Here is how to allocate your capital — matched to your risk profile and investment horizon.
+
+- **Optimizer** — allocation suggestions across markets, driven by your risk level and
+  how long the capital stays deployed.
+- **Portfolio-aware** — connect a wallet to see your positions across all protocols and
+  chains, and where they could earn more.
+
+## Supported protocols & chains
+
+| Protocol                       | Ethereum | Optimism | Polygon | Base | Arbitrum | Avalanche | Linea | BSC |
+| ------------------------------ | :------: | :------: | :-----: | :--: | :------: | :-------: | :---: | :-: |
+| **Aave V3**                    |    ✅    |    ✅    |   ✅    |  ✅  |    ✅    |    ✅     |  ✅   | ✅  |
+| **Morpho** (Blue + MetaMorpho) |    ✅    |    ✅    |   ✅    |  ✅  |    ✅    |     —     |   —   |  —  |
+| **Compound V3**                |    ✅    |    ✅    |   ✅    |  ✅  |    ✅    |     —     |   —   |  —  |
+
+Want another protocol? **[Request it](https://github.com/lendwise-fi/lendwise/issues/new?template=protocol_request.yml)** — or
+[build the adapter yourself](#contributing): it's ~5 files with a test harness to validate it.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["Protocol adapters<br/>Aave · Morpho · Compound"] -->|"every 10 min"| B["APY collector"]
+    B --> C[("Postgres<br/>apy_hourly · apy_daily")]
+    D["Gap detection<br/>+ self-healing"] --> C
+    C --> E["GraphQL API<br/>/api/graphql"]
+    E --> F["Next.js app<br/>lendwise.fi"]
+```
+
+Each protocol is an isolated **adapter** that transforms its source (GraphQL API, subgraph,
+RPC) into a shared data model. Aggregation uses `Promise.allSettled` everywhere — one
+protocol having a bad day never blocks the others. The full design is documented in
+[`src/lib/protocols/README.md`](src/lib/protocols/README.md) and [`docs/`](docs/).
+
+## Quick start
+
+Prerequisites: Node.js 24, [pnpm](https://pnpm.io) 11.
 
 ```bash
 git clone https://github.com/lendwise-fi/lendwise
 cd lendwise
-```
-
-2. **Install dependencies**
-
-```bash
 pnpm install
+cp .env.example .env.local   # minimal: THEGRAPH_API_KEY (free) — see CONTRIBUTING.md
+pnpm dev                     # → http://localhost:3000
 ```
 
-3. **Run ESLint**
+<details>
+<summary><strong>Useful commands</strong></summary>
 
 ```bash
-pnpm lint
+pnpm codegen          # regenerate GraphQL types (run before typecheck/test)
+pnpm lint             # ESLint
+pnpm typecheck        # tsc --noEmit (strict)
+pnpm test             # vitest
+pnpm adapter:test <id>  # live-test a protocol adapter (e.g. aave_v3)
+pnpm build            # codegen + next build
 ```
 
-4. **Run the development server**
+</details>
 
-```bash
-pnpm dev
-```
+## Tech stack
 
-5. **Open your browser**
+Next.js 16 (App Router) · TypeScript strict · Tailwind 4 + Radix UI · viem/wagmi ·
+PostgreSQL (Neon) + Drizzle ORM · GraphQL (graphql-yoga + URQL + codegen) · The Graph ·
+QStash cron.
 
-Navigate to [http://localhost:3000](http://localhost:3000) to see the application.
+## Documentation
 
-## Project Structure
-
-```
-lendwise/
-├── app/                     # Next.js 16 App Router
-│   ├── layout.tsx           # Root layout with sidebar
-│   ├── page.tsx             # Home page (redirects to dashboard)
-│   ├── dashboard/           # Dashboard page
-│   ├── supplying/           # Supplying optimization page
-│   ├── borrowing/           # Borrowing optimization page
-│   ├── portfolio/           # Portfolio tracker page
-│   ├── risk/                # Risk monitor page
-│   └── globals.css          # Global styles
-├── components/              # React components
-│   ├── ui/                  # Shadcn UI components
-│   │   ├── button.tsx
-│   │   ├── card.tsx
-│   │   ├── badge.tsx
-│   │   ├── tabs.tsx
-│   │   ├── select.tsx
-│   │   ├── progress.tsx
-│   │   └── alert.tsx
-│   ├── dashboard/           # Dashboard-specific components
-│   │   ├── metric-card.tsx
-│   │   ├── portfolio-chart.tsx
-│   │   └── protocol-allocation.tsx
-│   └── app-sidebar.tsx      # Application sidebar
-├── lib/                     # Utilities and data layer
-│   ├── entities/            # Data models and API layer
-│   │   ├── position.ts      # Position entity
-│   │   ├── protocol.ts      # Protocol entity
-│   │   ├── asset.ts         # Asset entity
-│   │   └── index.ts
-│   └── utils.ts             # Utility functions
-├── Entities/                # Original JSON schemas
-│   ├── Position.json
-│   ├── Protocol.json
-│   └── Asset.json
-├── next.config.ts           # Next.js configuration
-├── tailwind.config.ts       # Tailwind CSS configuration
-├── tsconfig.json            # TypeScript configuration
-└── package.json             # Dependencies
-```
-
-## Available Pages
-
-### Dashboard (`/dashboard`)
-
-- Portfolio overview with key metrics
-- Total portfolio value, average yield, health factor
-- Portfolio performance charts
-- Protocol allocation visualization
-- Optimization opportunities and risk alerts
-
-### Supplying (`/supplying`)
-
-- Best supplying rates across protocols
-- Filter by blockchain, asset, and investment horizon
-- Sort by APY, TVL, or risk score
-- Current positions summary
-- Diversification metrics
-
-### Borrowing (`/borrowing`)
-
-- Lowest borrowing rates
-- Collateral and loan asset selection
-- LTV and liquidation threshold comparison
-- Health factor monitoring
-- Current borrowing overview
-
-### Portfolio (`/portfolio`)
-
-- All supplying and borrowing positions
-- Net worth calculation
-- Position details with health factors
-- Blockchain badges and risk indicators
-- Quick access to position management
-
-### Risk Monitor (`/risk`)
-
-- Average health factor tracking
-- Risk score calculation
-- Health factor trend charts
-- Collateral distribution
-- Active risk alerts and recommendations
-- Most at-risk position highlighting
-
-## Development
-
-### Adding New Components
-
-To add new Shadcn UI components:
-
-```bash
-pnpm dlx shadcn@latest add [component-name]
-```
-
-### Customizing Theme
-
-Edit `app/globals.css` to customize the color scheme and design tokens.
-
-### Data Layer
-
-The application currently uses mock data defined in `lib/entities/`. To connect to a real API:
-
-1. Update the entity files in `lib/entities/`
-2. Replace mock data with actual API calls
-3. Add environment variables for API endpoints
-
-## Building for Production
-
-```bash
-pnpm build
-pnpm start
-```
-
-## Environment Variables
-
-Create a `.env.local` file for environment-specific variables:
-
-```env
-NEXT_PUBLIC_API_URL=your_api_url
-NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID=your_project_id
-```
-
-## Features Roadmap
-
-- [ ] Real-time data integration
-- [ ] Wallet connection (WalletConnect, MetaMask)
-- [ ] Transaction execution
-- [ ] Historical data analytics
-- [ ] Notification system
-- [ ] Multi-wallet support
-- [ ] Mobile responsive enhancements
+| Doc                                              | What's inside                                         |
+| ------------------------------------------------ | ----------------------------------------------------- |
+| [Protocol adapters](src/lib/protocols/README.md) | Architecture, adapter contract, how to add a protocol |
+| [APY pipeline](docs/apy-pipeline-gap-heal.md)    | Gap detection and self-healing for historical data    |
+| [APY daily schema](docs/APY_DAILY_SCHEMA.md)     | How historical aggregates are computed                |
+| [Products schema](docs/PRODUCTS_SCHEMA.md)       | The product registry data model                       |
+| [Contributing guide](CONTRIBUTING.md)            | Setup, quality bar, PR process                        |
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome — the most valuable one is a **new protocol adapter**, and the
+codebase is explicitly designed to make that a contained, testable unit of work
+(~5 files + a live test harness).
+
+- Read [**CONTRIBUTING.md**](CONTRIBUTING.md) — includes a
+  ["first PR in 15 minutes"](CONTRIBUTING.md#your-first-pr-in-15-minutes) path
+- Check [`good first issue`](https://github.com/lendwise-fi/lendwise/labels/good%20first%20issue)
+  and [`protocol-request`](https://github.com/lendwise-fi/lendwise/labels/protocol-request) labels
+- Ask anything in [Discussions](https://github.com/lendwise-fi/lendwise/discussions)
+
+## Community
+
+- 🌐 [lendwise.fi](https://lendwise.fi) — the live app
+- 🐦 [@Lendwisefi](https://x.com/Lendwisefi) — announcements
+- 🟪 [Farcaster](https://farcaster.xyz/lendwise)
+- 💬 [GitHub Discussions](https://github.com/lendwise-fi/lendwise/discussions) — questions & ideas
+- 📧 [hello@lendwise.fi](mailto:hello@lendwise.fi)
 
 ## License
 
-MIT License - feel free to use this project for personal or commercial purposes.
-
-## Support
-
-For issues or questions, please open an issue on the repository.
-
----
-
-Built with ❤️ using Next.js 16, TypeScript, and Shadcn UI
+[MIT](LICENSE) © Lendwise

@@ -19,7 +19,7 @@ Completes in **a few seconds** and hard-asserts a **3-minute budget** (exits non
 ## What it proves (end to end)
 
 1. **Connect** to a public Soroban RPC with no credentials.
-2. **Discover** live pools on-chain via the Blend Backstop reward zone — *no hard-coded pool address*.
+2. **Discover** live pools on-chain via the Blend Backstop reward zone — _no hard-coded pool address_.
 3. **Load** each pool's reserves with `@blend-capital/blend-sdk` (`PoolV2.load`).
 4. **Read** on-chain supply/borrow APR and **normalize** APR → APY with LendWise's canonical
    formula `(1 + APR/365)^365 − 1`, then **cross-check** against the SDK's own compounded estimate
@@ -43,18 +43,18 @@ Max |LendWise APY − SDK estimate| across 16 healthy reserves: 0.0040%
 
 ## Config (optional env overrides)
 
-| Env | Default | Meaning |
-| :-- | :-- | :-- |
-| `BLEND_RPC` | `https://mainnet.sorobanrpc.com` | Soroban RPC endpoint |
-| `BLEND_PASSPHRASE` | `Public Global Stellar Network ; September 2015` | network passphrase |
-| `BLEND_BACKSTOP` | `CAQQ…3IM7` | Blend v2 mainnet Backstop contract |
-| `MAX_POOLS` | `5` | number of reward-zone pools to read |
+| Env                | Default                                          | Meaning                             |
+| :----------------- | :----------------------------------------------- | :---------------------------------- |
+| `BLEND_RPC`        | `https://mainnet.sorobanrpc.com`                 | Soroban RPC endpoint                |
+| `BLEND_PASSPHRASE` | `Public Global Stellar Network ; September 2015` | network passphrase                  |
+| `BLEND_BACKSTOP`   | `CAQQ…3IM7`                                      | Blend v2 mainnet Backstop contract  |
+| `MAX_POOLS`        | `5`                                              | number of reward-zone pools to read |
 
 ## Mapping to the production pipeline
 
-| PoC step | Production equivalent |
-| :-- | :-- |
-| `Backstop.load` + reward zone | pool discovery in `src/lib/protocols/blend/config.ts` |
-| `PoolV2.load` + reserve read | `src/lib/protocols/blend/services/blend-api.ts` |
-| `aprToApy` + row shaping | adapter `getAccountPositions` → `SupplyProduct`/`BorrowProduct` |
-| printed rows | `repositories/apy.ts` upsert into `apy_hourly` |
+| PoC step                      | Production equivalent                                           |
+| :---------------------------- | :-------------------------------------------------------------- |
+| `Backstop.load` + reward zone | pool discovery in `src/lib/protocols/blend/config.ts`           |
+| `PoolV2.load` + reserve read  | `src/lib/protocols/blend/services/blend-api.ts`                 |
+| `aprToApy` + row shaping      | adapter `getAccountPositions` → `SupplyProduct`/`BorrowProduct` |
+| printed rows                  | `repositories/apy.ts` upsert into `apy_hourly`                  |

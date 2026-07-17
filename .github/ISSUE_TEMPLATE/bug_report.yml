@@ -1,0 +1,44 @@
+name: 🐛 Bug report
+description: Something is broken or showing wrong data
+labels: ['bug']
+body:
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did it happen?
+      options:
+        - lendwise.fi (production)
+        - Local development
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Clear description of the bug. Wrong APY? Missing market? UI glitch? Screenshots welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to /supply
+        2. Filter by USDC on Base
+        3. ...
+  - type: input
+    id: env
+    attributes:
+      label: Browser / environment
+      placeholder: 'Chrome 138 on macOS, Node 24 locally, ...'
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or console errors
+      render: shell

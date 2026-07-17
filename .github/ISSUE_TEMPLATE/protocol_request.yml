@@ -1,0 +1,45 @@
+name: 🔌 Protocol integration request
+description: Request support for a new lending protocol
+labels: ['protocol-request', 'adapter']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Want to build it yourself? See the [adapter guide](https://github.com/lendwise-fi/lendwise/blob/main/src/lib/protocols/README.md) —
+        a protocol adapter is ~5 files and there's a test harness (`pnpm adapter:test`) to validate it.
+  - type: input
+    id: protocol
+    attributes:
+      label: Protocol name and version
+      placeholder: 'Spark, Fluid, Blend, ...'
+    validations:
+      required: true
+  - type: input
+    id: chains
+    attributes:
+      label: Chains
+      placeholder: 'Ethereum, Base, ...'
+    validations:
+      required: true
+  - type: textarea
+    id: data
+    attributes:
+      label: Data sources
+      description: Links to the protocol's API, subgraph, or docs for reading market rates.
+      placeholder: |
+        - GraphQL API: https://...
+        - Subgraph: https://...
+        - Docs: https://...
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this protocol?
+      description: TVL, unique markets, chains not covered yet — what does it add?
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I'm interested in building this adapter myself
