@@ -1,6 +1,6 @@
 <div align="center">
   <a href="https://lendwise.fi">
-    <img src="public/logo.jpg" alt="Lendwise logo" width="380" />
+    <img src="public/logo.png" alt="Lendwise logo" width="380" />
   </a>
 
 <br />
