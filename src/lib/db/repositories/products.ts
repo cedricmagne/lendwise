@@ -93,7 +93,9 @@ export interface ProviderSyncResult {
  *
  * MUST only be called for a provider whose enumeration actually succeeded. An
  * empty list from a failed fetch would read as "the provider delisted everything"
- * and close every period it owns.
+ * and close every period it owns. Callers guard against REJECTED fetches; the
+ * collapse guard below additionally refuses empty-but-"successful" enumerations,
+ * which are what an API outage actually returns (seen 16 Jul 2026, Morpho).
  *
  * The closing boundary is the hour AFTER the pool's last stored observation, not
  * the sync's own clock: the sync is a poll, not an event stream, so it learns about
@@ -128,6 +130,22 @@ export async function syncProviderProducts(
       )
     )
   const openIds = new Set(open.map((r) => r.id))
+
+  // An empty or collapsed enumeration is indistinguishable from a provider-wide
+  // API outage. 16 Jul 2026: Morpho's fetch "succeeded" with an empty list and
+  // this reconciliation closed all 376 open periods — which silenced gap
+  // detection for the outage hours (expectedAt said nothing was owed, so the
+  // heal never ran) and left a permanent hole at 08:00. Absence of evidence is
+  // not evidence of delisting: refuse to reconcile when the returned catalogue
+  // collapsed versus what is currently open. Real mass delistings shrink a
+  // catalogue gradually; a >50% single-poll drop is an outage until a human
+  // says otherwise.
+  if (openIds.size >= 10 && fetchedIds.length < openIds.size * 0.5) {
+    throw new Error(
+      `enumeration collapsed for ${provider}: ${fetchedIds.length} products returned ` +
+        `vs ${openIds.size} open periods — refusing to reconcile availability (provider outage?)`
+    )
+  }
 
   const returned = new Set(fetchedIds)
   const staleIds = [...openIds].filter((id) => !returned.has(id))
