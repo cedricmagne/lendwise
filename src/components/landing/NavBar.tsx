@@ -21,11 +21,13 @@ import { Logo } from '../logo'
 /** landing header height — the mobile menu hangs below it */
 const HEADER_H = 68
 
+// anchor links are absolute (`/#…`) so they lead back to the landing page
+// from /about, /terms, and the other pages that reuse this bar
 const links = [
-  { label: 'Why Lendwise', href: '#problem' },
-  { label: 'How it works', href: '#features' },
-  { label: 'API', href: '#api' },
-  { label: 'Portfolio', href: '#portfolio' },
+  { label: 'Why Lendwise', href: '/#problem' },
+  { label: 'How it works', href: '/#features' },
+  { label: 'API', href: '/#api' },
+  { label: 'Portfolio', href: '/#portfolio' },
   { label: 'Docs', href: '/docs' },
 ]
 

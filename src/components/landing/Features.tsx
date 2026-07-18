@@ -69,7 +69,7 @@ function Feature({
     <div
       id={id}
       className={cn(
-        'reveal border-border/60 grid grid-cols-[5fr_6fr] items-center gap-[72px] border-t py-[88px]',
+        'reveal border-border/60 grid scroll-mt-[68px] grid-cols-[5fr_6fr] items-center gap-[72px] border-t py-[88px]',
         'max-desk:grid-cols-1 max-desk:gap-10 max-desk:py-16',
         first && 'max-desk:pt-0 border-t-0 pt-0',
         last && 'max-desk:pb-0 pb-0'
@@ -454,7 +454,7 @@ const features = [
 export function Features() {
   return (
     <section
-      className="border-border/60 border-b"
+      className="border-border/60 scroll-mt-[68px] border-b"
       id="features"
       data-screen-label="Features"
     >

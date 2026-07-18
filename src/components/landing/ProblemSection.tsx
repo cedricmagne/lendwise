@@ -21,7 +21,7 @@ const cols = [
 export function ProblemSection() {
   return (
     <section
-      className="border-border/60 border-b"
+      className="border-border/60 scroll-mt-[68px] border-b"
       id="problem"
       data-screen-label="Problem"
     >

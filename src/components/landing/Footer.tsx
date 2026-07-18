@@ -4,11 +4,43 @@ import { ThemeSwitcher } from '@/components/theme/ThemeSwitcher'
 
 import { Logo } from '../logo'
 
-const groups: Record<string, string[]> = {
-  Product: ['Features', 'Pricing', 'API docs', 'Changelog'],
-  Resources: ['Documentation', 'Blog', 'Tutorials', 'Status'],
-  Company: ['About', 'Careers', 'Contact', 'Privacy'],
+type FooterLink = { label: string; href: string; external?: boolean }
+
+const groups: Record<string, FooterLink[]> = {
+  Product: [
+    { label: 'Features', href: '/#features' },
+    { label: 'Supply rates', href: '/supply' },
+    { label: 'Borrow rates', href: '/borrow' },
+    { label: 'Portfolio', href: '/portfolio' },
+  ],
+  Resources: [
+    { label: 'Documentation', href: '/docs' },
+    { label: 'API docs', href: '/docs/api/' },
+    { label: 'Learn', href: '/docs/learn/' },
+    { label: 'Status', href: '/status' },
+    {
+      label: 'Changelog',
+      href: 'https://github.com/lendwise-fi/lendwise/releases',
+      external: true,
+    },
+  ],
+  Company: [
+    { label: 'About', href: '/about' },
+    { label: 'Contact', href: '/contact' },
+    { label: 'Support', href: '/support' },
+    {
+      label: 'GitHub',
+      href: 'https://github.com/lendwise-fi/lendwise',
+      external: true,
+    },
+  ],
 }
+
+const legalLinks: FooterLink[] = [
+  { label: 'Terms', href: '/terms' },
+  { label: 'Privacy', href: '/privacy' },
+  { label: 'Cookies', href: '/cookies' },
+]
 
 export function Footer() {
   return (
@@ -18,7 +50,7 @@ export function Footer() {
           <div className="max-desk:col-span-2">
             <Logo className="mb-4" />
             <p className="text-ink-faint m-0 max-w-[30ch] text-[13.5px] leading-[1.6]">
-              The unified yield aggregation and optimization platform for DeFi.
+              Unified view for cross-chain lending markets.
             </p>
           </div>
           {Object.entries(groups).map(([title, items]) => (
@@ -27,14 +59,25 @@ export function Footer() {
                 {title}
               </h4>
               <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
-                {items.map((i) => (
-                  <li key={i}>
-                    <Link
-                      className="text-muted-foreground hover:text-foreground text-[13.5px] transition-colors"
-                      href="#"
-                    >
-                      {i}
-                    </Link>
+                {items.map((item) => (
+                  <li key={item.label}>
+                    {item.external ? (
+                      <a
+                        className="text-muted-foreground hover:text-foreground text-[13.5px] transition-colors"
+                        href={item.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {item.label}
+                      </a>
+                    ) : (
+                      <Link
+                        className="text-muted-foreground hover:text-foreground text-[13.5px] transition-colors"
+                        href={item.href}
+                      >
+                        {item.label}
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -48,13 +91,13 @@ export function Footer() {
             © 2026 Lendwise. All rights reserved.
           </span>
           <span className="max-desk:order-1 max-desk:ml-0 ml-auto flex gap-5">
-            {['Terms', 'Privacy', 'Cookies'].map((l) => (
+            {legalLinks.map((l) => (
               <Link
-                key={l}
+                key={l.label}
                 className="text-ink-faint hover:text-muted-foreground"
-                href="#"
+                href={l.href}
               >
-                {l}
+                {l.label}
               </Link>
             ))}
           </span>
