@@ -12,7 +12,6 @@ Lendwise compares and monitors 700+ lending markets across **Aave**, **Morpho**,
 [![CI](https://github.com/lendwise-fi/lendwise/actions/workflows/ci.yml/badge.svg)](https://github.com/lendwise-fi/lendwise/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](tsconfig.json)
-[![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 [**Live App**](https://lendwise.fi) · [Documentation](docs/) · [X / Twitter](https://x.com/Lendwisefi) · [Farcaster](https://farcaster.xyz/lendwise) · [Discussions](https://github.com/lendwise-fi/lendwise/discussions)
