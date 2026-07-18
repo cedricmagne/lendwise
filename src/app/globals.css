@@ -170,10 +170,6 @@
   * {
     @apply border-border outline-ring/50;
   }
-  html {
-    /* Keep anchor targets clear of the 68px fixed marketing nav */
-    scroll-padding-top: 84px;
-  }
   body {
     @apply bg-background text-foreground font-sans;
     letter-spacing: -0.01em;

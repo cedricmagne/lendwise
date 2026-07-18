@@ -28,9 +28,22 @@ const groups: Record<string, FooterLink[]> = {
     { label: 'About', href: '/about' },
     { label: 'Contact', href: '/contact' },
     { label: 'Support', href: '/support' },
+  ],
+  Socials: [
+    { label: 'X / Twitter', href: 'https://x.com/Lendwisefi', external: true },
+    {
+      label: 'Farcaster',
+      href: 'https://farcaster.xyz/lendwise',
+      external: true,
+    },
     {
       label: 'GitHub',
-      href: 'https://github.com/lendwise-fi/lendwise',
+      href: 'https://github.com/lendwise-fi',
+      external: true,
+    },
+    {
+      label: 'LinkedIn',
+      href: 'https://www.linkedin.com/company/lendwise-fi',
       external: true,
     },
   ],
@@ -46,7 +59,7 @@ export function Footer() {
   return (
     <footer className="bg-background" data-screen-label="Footer">
       <div className="wrap pt-[72px] pb-10">
-        <div className="border-border/60 max-desk:grid-cols-2 grid grid-cols-[2fr_1fr_1fr_1fr] gap-10 border-b pb-14">
+        <div className="border-border/60 max-desk:grid-cols-2 grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-10 border-b pb-14">
           <div className="max-desk:col-span-2">
             <Logo className="mb-4" />
             <p className="text-ink-faint m-0 max-w-[30ch] text-[13.5px] leading-[1.6]">

@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 
 import Link from 'next/link'
 
-import { FarcasterIcon, XIcon } from '@/components/icons/social'
 import { MobileNavSheet, SHEET_EXIT_MS } from '@/components/mobile-nav-sheet'
 import {
   NavigationMenu,
@@ -47,15 +46,6 @@ const appLinks = [
     label: 'Borrow',
     href: '/borrow',
     desc: 'Find the cheapest borrow rates and collaterals.',
-  },
-]
-
-const socials = [
-  { label: 'X', href: 'https://x.com/lendwisefi', Icon: XIcon },
-  {
-    label: 'Farcaster',
-    href: 'https://farcaster.xyz/lendwise',
-    Icon: FarcasterIcon,
   },
 ]
 
@@ -142,23 +132,6 @@ export function NavBar() {
             </NavigationMenuList>
           </NavigationMenu>
 
-          {/* below `desk` the bar has no room for these — they move into the
-           * sheet, otherwise the burger gets pushed off-screen */}
-          <div className="desk:flex hidden items-center gap-1">
-            {socials.map(({ label, href, Icon }) => (
-              <a
-                key={label}
-                href={href}
-                target="_blank"
-                rel="noreferrer noopener"
-                aria-label={label}
-                className="text-muted-foreground hover:text-foreground hover:bg-accent grid h-9 w-9 place-items-center rounded transition-colors"
-              >
-                <Icon className="h-[17px] w-[17px]" />
-              </a>
-            ))}
-          </div>
-
           {/* the logo and the "Launch app" links stay visible in the bar
            * above the menu, so they aren't repeated inside it */}
           <MobileNavSheet
@@ -178,20 +151,6 @@ export function NavBar() {
                   {l.label}
                 </Link>
               ))}
-              <div className="flex items-center gap-1 pt-4 pb-2">
-                {socials.map(({ label, href, Icon }) => (
-                  <a
-                    key={label}
-                    href={href}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    aria-label={label}
-                    className="text-muted-foreground hover:text-foreground hover:bg-accent grid h-9 w-9 place-items-center rounded transition-colors"
-                  >
-                    <Icon className="h-[17px] w-[17px]" />
-                  </a>
-                ))}
-              </div>
             </div>
           </MobileNavSheet>
         </div>
