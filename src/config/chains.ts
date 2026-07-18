@@ -1,240 +1,115 @@
-import { http } from 'wagmi'
+import { defineChain, http } from 'viem'
+import type { Chain } from 'viem/chains'
 import {
   arbitrum,
-  arbitrumSepolia,
   avalanche,
-  avalancheFuji,
   base,
-  baseGoerli,
   bsc,
-  bscTestnet,
   celo,
-  celoAlfajores,
-  gnosis,
   linea,
-  lineaTestnet,
-  // Mainnets
   mainnet,
+  mantle,
   optimism,
-  optimismSepolia,
   polygon,
-  polygonMumbai,
-  // Testnets
-  sepolia,
-  zkSync,
-} from 'wagmi/chains'
+  scroll,
+  unichain,
+  zksync,
+} from 'viem/chains'
+
+import type { RegisteredChainId } from '@/lib/protocols/core/toolkit'
+
+/**
+ * Execution layer — the chains where Lendwise can drive a wallet (send a
+ * transaction, wait for a receipt, read a native balance).
+ *
+ * Identity lives in the chain registry (core/toolkit/chain-slugs.ts) and data
+ * coverage in each adapter config; both extend without touching this file. A
+ * chain ingested for data but absent here is simply view-only in the UI —
+ * `isTxSupported` is the one predicate consumers ask.
+ *
+ * Membership = the Infura project has the network enabled (checked live before
+ * adding — an entry whose RPC 403s is worse than none). Remaining view-only
+ * chains (gnosis, metis, soneium, sonic, plasma, ink, xlayer, katana, …) are
+ * not served by Infura; adding one means finding it an RPC first.
+ *
+ * EVM-only by nature (wagmi). A future non-EVM execution stack (e.g. Stellar
+ * wallets for Blend) gets its own module; it shares the registry, not this file.
+ */
 
 if (!process.env.NEXT_PUBLIC_INFURA_API_KEY) {
   throw new Error('NEXT_PUBLIC_INFURA_API_KEY is not defined')
 }
 
-export const INFURA_API_KEY = process.env.NEXT_PUBLIC_INFURA_API_KEY
+const INFURA_API_KEY = process.env.NEXT_PUBLIC_INFURA_API_KEY
 
-export const NETWORKS = {
-  // Ethereum Networks
-  MAINNET: {
-    ...mainnet,
-    rpc: `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,
-  },
-  SEPOLIA: {
-    ...sepolia,
-    rpc: `https://sepolia.infura.io/v3/${INFURA_API_KEY}`,
-  },
+const infura = (subdomain: string) =>
+  `https://${subdomain}.infura.io/v3/${INFURA_API_KEY}`
 
-  // Arbitrum Networks
-  ARBITRUM: {
-    ...arbitrum,
-    rpc: `https://arbitrum-mainnet.infura.io/v3/${INFURA_API_KEY}`,
-  },
-  ARBITRUM_SEPOLIA: {
-    ...arbitrumSepolia,
-    rpc: `https://arbitrum-sepolia.infura.io/v3/${INFURA_API_KEY}`,
-  },
+// Not in our viem version yet — minimal definitions, explorers can come later.
+const hyperevm = defineChain({
+  id: 999,
+  name: 'HyperEVM',
+  nativeCurrency: { name: 'Hyperliquid', symbol: 'HYPE', decimals: 18 },
+  rpcUrls: { default: { http: [infura('hyperevm-mainnet')] } },
+})
 
-  // Optimism Networks
-  OPTIMISM: {
-    ...optimism,
-    rpc: `https://optimism-mainnet.infura.io/v3/${INFURA_API_KEY}`,
-  },
-  OPTIMISM_SEPOLIA: {
-    ...optimismSepolia,
-    rpc: `https://optimism-sepolia.infura.io/v3/${INFURA_API_KEY}`,
-  },
+const megaeth = defineChain({
+  id: 4326,
+  name: 'MegaETH',
+  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: [infura('megaeth-mainnet')] } },
+})
 
-  // Polygon Networks
-  POLYGON: {
-    ...polygon,
-    rpc: `https://polygon-mainnet.infura.io/v3/${INFURA_API_KEY}`,
-  },
-  POLYGON_MUMBAI: {
-    ...polygonMumbai,
-    rpc: `https://polygon-mumbai.infura.io/v3/${INFURA_API_KEY}`,
-  },
+const monad = defineChain({
+  id: 143,
+  name: 'Monad',
+  nativeCurrency: { name: 'Monad', symbol: 'MON', decimals: 18 },
+  rpcUrls: { default: { http: [infura('monad-mainnet')] } },
+})
 
-  // Base Networks
-  BASE: {
-    ...base,
-    rpc: `https://base-mainnet.infura.io/v3/${INFURA_API_KEY}`,
-  },
-  BASE_GOERLI: {
-    ...baseGoerli,
-    rpc: `https://base-goerli.infura.io/v3/${INFURA_API_KEY}`,
-  },
-
-  // Linea Networks
-  LINEA: {
-    ...linea,
-    rpc: `https://linea-mainnet.infura.io/v3/${INFURA_API_KEY}`,
-  },
-  LINEA_GOERLI: {
-    ...lineaTestnet,
-    rpc: `https://linea-goerli.infura.io/v3/${INFURA_API_KEY}`,
-  },
-
-  // Celo Networks
-  CELO: {
-    ...celo,
-    rpc: `https://celo-mainnet.infura.io/v3/${INFURA_API_KEY}`,
-  },
-  CELO_ALFAJORES: {
-    ...celoAlfajores,
-    rpc: `https://celo-alfajores.infura.io/v3/${INFURA_API_KEY}`,
-  },
-
-  // Avalanche Networks
-  AVALANCHE: {
-    ...avalanche,
-    rpc: `https://avalanche-mainnet.infura.io/v3/${INFURA_API_KEY}`,
-  },
-  AVALANCHE_FUJI: {
-    ...avalancheFuji,
-    rpc: `https://avalanche-fuji.infura.io/v3/${INFURA_API_KEY}`,
-  },
-
-  // BSC Networks (Binance Smart Chain)
-  BSC: {
-    ...bsc,
-    rpc: 'https://bsc-dataseed.binance.org',
-  },
-  BSC_TESTNET: {
-    ...bscTestnet,
-    rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545',
-  },
-
-  // zkSync Networks
-  ZKSYNC: {
-    ...zkSync,
-    rpc: 'https://mainnet.era.zksync.io',
-  },
-
-  // Gnosis Chain (formerly xDai)
-  GNOSIS: {
-    ...gnosis,
-    rpc: 'https://rpc.gnosischain.com',
-  },
-} as const
-
-// Groupement des réseaux par type
-export const CHAINS = {
-  MAINNETS: [
-    NETWORKS.MAINNET, // Ethereum
-    NETWORKS.ARBITRUM, // Arbitrum
-    NETWORKS.OPTIMISM, // Optimism
-    NETWORKS.POLYGON, // Polygon
-    NETWORKS.BASE, // Base
-    NETWORKS.LINEA, // Linea
-    NETWORKS.CELO, // Celo
-    NETWORKS.AVALANCHE, // Avalanche
-    NETWORKS.BSC, // Binance Smart Chain
-    NETWORKS.ZKSYNC, // zkSync Era
-    NETWORKS.GNOSIS, // Gnosis Chain
-  ],
-  TESTNETS: [
-    NETWORKS.SEPOLIA, // Ethereum testnet
-    NETWORKS.ARBITRUM_SEPOLIA, // Arbitrum testnet
-    NETWORKS.OPTIMISM_SEPOLIA, // Optimism testnet
-    NETWORKS.POLYGON_MUMBAI, // Polygon testnet
-    NETWORKS.BASE_GOERLI, // Base testnet
-    NETWORKS.LINEA_GOERLI, // Linea testnet
-    NETWORKS.CELO_ALFAJORES, // Celo testnet
-    NETWORKS.AVALANCHE_FUJI, // Avalanche testnet
-    NETWORKS.BSC_TESTNET, // BSC testnet
-  ],
-} as const
-
-export const ALL_CHAINS = [
-  // Ethereum Networks
-  NETWORKS.MAINNET,
-  NETWORKS.SEPOLIA,
-
-  // Arbitrum Networks
-  NETWORKS.ARBITRUM,
-  NETWORKS.ARBITRUM_SEPOLIA,
-
-  // Optimism Networks
-  NETWORKS.OPTIMISM,
-  NETWORKS.OPTIMISM_SEPOLIA,
-
-  // Polygon Networks
-  NETWORKS.POLYGON,
-  NETWORKS.POLYGON_MUMBAI,
-
-  // Base Networks
-  NETWORKS.BASE,
-  NETWORKS.BASE_GOERLI,
-
-  // Linea Networks
-  NETWORKS.LINEA,
-  NETWORKS.LINEA_GOERLI,
-
-  // Celo Networks
-  NETWORKS.CELO,
-  NETWORKS.CELO_ALFAJORES,
-
-  // Avalanche Networks
-  NETWORKS.AVALANCHE,
-  NETWORKS.AVALANCHE_FUJI,
-
-  // BSC Networks
-  NETWORKS.BSC,
-  NETWORKS.BSC_TESTNET,
-
-  // zkSync Networks
-  NETWORKS.ZKSYNC,
-
-  // Gnosis Networks
-  NETWORKS.GNOSIS,
+export const TX_CHAINS = [
+  { ...mainnet, rpc: infura('mainnet') },
+  { ...arbitrum, rpc: infura('arbitrum-mainnet') },
+  { ...optimism, rpc: infura('optimism-mainnet') },
+  { ...polygon, rpc: infura('polygon-mainnet') },
+  { ...base, rpc: infura('base-mainnet') },
+  { ...linea, rpc: infura('linea-mainnet') },
+  { ...avalanche, rpc: infura('avalanche-mainnet') },
+  { ...bsc, rpc: infura('bsc-mainnet') },
+  { ...celo, rpc: infura('celo-mainnet') },
+  { ...zksync, rpc: infura('zksync-mainnet') },
+  { ...mantle, rpc: infura('mantle-mainnet') },
+  { ...scroll, rpc: infura('scroll-mainnet') },
+  { ...unichain, rpc: infura('unichain-mainnet') },
+  { ...hyperevm, rpc: infura('hyperevm-mainnet') },
+  { ...megaeth, rpc: infura('megaeth-mainnet') },
+  { ...monad, rpc: infura('monad-mainnet') },
 ] as const
 
-export const CHAIN_TRANSPORTS = ALL_CHAINS.reduce(
-  (acc, chain) => ({
-    ...acc,
-    [chain.id]: http(chain.rpc),
-  }),
-  {}
-)
+/** Compile-time guard: every tx chain must exist in the chain registry. */
+type AssertRegistered<T extends RegisteredChainId> = T
+export type TxChainId = AssertRegistered<(typeof TX_CHAINS)[number]['id']>
+
+const TX_CHAIN_IDS: ReadonlySet<number> = new Set(TX_CHAINS.map((c) => c.id))
 
 /**
- * List of chain IDs that support ENS (Ethereum Name Service)
- * ENS is natively supported on Ethereum Mainnet and available via CCIP-Read on L2s
+ * Execution count — chains with wallet support. The data/marketing count is
+ * STANDARDIZED_CHAIN_COUNT in `@/config/chains-coverage`.
  */
-const ENS_SUPPORTED_CHAIN_IDS = [
-  mainnet.id, // Ethereum Mainnet (1)
-  optimism.id, // Optimism (10)
-  arbitrum.id, // Arbitrum One (42161)
-  base.id, // Base (8453)
-  polygon.id, // Polygon (137)
-  sepolia.id, // Sepolia Testnet (11155111)
-] as const
+export const TX_CHAIN_COUNT = TX_CHAINS.length
 
-/**
- * Check if a chain supports ENS resolution
- * @param chainId - The chain ID to check
- * @returns true if the chain supports ENS, false otherwise
- */
-export function isEnsSupported(chainId: number | undefined): boolean {
-  if (!chainId) return false
-  return ENS_SUPPORTED_CHAIN_IDS.includes(
-    chainId as (typeof ENS_SUPPORTED_CHAIN_IDS)[number]
-  )
+/** Can Lendwise drive a wallet on this chain? false = view-only in the UI. */
+export function isTxSupported(chainId: number): boolean {
+  return TX_CHAIN_IDS.has(chainId)
 }
+
+export const ALL_CHAINS = TX_CHAINS
+
+export const CHAINS = {
+  MAINNETS: TX_CHAINS,
+  TESTNETS: [] as readonly Chain[],
+} as const
+
+export const CHAIN_TRANSPORTS = Object.fromEntries(
+  TX_CHAINS.map((chain) => [chain.id, http(chain.rpc)])
+)

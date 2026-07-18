@@ -70,7 +70,7 @@ export function PieChartMini({
       </div>
       {showLabel && (
         <div
-          className={`pointer-events-none flex items-center justify-center font-semibold ${labelSizeMap[labelSize]}`}
+          className={`pointer-events-none flex min-w-[7ch] items-center justify-start font-semibold tabular-nums ${labelSizeMap[labelSize]}`}
           style={{ color: labelColor }}
         >
           {percentage < 0.1 ? '<0.1' : percentage.toFixed(2)}%

@@ -6,14 +6,22 @@ import { NavBar } from '@/components/landing/NavBar'
 import { ProblemSection } from '@/components/landing/ProblemSection'
 import { RevealObserver } from '@/components/landing/RevealObserver'
 import { Ticker } from '@/components/landing/Ticker'
+import { catalogStatsSafe } from '@/lib/catalog-stats'
+import { tickerRatesSafe } from '@/lib/ticker-rates'
 
-export default function Home() {
+export const revalidate = 3600
+
+export default async function Home() {
+  const [catalog, tickerRates] = await Promise.all([
+    catalogStatsSafe(),
+    tickerRatesSafe(),
+  ])
   return (
     <div className="bg-background text-foreground selection:bg-primary selection:text-primary-foreground min-h-screen font-sans antialiased [&_a]:no-underline">
       <RevealObserver />
       <NavBar />
-      <HeroSection />
-      <Ticker />
+      <HeroSection marketCount={catalog?.activeProducts ?? null} />
+      <Ticker rates={tickerRates} />
       <ProblemSection />
       <Features />
       <CTASection />

@@ -11,5 +11,16 @@ export type {
   BaseChainTransformers,
   ChainConfig,
 } from './types'
-export { CHAIN_SLUG_MAP } from './chain-slugs'
-export type { RegisteredChainId } from './chain-slugs'
+export {
+  CHAIN_BY_ID,
+  CHAIN_BY_SLUG,
+  CHAIN_REGISTRY,
+  CHAIN_SLUG_MAP,
+  adapterChains,
+} from './chain-slugs'
+export type {
+  ChainFamily,
+  ChainSlug,
+  RegisteredChain,
+  RegisteredChainId,
+} from './chain-slugs'

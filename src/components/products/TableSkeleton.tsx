@@ -40,12 +40,11 @@ function ValueCell() {
   )
 }
 
-function LiquidityCell() {
+function UtilizationCell() {
   return (
-    <div className="flex flex-1 items-center gap-2">
-      <Skeleton className="h-4 w-20" />
-      <Skeleton className="h-5 w-14 rounded-md" />
+    <div className="flex items-center gap-1">
       <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
+      <Skeleton className="h-4 w-12" />
     </div>
   )
 }
@@ -88,6 +87,7 @@ const SUPPLY_HEADERS: HeaderCol[] = [
   { label: 'NAME', flex: true },
   { label: 'DEPOSITS', flex: true },
   { label: 'LIQUIDITY', flex: true },
+  { label: 'UTILIZATION' },
   { label: 'APY' },
   { label: '' },
 ]
@@ -100,6 +100,7 @@ const BORROW_HEADERS: HeaderCol[] = [
   { label: 'COLLATERAL' },
   { label: 'DEPOSITS', flex: true },
   { label: 'LIQUIDITY', flex: true },
+  { label: 'UTILIZATION' },
   { label: 'APY' },
   { label: '' },
 ]
@@ -114,7 +115,8 @@ function SupplyRow() {
       <BadgeCell w={88} />
       <NameCell />
       <ValueCell />
-      <LiquidityCell />
+      <ValueCell />
+      <UtilizationCell />
       <ApyCell />
       <LinkCell />
     </div>
@@ -130,7 +132,8 @@ function BorrowRow() {
       <NameCell />
       <CollateralsCell />
       <ValueCell />
-      <LiquidityCell />
+      <ValueCell />
+      <UtilizationCell />
       <ApyCell />
       <LinkCell />
     </div>

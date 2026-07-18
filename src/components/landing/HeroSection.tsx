@@ -1,21 +1,31 @@
 import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
+import { TX_CHAIN_COUNT } from '@/config/chains'
+import { STANDARDIZED_CHAIN_COUNT } from '@/config/chains-coverage'
 import { cn } from '@/lib/utils'
 
+import { CountUp } from './CountUp'
 import { Cube } from './Cube'
 import { CubeField } from './CubeField'
 
-const stats = [
-  { value: '8', label: 'Blockchains' },
-  { value: '700+', label: 'Lending markets' },
-  { value: '<1s', label: 'Latency' },
-  { value: '60s', label: 'Data refresh' },
-]
-
 const lineSoft = 'oklch(from var(--border) l c h / 0.6)'
 
-export function HeroSection() {
+export function HeroSection({
+  marketCount,
+}: {
+  marketCount: number | null
+}) {
+  const stats = [
+    { value: STANDARDIZED_CHAIN_COUNT, suffix: '', label: 'Chains standardized' },
+    { value: TX_CHAIN_COUNT, suffix: '', label: 'Chains with execution' },
+    {
+      value: marketCount ?? 700,
+      suffix: marketCount != null ? '' : '+',
+      label: 'Lending markets',
+    },
+    { value: 60, suffix: 's', label: 'Data refresh' },
+  ]
   return (
     <header
       className="border-border/60 relative flex min-h-screen flex-col overflow-hidden border-b"
@@ -81,7 +91,7 @@ export function HeroSection() {
               key={s.label}
             >
               <b className="text-foreground block font-mono text-[26px] font-semibold tracking-[-0.02em]">
-                {s.value}
+                <CountUp suffix={s.suffix} value={s.value} />
               </b>
               <span className="text-ink-faint text-[12.5px]">{s.label}</span>
             </div>

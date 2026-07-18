@@ -219,27 +219,33 @@ const createColumns = (
             currency
           )}
         </Badge>
+      </div>
+    ),
+    enableHiding: false,
+  },
+  {
+    id: 'utilization',
+    accessorFn: (row) => getUtilizationPct(row),
+    header: ({ column }) => (
+      <SortableHeader column={column}>Utilization</SortableHeader>
+    ),
+    cell: ({ row }) => (
+      <div className="flex items-center">
         <PieChartMini
-          percentage={(() => {
-            if (!row.original.liquidityAmountUsd) return 100
-            const used =
-              row.original.assetAmountUsd - row.original.liquidityAmountUsd
-            const pct = (used / row.original.assetAmountUsd) * 100
-            return Math.min(100, pct)
-          })()}
+          percentage={Math.min(100, Math.max(0, getUtilizationPct(row.original)))}
         />
-        {isOverutilized(row.original) && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex items-center">
+        <span className="inline-flex w-3.5 shrink-0 items-center">
+          {isOverutilized(row.original) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              Utilization &gt;99% — unhealthy market, cannot be optimized
-            </TooltipContent>
-          </Tooltip>
-        )}
+              </TooltipTrigger>
+              <TooltipContent>
+                Utilization &gt;99% — unhealthy market, cannot be optimized
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </span>
       </div>
     ),
     enableHiding: false,

@@ -1,22 +1,32 @@
-import { arbitrum, base, mainnet, optimism, polygon } from 'viem/chains'
-
 import type { AdapterChain, IngestionFloors } from '@/lib/protocols/core/types'
 
 // Relative (not '@/…') so codegen.ts can load this module through jiti, which
 // does not resolve the '@/' path alias for value imports. Matches the pattern in
 // the sibling aave/compound configs that codegen also imports.
-import { CHAIN_SLUG_MAP } from '../../core/toolkit/chain-slugs'
+import { adapterChains } from '../../core/toolkit/chain-slugs'
 
 export const MORPHO_V1_API_URL = 'https://api.morpho.org/graphql'
 
-/** Lightweight chain map — no more viem Chain spread. subgraphUrl extras died with onchain/. */
-export const MORPHO_V1_CHAINS: Record<number, AdapterChain> =
-  Object.fromEntries(
-    [mainnet, base, arbitrum, polygon, optimism].map((c) => [
-      c.id,
-      { slug: CHAIN_SLUG_MAP[c.id] },
-    ])
-  )
+/**
+ * Coverage — every Morpho API chain with at least one listed vault or market
+ * above the ingestion floor (July 2026; World Chain and Arc had zero, add them
+ * the day they do). Identity lives in the registry; an unknown slug here is a
+ * compile error. Transactability is decided independently in src/config/chains.ts.
+ */
+export const MORPHO_V1_CHAINS: Record<number, AdapterChain> = adapterChains([
+  'ethereum',
+  'base',
+  'arbitrum',
+  'polygon',
+  'optimism',
+  'katana',
+  'hyperevm',
+  'unichain',
+  'monad',
+  'stable',
+  'tempo',
+  'robinhood',
+])
 
 /**
  * Moved verbatim from morpho/config.ts — the one irreversible filter. Keep LOW.

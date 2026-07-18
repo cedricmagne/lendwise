@@ -278,6 +278,26 @@ function filterConds(f: ProductFilters) {
 }
 
 /**
+ * Catalog-wide aggregate for stats surfaces (landing, /api/stats): one round
+ * trip, active products only.
+ */
+export async function getCatalogStats(): Promise<{
+  activeProducts: number
+  assets: number
+  chains: number
+}> {
+  const rows = await db
+    .select({
+      activeProducts: sql<number>`count(*) filter (where ${products.active})::int`,
+      assets: sql<number>`count(distinct ${products.assetSymbol}) filter (where ${products.active})::int`,
+      chains: sql<number>`count(distinct ${products.chainId}) filter (where ${products.active})::int`,
+    })
+    .from(products)
+
+  return rows[0] ?? { activeProducts: 0, assets: 0, chains: 0 }
+}
+
+/**
  * Paginated product registry read, with a total count.
  *
  * Clamps its own page (via the shared `clampPage`) rather than trusting the
