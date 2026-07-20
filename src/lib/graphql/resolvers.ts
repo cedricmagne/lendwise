@@ -333,9 +333,12 @@ function toProductFilters(filters?: GqlProductFilters): ProductFilters {
 /** Latest snapshot per product — always hourly rows, best-first by default. */
 async function resolveLatest(kind: 'supply' | 'borrow', args: ResolverArgs) {
   const f = toApyFilters(kind, args.filters ?? {})
-  // Defaults to apyNet desc (best-first), unlike the time-series queries which
-  // default to time asc. These mirror the schema's own defaults.
-  const page = toPage(args, 'apyNet', 'desc')
+  // Defaults to apyNet, best-first — but "best" is direction-dependent: supply
+  // net is a yield (higher is better → desc), borrow net is a cost (lower is
+  // better → asc). A single desc default would rank the most expensive borrow
+  // first. The time-series queries default to time asc instead; these mirror the
+  // schema's own per-query defaults.
+  const page = toPage(args, 'apyNet', kind === 'borrow' ? 'asc' : 'desc')
 
   const { rows, countTotal, applied } = await queryLatestApy(f, page)
   const isBorrow = kind === 'borrow'

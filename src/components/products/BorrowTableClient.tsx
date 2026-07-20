@@ -1057,7 +1057,7 @@ export function BorrowTableClient() {
         ]}
         columns={columns}
         data={visibleMarkets}
-        initialSorting={[{ id: sortColumn, desc: true }]}
+        initialSorting={[{ id: sortColumn, desc: false }]}
         getRowId={getRowId}
         hideToolbar={true}
         columnFilters={columnFilters}

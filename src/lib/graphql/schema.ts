@@ -573,13 +573,19 @@ export const typeDefs = /* GraphQL */ `
       orderBy: SupplyApyOrderBy = apyNet
       orderDirection: OrderDirection = desc
     ): SupplyHourlyResponse!
-    "The single most recent snapshot per borrow product, across the whole catalogue."
+    """
+    The single most recent snapshot per borrow product, across the whole
+    catalogue — the "cheapest borrow right now" query. Defaults to net APY
+    ascending: borrow net is a cost (base + fees − rewards), so the lowest is the
+    best, the reverse of latestSupplyApy. Only products with a reading in the last
+    6 hours are returned; a stale rate is worse than a missing one.
+    """
     latestBorrowApy(
       filters: LatestBorrowFilters
       first: Int = 100
       skip: Int = 0
       orderBy: BorrowApyOrderBy = apyNet
-      orderDirection: OrderDirection = desc
+      orderDirection: OrderDirection = asc
     ): BorrowHourlyResponse!
 
     "The product registry. \`first\` is capped at 500."

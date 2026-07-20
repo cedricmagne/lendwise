@@ -1,7 +1,7 @@
 # LendWise MCP — Design Spec
 
 Date: 2026-07-12
-Status: approved, pending implementation plan
+Status: implemented. Parts A and B shipped. Borrow read/compare added 2026-07-20 (Tier 1 — see Non-goals); borrow optimization still deferred to v2.
 
 ## Goal
 
@@ -203,7 +203,10 @@ vitest. Unit: optimizer index mapping (both directions), `stats.ts`, argument va
 
 ## Non-goals (v1)
 
-- Borrow tools (`find_best_borrow_markets`, `optimize_borrow`, `optimize_collateral`) — v2, once the tool shape is proven. Borrow needs collateral modelling and two more optimizer endpoints.
+- Borrow tools — split on the 2026-07-20 revision once the tool shape was proven:
+  - **Tier 1, borrow read/compare — SHIPPED (2026-07-20).** Not new tools: `find_best_markets` and `get_market_history` gained a `kind: supply | borrow` param (default supply), joining `list_market_universe` (already had `kind`) and `get_market_details` (already kind-agnostic). Still 5 tools. `find_best_markets` also gained a borrow-only `collateral?` filter, whose valid values the agent discovers from the `collaterals` carried on returned borrow rows. The load-bearing detail: borrow net APY is a cost (`base + fees − rewards`), so borrow ranks lowest-first, and the MCP sends `orderDirection: asc` explicitly for it. `latestBorrowApy` / `borrowApyDaily` from Part A already carried the data the tools need.
+    - **Follow-on Part A fix (2026-07-20):** `latestBorrowApy`'s default `orderDirection` was `desc` — inherited symmetrically from `latestSupplyApy` but wrong for a cost, so a direct GraphQL caller fetching "best borrow" without a direction got the *most expensive* first. Flipped the default to `asc` (`resolveLatest` is now kind-aware; schema SDL + description updated). Zero internal consumers; the MCP keeps its explicit `asc` as defense in depth. It is a public-contract behavior change — external clients relying on the old desc ordering will see it flip.
+  - **Tier 2, borrow optimization (`optimize_borrow`, `optimize_collateral`) — still v2.** These need collateral modelling (deriving per-market `max_ltv` across Aave/Compound multi-collateral vs Morpho single `lltv`) and the two `/optimize/borrow` + `/optimize/collateral` endpoints. The proxy already whitelists both; the modelling is the open work.
 - Any write/transaction capability. The MCP is read-only. It recommends; it never signs.
 - API keys / per-user tiers on `/api/graphql`. IP-based limits first; keys only if abuse appears.
 - A raw `graphql_query` escape hatch. It reintroduces the expensive-query surface Part A exists to close.
