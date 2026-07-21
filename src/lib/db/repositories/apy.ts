@@ -262,20 +262,33 @@ export async function aggregateDaily(
 
 // ─── Enrichment reads (used by products.actions) ────────────────────────────
 
+export interface LatestHourly {
+  apyNet: number
+  /** Reward component of that same row — 0 when the market pays no incentives. */
+  apyRewards: number
+}
+
 /** Latest hourly net APY per product (replaces $sort+$group $first). */
-export async function latestHourlyNet(
+export async function latestHourly(
   productIds: string[]
-): Promise<Map<string, number>> {
-  const map = new Map<string, number>()
+): Promise<Map<string, LatestHourly>> {
+  const map = new Map<string, LatestHourly>()
   if (productIds.length === 0) return map
   const res = await db.execute(sql`
-    SELECT DISTINCT ON (product_id) product_id, apy_net
+    SELECT DISTINCT ON (product_id) product_id, apy_net, apy_rewards
     FROM apy_hourly
     WHERE product_id IN ${inList(productIds)}
     ORDER BY product_id, hour DESC
   `)
-  for (const r of res.rows as { product_id: string; apy_net: number }[]) {
-    map.set(r.product_id, r.apy_net)
+  for (const r of res.rows as {
+    product_id: string
+    apy_net: number
+    apy_rewards: number
+  }[]) {
+    map.set(r.product_id, {
+      apyNet: r.apy_net,
+      apyRewards: Number(r.apy_rewards) || 0,
+    })
   }
   return map
 }
@@ -284,6 +297,9 @@ export interface ApyEnrichment {
   apyDaily?: number
   apyMonthly?: number
   apyYearly?: number
+  apyRewardsDaily?: number
+  apyRewardsMonthly?: number
+  apyRewardsYearly?: number
 }
 
 /**
@@ -306,7 +322,10 @@ export async function apyEnrichments(
       avg(apy_net) FILTER (WHERE date >= now() - interval '30 days')  AS avg30,
       count(*)     FILTER (WHERE date >= now() - interval '30 days')  AS n30,
       avg(apy_net)                                                    AS avg365,
-      count(*)                                                        AS n365
+      count(*)                                                        AS n365,
+      avg(apy_rewards) FILTER (WHERE date >= now() - interval '7 days')  AS rew7,
+      avg(apy_rewards) FILTER (WHERE date >= now() - interval '30 days') AS rew30,
+      avg(apy_rewards)                                                   AS rew365
     FROM apy_daily
     WHERE product_id IN ${inList(productIds)} AND date >= now() - interval '365 days'
     GROUP BY product_id
@@ -319,6 +338,9 @@ export async function apyEnrichments(
     n30: number | string
     avg365: number | null
     n365: number | string
+    rew7: number | null
+    rew30: number | null
+    rew365: number | null
   }[]) {
     // Postgres numeric can hold 'NaN' (e.g. a bad upstream APR→APY); avg() over
     // it yields NaN. Coerce any non-finite value to undefined so the UI shows a
@@ -331,6 +353,9 @@ export async function apyEnrichments(
       apyDaily: Number(r.n7) >= 1 ? avg(r.avg7) : undefined,
       apyMonthly: Number(r.n30) >= 1 ? avg(r.avg30) : undefined,
       apyYearly: Number(r.n365) >= 1 ? avg(r.avg365) : undefined,
+      apyRewardsDaily: Number(r.n7) >= 1 ? avg(r.rew7) : undefined,
+      apyRewardsMonthly: Number(r.n30) >= 1 ? avg(r.rew30) : undefined,
+      apyRewardsYearly: Number(r.n365) >= 1 ? avg(r.rew365) : undefined,
     })
   }
   return map
@@ -559,7 +584,7 @@ const LATEST_WINDOW_HOURS = 6
 /**
  * The most recent hourly row per product, across the whole catalogue, sorted and
  * paginated by any field. This is what answers "the best markets right now" —
- * `latestHourlyNet` can't, because it takes explicit productIds and so discovers
+ * `latestHourly` can't, because it takes explicit productIds and so discovers
  * nothing.
  *
  * DISTINCT ON must sort by product_id first, which rules out sorting by APY in

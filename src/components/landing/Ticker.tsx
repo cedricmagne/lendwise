@@ -23,7 +23,7 @@ export function Ticker({ rates }: { rates: TickerRate[] | null }) {
       <div className="animate-marquee flex w-max group-hover:[animation-play-state:paused] motion-reduce:animate-none">
         {loop.map((tk, i) => (
           <span
-            className="border-border/60 text-muted-foreground inline-flex items-center gap-3 border-r px-7 py-[14px] font-mono text-[12.5px] whitespace-nowrap"
+            className="border-border/60 text-muted-foreground inline-flex items-center gap-3 border-r px-7 py-3.5 font-mono text-[12.5px] whitespace-nowrap"
             key={`${tk.protocol}-${tk.chain}-${i}`}
           >
             {tk.protocol.toUpperCase()} · {tk.chain}{' '}

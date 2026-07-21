@@ -1,7 +1,11 @@
+'use client'
+
 import type { CSSProperties, ReactNode } from 'react'
 
 import { ArrowUpRight } from 'lucide-react'
+import { useTheme } from 'next-themes'
 
+import { CodeBlock } from '@/components/animate-ui/primitives/animate/code-block'
 import { cn } from '@/lib/utils'
 
 import { Cube } from './Cube'
@@ -21,7 +25,7 @@ function PointBody({ p }: { p: Point }) {
 }
 
 function Points({ items }: { items: Point[] }) {
-  const row = 'flex items-start gap-[14px] py-[13px] text-[14px]'
+  const row = 'flex items-start gap-3.5 py-3.25 text-[14px]'
   return (
     <ul className="m-0 flex list-none flex-col p-0">
       {items.map((p) => (
@@ -69,7 +73,7 @@ function Feature({
     <div
       id={id}
       className={cn(
-        'reveal border-border/60 grid scroll-mt-[68px] grid-cols-[5fr_6fr] items-center gap-[72px] border-t py-[88px]',
+        'reveal border-border/60 grid scroll-mt-17 grid-cols-[5fr_6fr] items-center gap-18 border-t py-22',
         'max-desk:grid-cols-1 max-desk:gap-10 max-desk:py-16',
         first && 'max-desk:pt-0 border-t-0 pt-0',
         last && 'max-desk:pb-0 pb-0'
@@ -82,7 +86,7 @@ function Feature({
         <h3 className="text-foreground mt-4 mb-3 text-[30px] leading-[1.1] font-semibold tracking-[-0.03em]">
           {title}
         </h3>
-        <p className="text-muted-foreground m-0 mb-[26px] text-[15.5px] leading-[1.6]">
+        <p className="text-muted-foreground m-0 mb-6.5 text-[15.5px] leading-[1.6]">
           {body}
         </p>
         <Points items={points} />
@@ -102,8 +106,8 @@ function Panel({ children }: { children: ReactNode }) {
 
 function PanelBar({ label, right }: { label: string; right: string }) {
   return (
-    <div className="border-border/60 text-ink-faint flex items-center gap-2.5 border-b px-[18px] py-3 font-mono text-[11px] tracking-[0.08em] uppercase">
-      <span className="bg-brand-bright h-[7px] w-[7px] rounded-full" /> {label}
+    <div className="border-border/60 text-ink-faint flex items-center gap-2.5 border-b px-4.5 py-3 font-mono text-[11px] tracking-[0.08em] uppercase">
+      <span className="bg-brand-bright h-1.75 w-1.75 rounded-full" /> {label}
       <span className="ml-auto tracking-normal normal-case">{right}</span>
     </div>
   )
@@ -118,15 +122,15 @@ const standardRows = [
 ]
 
 function StandardPanel() {
-  const td = 'border-border/60 border-b px-[18px] py-[13px]'
+  const td = 'border-border/60 border-b px-4.5 py-3.25'
   const th =
-    'text-ink-faint border-border/60 border-b px-[18px] py-3 text-left text-[10.5px] font-medium tracking-[0.1em] uppercase'
+    'text-ink-faint border-border/60 border-b px-4.5 py-3 text-left text-[10.5px] font-medium tracking-[0.1em] uppercase'
   return (
     <Panel>
       <PanelBar label="yield_standardization" right="60s refresh" />
       {/* the 4 columns don't fit under ~430px — scroll the table, not the page */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[420px] border-collapse font-mono text-[13px] [&_tr:last-child>td]:border-b-0">
+        <table className="w-full min-w-105 border-collapse font-mono text-[13px] [&_tr:last-child>td]:border-b-0">
           <thead>
             <tr>
               <th className={th}>Protocol</th>
@@ -189,14 +193,14 @@ function OptimizerPanel() {
   return (
     <Panel>
       <PanelBar label="optimized_portfolio" right="4 positions" />
-      <div className="px-[18px] py-[22px]">
-        <div className="mb-5 flex items-baseline gap-[14px]">
+      <div className="px-4.5 py-5.5">
+        <div className="mb-5 flex items-baseline gap-3.5">
           <span className="text-foreground font-mono text-[34px] font-semibold tracking-[-0.02em]">
             5.82%
           </span>
           <span className="text-ink-faint text-[12.5px]">blended APY</span>
           <span
-            className="text-rose ml-auto rounded-[3px] border px-2 py-[3px] font-mono text-[12px]"
+            className="text-rose ml-auto rounded-sm border px-2 py-0.75 font-mono text-[12px]"
             style={deltaStyle}
           >
             +2.4% vs manual
@@ -205,7 +209,7 @@ function OptimizerPanel() {
         {positions.map((p, index) => (
           <div
             key={p.name}
-            className="border-border/60 grid grid-cols-[1fr_auto_auto] items-center gap-x-4 gap-y-1 border-t py-[11px]"
+            className="border-border/60 grid grid-cols-[1fr_auto_auto] items-center gap-x-4 gap-y-1 border-t py-2.75"
           >
             <span className="text-foreground text-[13.5px] font-semibold">
               {p.name}
@@ -216,10 +220,10 @@ function OptimizerPanel() {
             <span className="text-muted-foreground font-mono text-[13px]">
               {p.pct}% · {p.apy}
             </span>
-            <span className="bg-border/60 col-span-full h-[4px] overflow-hidden rounded-[2px]">
+            <span className="bg-border/60 col-span-full h-1 overflow-hidden rounded-sm">
               <i
                 className={cn(
-                  'slider-animate block h-full rounded-[2px]',
+                  'slider-animate block h-full rounded-sm',
                   p.hot ? 'bg-brand-bright' : 'bg-primary'
                 )}
                 style={
@@ -235,7 +239,7 @@ function OptimizerPanel() {
             </span>
           </div>
         ))}
-        <div className="mt-[18px] flex gap-2">
+        <div className="mt-4.5 flex gap-2">
           {['Low risk', 'Auto-compound'].map((t) => (
             <span
               key={t}
@@ -250,49 +254,48 @@ function OptimizerPanel() {
   )
 }
 
-function CodeLine({ n, children }: { n: number; children: ReactNode }) {
-  return <div style={{ '--line': n } as CSSProperties}>{children}</div>
-}
-
 function ApiPanel() {
+  const { resolvedTheme } = useTheme()
+
   return (
     <Panel>
       <PanelBar label="graphql_playground" right="connected" />
-      <div className="code-typing text-muted-foreground px-[22px] py-5 font-mono text-[13px] leading-[1.75]">
-        <CodeLine n={1}>
-          <span className="text-rose">query</span> {'{'}
-        </CodeLine>
-        <CodeLine n={2}>
-          &nbsp;&nbsp;<span className="text-foreground">pools</span>(
-          <span className="text-foreground">chain</span>:{' '}
-          <span className="text-[oklch(0.62_0.06_140)]">
-            &quot;ethereum&quot;
-          </span>
-          , <span className="text-foreground">orderBy</span>:{' '}
-          <span className="text-foreground">apy</span>,{' '}
-          <span className="text-foreground">first</span>:{' '}
-          <span className="text-[oklch(0.68_0.08_80)]">5</span>) {'{'}
-        </CodeLine>
-        <CodeLine n={3}>
-          &nbsp;&nbsp;&nbsp;&nbsp;
-          <span className="text-foreground">protocol</span>
-        </CodeLine>
-        <CodeLine n={4}>
-          &nbsp;&nbsp;&nbsp;&nbsp;<span className="text-foreground">tvl</span>
-        </CodeLine>
-        <CodeLine n={5}>
-          &nbsp;&nbsp;&nbsp;&nbsp;<span className="text-foreground">apy</span>
-        </CodeLine>
-        <CodeLine n={6}>
-          &nbsp;&nbsp;&nbsp;&nbsp;
-          <span className="text-foreground">apyStandardized</span>
-        </CodeLine>
-        <CodeLine n={7}>&nbsp;&nbsp;{'}'}</CodeLine>
-        <CodeLine n={8}>{'}'}</CodeLine>
+      <div className="px-5.5 py-5">
+        <CodeBlock
+          code={`{
+  latestSupplyApy {
+    items {
+      apy {
+        base
+        fees
+        net
+        rewards
+      }
+      asset
+      product {
+        protocol {
+          chain {
+            name
+            id
+          }
+          name
+          provider
+        }
+      }
+    }
+  }
+}`}
+          lang="graphql"
+          theme={resolvedTheme === 'dark' ? 'dark' : 'light'}
+          writing={true}
+          duration={5000}
+          delay={0}
+          className="min-h-90 text-xs"
+        />
       </div>
-      <div className="border-border/60 text-ink-faint flex gap-4 border-t px-[22px] py-3 font-mono text-[12px]">
-        <b className="text-rose font-medium">200</b> response · 42ms{' '}
-        <span>{'{ pools: [ 5 results ] }'}</span>
+      <div className="border-border/60 text-ink-faint flex gap-4 border-t px-5.5 py-3 font-mono text-[12px]">
+        <b className="text-rose font-medium">200</b> response · 12ms{' '}
+        <span>{'{ data: { latestSupplyApy: { items: [...] } } }'}</span>
       </div>
     </Panel>
   )
@@ -329,18 +332,18 @@ function PortfolioPanel() {
   return (
     <Panel>
       <PanelBar label="portfolio_tracker" right="3 wallets" />
-      <div className="px-[18px] pt-[22px] pb-2">
+      <div className="px-4.5 pt-5.5 pb-2">
         <div className="text-foreground font-mono text-[34px] font-semibold tracking-[-0.02em]">
           $25,750
         </div>
-        <div className="text-ink-faint mt-1 mb-[18px] text-[12.5px]">
+        <div className="text-ink-faint mt-1 mb-4.5 text-[12.5px]">
           Total value ·{' '}
           <b className="text-rose font-mono font-medium">+12.4% (30d)</b>
         </div>
         {folio.map((f) => (
           <div
             key={f.name}
-            className="border-border/60 flex items-center gap-[14px] border-t py-3"
+            className="border-border/60 flex items-center gap-3.5 border-t py-3"
           >
             <span className="bg-border/60 border-border text-muted-foreground grid h-8 w-8 place-items-center rounded border font-mono text-[10px] font-semibold">
               {f.ic}
@@ -454,11 +457,11 @@ const features = [
 export function Features() {
   return (
     <section
-      className="border-border/60 scroll-mt-[68px] border-b"
+      className="border-border/60 scroll-mt-17 border-b"
       id="features"
       data-screen-label="Features"
     >
-      <div className="wrap py-[110px]">
+      <div className="wrap py-27.5">
         {features.map((f, i) => (
           <Feature
             key={f.id}

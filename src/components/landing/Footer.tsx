@@ -58,7 +58,7 @@ const legalLinks: FooterLink[] = [
 export function Footer() {
   return (
     <footer className="bg-background" data-screen-label="Footer">
-      <div className="wrap pt-[72px] pb-10">
+      <div className="wrap pt-18 pb-10">
         <div className="border-border/60 max-desk:grid-cols-2 grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-10 border-b pb-14">
           <div className="max-desk:col-span-2">
             <Logo className="mb-4" />
@@ -68,7 +68,7 @@ export function Footer() {
           </div>
           {Object.entries(groups).map(([title, items]) => (
             <div key={title}>
-              <h4 className="text-ink-faint m-0 mb-[14px] font-mono text-[11px] font-medium tracking-[0.12em] uppercase">
+              <h4 className="text-ink-faint m-0 mb-3.5 font-mono text-[11px] font-medium tracking-[0.12em] uppercase">
                 {title}
               </h4>
               <ul className="m-0 flex list-none flex-col gap-2.5 p-0">

@@ -84,7 +84,7 @@ export function WalletSelector({
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          className={`min-w-[200px] justify-between ${className}`}
+          className={`min-w-50 justify-between ${className}`}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <Wallet className="h-4 w-4 shrink-0" />
@@ -129,7 +129,7 @@ export function WalletSelector({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="flex max-h-[400px] w-64 flex-col p-0"
+        className="flex max-h-100 w-64 flex-col p-0"
         align="start"
         side="bottom"
         sideOffset={4}
@@ -148,7 +148,7 @@ export function WalletSelector({
           </Button>
         </div>
 
-        <div className="scrollbar-thumb-border max-h-[350px] flex-1 scrollbar-thin scrollbar-track-transparent overflow-y-auto p-1">
+        <div className="scrollbar-thumb-border max-h-87.5 flex-1 scrollbar-thin scrollbar-track-transparent overflow-y-auto p-1">
           {connectedWallets.length === 0 ? (
             <div className="text-muted-foreground px-2 py-1.5 text-sm">
               No wallets connected

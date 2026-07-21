@@ -87,9 +87,9 @@ export function NavBar() {
     >
       {/* tight gap below `desk` — at 320px the wide row pushes the burger
        * off-screen otherwise */}
-      <div className="desk:gap-9 wrap flex h-[68px] items-center gap-3">
+      <div className="desk:gap-9 wrap flex h-17 items-center gap-3">
         <Logo />
-        <div className="desk:flex ml-3 hidden gap-[26px]">
+        <div className="desk:flex ml-3 hidden gap-6.5">
           {links.map((l) => (
             <Link
               key={l.label}

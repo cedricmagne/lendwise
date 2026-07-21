@@ -120,6 +120,15 @@ export interface SupplyProduct {
   apyDaily?: number
   apyMonthly?: number
   apyYearly?: number
+  /**
+   * Reward component of the matching APY horizon, in the same unit (APY, not
+   * points). Only used to tell "this rate includes incentives" apart from a pure
+   * base rate — `undefined` means unknown, `0` means no rewards.
+   */
+  apyRewards?: number
+  apyRewardsDaily?: number
+  apyRewardsMonthly?: number
+  apyRewardsYearly?: number
   productId?: string
   link?: string
 }

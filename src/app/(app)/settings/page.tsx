@@ -1095,7 +1095,7 @@ function SettingsContent() {
                                   key={`${order.id}-${item.label}-${index}`}
                                   className="flex justify-between"
                                 >
-                                  <span className="text-muted-foreground max-w-[200px] truncate">
+                                  <span className="text-muted-foreground max-w-50 truncate">
                                     {item.label}
                                   </span>
                                   <span className="font-medium">
@@ -1114,7 +1114,7 @@ function SettingsContent() {
             ) : (
               <Card>
                 <CardContent className="p-8 text-center">
-                  <div className="mx-auto flex max-w-[420px] flex-col items-center justify-center text-center">
+                  <div className="mx-auto flex max-w-105 flex-col items-center justify-center text-center">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"

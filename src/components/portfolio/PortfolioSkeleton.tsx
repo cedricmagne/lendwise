@@ -112,9 +112,9 @@ function SupplyRow() {
   return (
     <div className="border-border/30 flex items-center gap-3 border-b px-4 py-3.5 md:px-8">
       {/* Protocol — hidden on mobile */}
-      <Skeleton className="hidden h-6 w-[88px] shrink-0 rounded-lg sm:block" />
+      <Skeleton className="hidden h-6 w-22 shrink-0 rounded-lg sm:block" />
       {/* Network — hidden on mobile */}
-      <Skeleton className="hidden h-6 w-[88px] shrink-0 rounded-lg sm:block" />
+      <Skeleton className="hidden h-6 w-22 shrink-0 rounded-lg sm:block" />
       {/* Address — hidden on mobile */}
       <Skeleton className="hidden h-6 w-24 shrink-0 rounded-lg md:block" />
       {/* Vault/Pool */}

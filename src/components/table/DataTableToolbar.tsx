@@ -48,7 +48,7 @@ export function DataTableToolbar<TData>({
           placeholder="Filter..."
           value={globalFilter ?? ''}
           onChange={(event) => onGlobalFilterChange(event.target.value)}
-          className="h-8 w-[150px] lg:w-[200px]"
+          className="h-8 w-37.5 lg:w-50"
         />
       ) : searchableColumn ? (
         <Input
@@ -62,7 +62,7 @@ export function DataTableToolbar<TData>({
               .getColumn(searchableColumn)
               ?.setFilterValue(event.target.value)
           }
-          className="h-8 w-[150px] lg:w-[200px]"
+          className="h-8 w-37.5 lg:w-50"
         />
       ) : null}
       {filterableColumns?.map(

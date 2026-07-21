@@ -781,7 +781,7 @@ export function ProductDetailDrawer({
               value={selectedTimeframe}
               onValueChange={(value) => handleLoad(value as TimeframeLabel)}
             >
-              <SelectTrigger className="h-7 w-[80px] text-xs">
+              <SelectTrigger className="h-7 w-20 text-xs">
                 <SelectValue placeholder="Timeframe" />
               </SelectTrigger>
               <SelectContent align="end">
@@ -799,7 +799,7 @@ export function ProductDetailDrawer({
           </div>
 
           {pending ? (
-            <div className="text-muted-foreground flex h-[170px] items-center justify-center text-sm">
+            <div className="text-muted-foreground flex h-42.5 items-center justify-center text-sm">
               Loading…
             </div>
           ) : (

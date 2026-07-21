@@ -68,11 +68,11 @@ const STRATEGIES = [
 type StrategyId = (typeof STRATEGIES)[number]['id']
 
 const ALLOCATION_COLORS = [
-  '#3b82f6',
-  '#06b6d4',
-  '#8b5cf6',
-  '#10b981',
-  '#f59e0b',
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--chart-5)',
 ]
 
 function AllocationTooltip({
@@ -85,7 +85,7 @@ function AllocationTooltip({
   if (!active || !payload?.length) return null
   return (
     <div className="border-border bg-popover rounded-lg border px-3 py-2 text-xs shadow-md">
-      <p className="text-foreground max-w-[160px] truncate font-medium">
+      <p className="text-foreground max-w-40 truncate font-medium">
         {payload[0].name}
       </p>
       <p className="text-muted-foreground font-mono">
@@ -243,7 +243,7 @@ export function SupplyingOptimizerView({
                 </span>
               )}
             </div>
-            <div className="border-input dark:bg-input/30 focus-within:border-ring focus-within:ring-ring/50 flex items-center rounded-xl border focus-within:ring-[3px]">
+            <div className="border-input dark:bg-input/30 focus-within:border-ring focus-within:ring-ring/50 flex items-center rounded-xl border focus-within:ring-3">
               <span className="flex items-center px-3.5 select-none">
                 <TokenIcon symbol={assetSymbol} size={18} />
               </span>

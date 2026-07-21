@@ -304,7 +304,7 @@ function ProtocolHeatmap({
                           type="button"
                           onClick={() => onSelect(slot)}
                           style={{ gridColumn: slotHour + 1 }}
-                          className={`h-5 cursor-pointer rounded-[2px] transition-all hover:scale-y-125 hover:brightness-110 ${m.color} ${slot.healed ? 'ring-1 ring-blue-400/50' : ''} ${isSelected ? 'ring-2 ring-white ring-offset-1 ring-offset-transparent' : ''}`}
+                          className={`h-5 cursor-pointer rounded-sm transition-all hover:scale-y-125 hover:brightness-110 ${m.color} ${slot.healed ? 'ring-1 ring-blue-400/50' : ''} ${isSelected ? 'ring-2 ring-white ring-offset-1 ring-offset-transparent' : ''}`}
                         />
                       </TooltipTrigger>
                       <TooltipContent
@@ -757,7 +757,7 @@ export default function StatusPage() {
   )
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-6 p-6">
+    <div className="mx-auto max-w-350 space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -792,23 +792,23 @@ export default function StatusPage() {
       {/* Legend — color reflects POOL completeness, not the spot average */}
       <div className="text-muted-foreground flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded-[2px] bg-emerald-500/80" />
+          <div className="h-3 w-3 rounded-sm bg-emerald-500/80" />
           Complete (≥95% pools full, none missing)
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded-[2px] bg-amber-400/80" />
+          <div className="h-3 w-3 rounded-sm bg-amber-400/80" />
           Degraded (≥70% pools full)
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded-[2px] bg-orange-500/80" />
+          <div className="h-3 w-3 rounded-sm bg-orange-500/80" />
           Sparse (&lt;70% pools full)
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded-[2px] bg-red-500/80" />
+          <div className="h-3 w-3 rounded-sm bg-red-500/80" />
           No data
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="bg-muted h-3 w-3 rounded-[2px] ring-1 ring-blue-400/50" />
+          <div className="bg-muted h-3 w-3 rounded-sm ring-1 ring-blue-400/50" />
           Contains healed data
         </div>
       </div>

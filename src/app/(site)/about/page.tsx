@@ -17,14 +17,14 @@ function roundedCount(n: number | undefined): string {
 export const metadata: Metadata = {
   title: 'About - Lendwise',
   description:
-    'Lendwise standardizes DeFi lending rates to one comparable net APY and optimizes capital allocation by risk profile and investment horizon.',
+    'Standardize, compare and optimize APYs across Aave, Morpho and Compound on 25+ chains.',
 }
 
 export default async function AboutPage() {
   const catalog = await catalogStatsSafe()
   return (
     <>
-      <PageHeader label="COMPANY" title="One standard for DeFi lending." />
+      <PageHeader label="COMPANY" title="One standard for lending markets." />
       <Prose>
         <p>
           DeFi lending is fragmented. Every protocol quotes rates its own way —
@@ -37,10 +37,9 @@ export default async function AboutPage() {
         <p>
           We track {roundedCount(catalog?.activeProducts)} supply and borrow
           markets across Aave, Morpho and Compound on {STANDARDIZED_CHAIN_COUNT}{' '}
-          chains, and standardize every rate
-          to one net APY (base
-          ± fees ± rewards), refreshed every 10 minutes with 180 days of
-          history. Standardized numbers you can actually compare.
+          chains, and standardize every rate to one net APY (base ± fees ±
+          rewards), refreshed every 10 minutes with 180 days of history.
+          Standardized numbers you can actually compare.
         </p>
         <h2>One allocation</h2>
         <p>

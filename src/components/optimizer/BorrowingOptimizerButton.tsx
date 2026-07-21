@@ -149,7 +149,7 @@ function AllocationTooltip({
   if (!active || !payload?.length) return null
   return (
     <div className="border-border bg-popover rounded-lg border px-3 py-2 text-xs shadow-md">
-      <p className="text-foreground max-w-[160px] truncate font-medium">
+      <p className="text-foreground max-w-40 truncate font-medium">
         {payload[0].name}
       </p>
       <p className="text-muted-foreground font-mono">
@@ -880,7 +880,7 @@ export function BorrowingOptimizerView({
                   )}
                 </div>
                 <div
-                  className={`border-input dark:bg-input/30 focus-within:border-ring focus-within:ring-ring/50 flex items-center rounded-xl border focus-within:ring-[3px] ${loanExceedsLiquidity ? 'border-red-500 focus-within:border-red-500 focus-within:ring-red-500/50' : ''}`}
+                  className={`border-input dark:bg-input/30 focus-within:border-ring focus-within:ring-ring/50 flex items-center rounded-xl border focus-within:ring-3 ${loanExceedsLiquidity ? 'border-red-500 focus-within:border-red-500 focus-within:ring-red-500/50' : ''}`}
                 >
                   <span className="flex items-center px-3.5 select-none">
                     <TokenIcon
@@ -979,8 +979,8 @@ export function BorrowingOptimizerView({
                     {/* Pie chart */}
                     <div className="flex h-44 items-center justify-center">
                       <div className="relative">
-                        <Skeleton className="h-[120px] w-[120px] rounded-full" />
-                        <div className="bg-card absolute top-1/2 left-1/2 h-[72px] w-[72px] -translate-x-1/2 -translate-y-1/2 rounded-full" />
+                        <Skeleton className="h-30 w-30 rounded-full" />
+                        <div className="bg-card absolute top-1/2 left-1/2 h-18 w-18 -translate-x-1/2 -translate-y-1/2 rounded-full" />
                       </div>
                     </div>
                     {/* Legend */}
@@ -1188,7 +1188,7 @@ export function BorrowingOptimizerView({
                     <div className="bg-secondary/60 mb-3 flex h-12 w-12 items-center justify-center rounded-2xl">
                       <Zap className="h-5 w-5 opacity-40" />
                     </div>
-                    <p className="text-muted-foreground max-w-[160px] text-xs leading-relaxed">
+                    <p className="text-muted-foreground max-w-40 text-xs leading-relaxed">
                       Configure your parameters and run the optimizer to see the
                       allocation.
                     </p>
@@ -1572,7 +1572,7 @@ export function BorrowingOptimizerView({
                     </span>
                     <div className="w-32 shrink-0">
                       <div
-                        className={`border-input dark:bg-input/30 focus-within:ring-ring/50 flex items-center rounded-lg border focus-within:ring-[3px] ${
+                        className={`border-input dark:bg-input/30 focus-within:ring-ring/50 flex items-center rounded-lg border focus-within:ring-3 ${
                           overCap
                             ? 'border-red-500 focus-within:border-red-500 focus-within:ring-red-500/50'
                             : 'focus-within:border-ring'

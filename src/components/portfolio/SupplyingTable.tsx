@@ -234,7 +234,7 @@ function TableCellViewer({ item }: { item: SupplyPosition }) {
                   handleLoadRates(value as TimeframeLabel)
                 }
               >
-                <SelectTrigger className="h-7 w-[80px] text-xs">
+                <SelectTrigger className="h-7 w-20 text-xs">
                   <SelectValue placeholder="Select timeframe" />
                 </SelectTrigger>
                 <SelectContent align="end">

@@ -32,11 +32,11 @@
   --input: oklch(0.8954 0.0055 17.2593);
   --ring: oklch(0.4104 0.1066 22.9979);
 
-  --chart-1: oklch(0.4104 0.1066 22.9979);
-  --chart-2: oklch(0.2919 0.0735 22.7503);
-  --chart-3: oklch(0.5126 0.1098 21.6663);
-  --chart-4: oklch(0.3384 0.0856 22.7821);
-  --chart-5: oklch(0.6133 0.0986 20.3102);
+  --chart-1: #3b82f6;
+  --chart-2: #06b6d4;
+  --chart-3: #8b5cf6;
+  --chart-4: #10b981;
+  --chart-5: #f59e0b;
 
   --sidebar: oklch(0.9866 0.0021 17.1947);
   --sidebar-background: oklch(0.9866 0.0021 17.1947);
@@ -89,11 +89,11 @@
    * hovers don't wash out (the accent text it colors is large display type). */
   --brand-bright: oklch(from var(--primary) calc(l + 0.14) c h);
 
-  --chart-1: oklch(0.4104 0.1066 22.9979);
-  --chart-2: oklch(0.6133 0.0986 20.3102);
-  --chart-3: oklch(0.5126 0.1098 21.6663);
-  --chart-4: oklch(0.3384 0.0856 22.7821);
-  --chart-5: oklch(0.2919 0.0735 22.7503);
+  --chart-1: #3b82f6;
+  --chart-2: #06b6d4;
+  --chart-3: #8b5cf6;
+  --chart-4: #10b981;
+  --chart-5: #f59e0b;
 
   --sidebar: oklch(0.2264 0 0);
   --sidebar-background: oklch(0.2264 0 0);
@@ -147,6 +147,10 @@
   --color-on-brand: var(--on-brand);
   --color-on-brand-muted: var(--on-brand-muted);
   --color-on-brand-faint: var(--on-brand-faint);
+
+  /* Point where side-by-side controls (hero CTAs, inline actions) stack
+   * vertically — gives xs:/max-xs: variants. */
+  --breakpoint-xs: 560px;
 
   /* Point where the marketing layout collapses to one column and the desktop
    * nav appears — gives desk:/max-desk: variants. */
@@ -253,7 +257,7 @@
 
 /* Centered max-width container used across the marketing sections */
 .wrap {
-  @apply relative mx-auto w-full max-w-[1200px] px-5 sm:px-8;
+  @apply relative mx-auto w-full max-w-300 px-5 sm:px-8;
 }
 
 /* Monospace eyebrow label */

@@ -31,11 +31,11 @@ export function NetworkFamilySelectorDialog({
 }: NetworkFamilySelectorDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card/95 border-border overflow-hidden rounded-2xl p-0 shadow-2xl backdrop-blur-xl sm:max-w-[480px]">
+      <DialogContent className="bg-card/95 border-border overflow-hidden rounded-2xl p-0 shadow-2xl backdrop-blur-xl sm:max-w-120">
         {/* Glow Effects */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="bg-primary/10 absolute top-[-40%] left-[-20%] h-[250px] w-[250px] rounded-full blur-[60px]" />
-          <div className="absolute right-[-20%] bottom-[-40%] h-[250px] w-[250px] rounded-full bg-indigo-500/10 blur-[60px]" />
+          <div className="bg-primary/10 absolute top-[-40%] left-[-20%] h-62.5 w-62.5 rounded-full blur-3xl" />
+          <div className="absolute right-[-20%] bottom-[-40%] h-62.5 w-62.5 rounded-full bg-indigo-500/10 blur-3xl" />
         </div>
 
         <div className="relative z-10 flex flex-col gap-6 p-6">
@@ -75,7 +75,7 @@ export function NetworkFamilySelectorDialog({
                   <h4 className="text-foreground text-base font-semibold">
                     EVM Chains
                   </h4>
-                  <p className="text-muted-foreground mt-1 max-w-[260px] text-xs">
+                  <p className="text-muted-foreground mt-1 max-w-65 text-xs">
                     Ethereum, Arbitrum, Base, Optimism, Polygon, and more.
                   </p>
                 </div>
@@ -110,7 +110,7 @@ export function NetworkFamilySelectorDialog({
                   <h4 className="text-foreground text-base font-semibold">
                     Stellar Network
                   </h4>
-                  <p className="text-muted-foreground mt-1 max-w-[260px] text-xs">
+                  <p className="text-muted-foreground mt-1 max-w-65 text-xs">
                     Access Blend protocol.
                   </p>
                 </div>

@@ -11,7 +11,7 @@ export function PageHeader({
 }) {
   return (
     <header className="mb-12">
-      <p className="mono-label mb-[26px]">
+      <p className="mono-label mb-6.5">
         <Cube /> {label}
       </p>
       <h1 className="text-foreground m-0 text-4xl leading-[1.05] font-semibold tracking-[-0.03em] text-balance sm:text-5xl">

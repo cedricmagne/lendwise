@@ -11,6 +11,7 @@ import {
   ArrowUpRightFromSquare,
   CheckCircle2,
   ChevronRight,
+  Gift,
   Search,
   X,
   Zap,
@@ -264,16 +265,34 @@ const createColumns = (
       const apyValue = row.original[HORIZON_CONFIG[horizon].apyKey] as
         | number
         | undefined
+      const rewardsValue = row.original[HORIZON_CONFIG[horizon].rewardsKey] as
+        | number
+        | undefined
+      const hasRewards = rewardsValue !== undefined && rewardsValue > 0
       return (
-        <span className="font-mono">
-          {apyValue !== undefined && !Number.isNaN(apyValue)
-            ? apyValue < 0.0001
-              ? '<0.01%'
-              : apyValue > 10
-                ? '>1000%'
-                : `${(apyValue * 100).toFixed(2)}%`
-            : '-'}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono">
+            {apyValue !== undefined && !Number.isNaN(apyValue)
+              ? apyValue < 0.0001
+                ? '<0.01%'
+                : apyValue > 10
+                  ? '>1000%'
+                  : `${(apyValue * 100).toFixed(2)}%`
+              : '-'}
+          </span>
+          <span className="inline-flex w-3.5 shrink-0 items-center">
+            {hasRewards && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Gift className="h-3.5 w-3.5 text-emerald-400" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  Includes {(rewardsValue * 100).toFixed(2)}% of token rewards
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </span>
+        </div>
       )
     },
     enableHiding: false,

@@ -4,7 +4,7 @@ import { unstable_cache } from 'next/cache'
 
 import { type ProtocolName } from '@/config/protocols-meta'
 import { APP_ADAPTERS } from '@/config/protocols-server'
-import { apyEnrichments, latestHourlyNet } from '@/lib/db/repositories/apy'
+import { apyEnrichments, latestHourly } from '@/lib/db/repositories/apy'
 import { listDisplayFlaggedIds } from '@/lib/db/repositories/display-flags'
 import { ineligibilityReason } from '@/lib/display-eligibility'
 import type { AppAdapter } from '@/lib/protocols/core/types'
@@ -68,21 +68,26 @@ async function _loadSupplyProducts(): Promise<SupplyProduct[]> {
     .map((p) => p.productId)
     .filter(Boolean) as string[]
 
-  const [enrichments, latestHourly, flagged] = await Promise.all([
+  const [enrichments, latest, flagged] = await Promise.all([
     apyEnrichments(productIds),
-    latestHourlyNet(productIds),
+    latestHourly(productIds),
     listDisplayFlaggedIds(),
   ])
 
   const enriched = allSupplyProducts.map((p) => {
     if (!p.productId) return p
     const e = enrichments.get(p.productId)
+    const l = latest.get(p.productId)
     return {
       ...p,
-      apy: latestHourly.get(p.productId) ?? p.apy,
+      apy: l?.apyNet ?? p.apy,
       apyDaily: e?.apyDaily,
       apyMonthly: e?.apyMonthly,
       apyYearly: e?.apyYearly,
+      apyRewards: l?.apyRewards,
+      apyRewardsDaily: e?.apyRewardsDaily,
+      apyRewardsMonthly: e?.apyRewardsMonthly,
+      apyRewardsYearly: e?.apyRewardsYearly,
     }
   })
 
@@ -121,9 +126,9 @@ async function _loadBorrowProducts(): Promise<BorrowProduct[]> {
     .map((p) => p.productId)
     .filter(Boolean) as string[]
 
-  const [enrichments, latestHourly, flagged] = await Promise.all([
+  const [enrichments, latest, flagged] = await Promise.all([
     apyEnrichments(productIds),
-    latestHourlyNet(productIds),
+    latestHourly(productIds),
     listDisplayFlaggedIds(),
   ])
 
@@ -132,7 +137,7 @@ async function _loadBorrowProducts(): Promise<BorrowProduct[]> {
     const e = enrichments.get(p.productId)
     return {
       ...p,
-      apy: latestHourly.get(p.productId) ?? p.apy,
+      apy: latest.get(p.productId)?.apyNet ?? p.apy,
       apyDaily: e?.apyDaily,
       apyMonthly: e?.apyMonthly,
       apyYearly: e?.apyYearly,

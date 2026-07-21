@@ -43,8 +43,8 @@ export function WalletNotConnected() {
     <div className="relative flex h-full flex-col items-center justify-center overflow-hidden px-6 py-6">
       {/* Background glow */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="bg-primary/5 absolute top-1/2 left-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl" />
-        <div className="bg-accent/5 absolute top-1/3 left-1/3 h-[300px] w-[300px] rounded-full blur-3xl" />
+        <div className="bg-primary/5 absolute top-1/2 left-1/2 h-150 w-150 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl" />
+        <div className="bg-accent/5 absolute top-1/3 left-1/3 h-75 w-75 rounded-full blur-3xl" />
       </div>
 
       <div className="relative z-10 flex w-full max-w-3xl flex-col items-center gap-7">

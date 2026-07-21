@@ -63,7 +63,7 @@ export function PieChartDonutText({
             <div>
               <ChartContainer
                 config={config}
-                className="mx-auto aspect-square max-h-[250px]"
+                className="mx-auto aspect-square max-h-62.5"
               >
                 <PieChart>
                   <ChartTooltip
