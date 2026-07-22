@@ -15,7 +15,7 @@ const channels = [
     label: 'Email',
     value: 'support@lendwise.fi',
     href: 'mailto:support@lendwise.fi',
-    note: 'Questions, bug reports, or feedback — we read everything.',
+    note: 'Questions, bug reports and feedback.',
   },
   {
     label: 'X / Twitter',
@@ -43,8 +43,8 @@ export default function SupportPage() {
       <PageHeader label="COMPANY" title="Support" />
       <Prose>
         <p>
-          Email and X DMs get the fastest response — usually within 24 hours.
-          For partnerships or press, head to the{' '}
+          Need help? Email us or send a direct message on X. We usually respond
+          within 24 hours. For partnerships or press inquiries, visit the{' '}
           <Link href="/contact">contact page</Link>.
         </p>
       </Prose>

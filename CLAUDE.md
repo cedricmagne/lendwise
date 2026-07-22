@@ -46,7 +46,7 @@ QStash cron (daily 00:10 UTC)
   → aggregates apy_hourly → apy_daily + prunes rows >180d
 
 Gap detection + healing: /api/yield/apy/gaps + /api/yield/apy/heal
-  → reports in pipeline_reports (see docs/apy-pipeline-gap-heal.md)
+  → reports in pipeline_reports (see ../../agent/references/lendwise/apy-pipeline-gap-heal.md)
 
 graphql-yoga at /api/graphql ← URQL client (React)
 ```
@@ -80,7 +80,7 @@ Drizzle ORM. Schema `src/lib/db/schema.ts`, client `src/lib/db/postgres.ts` (neo
 - **`apy_daily`** — PK `(product_id, date)`. One GROUP BY over the day's hourly rows. `quality_completeness` = hourly rows / 24; `< 0.5` → unreliable. Idempotent reruns.
 - **`pipeline_reports`** — gap-detection/heal run reports (jsonb).
 
-Schema field semantics: `docs/PRODUCTS_SCHEMA.md`, `docs/APY_DAILY_SCHEMA.md`.
+Schema field semantics: `../../agent/references/lendwise/PRODUCTS_SCHEMA.md`, `../../agent/references/lendwise/APY_DAILY_SCHEMA.md`.
 
 ---
 
@@ -96,7 +96,7 @@ Beware: subgraph `BigDecimal` fields come back as **strings** (`any` in codegen)
 
 ## Token icons
 
-`<TokenIcon symbol="USDC" size={24} />` (`src/components/icon/`). Resolution: `/public/icons/native/{symbol}.svg` → localStorage → server cache 24h → CoinGecko API. Internal API: `GET /api/token-icon?symbol=BTC`. Details: `docs/COINGECKO_TOKEN_ICONS.md`.
+`<TokenIcon symbol="USDC" size={24} />` (`src/components/icon/`). Resolution: `/public/icons/native/{symbol}.svg` → localStorage → server cache 24h → CoinGecko API. Internal API: `GET /api/token-icon?symbol=BTC`. Details: `../../agent/references/lendwise/COINGECKO_TOKEN_ICONS.md`.
 
 ---
 
@@ -112,7 +112,7 @@ Beware: subgraph `BigDecimal` fields come back as **strings** (`any` in codegen)
 
 ## Known issues
 
-**rsETH on AaveV3Arbitrum**: GraphQL API returns `canBeCollateral: false` while the Aave UI shows `true`. Code is correct (trusts the official API). See `docs/aave-collateral-discrepancies.md`.
+**rsETH on AaveV3Arbitrum**: GraphQL API returns `canBeCollateral: false` while the Aave UI shows `true`. Code is correct (trusts the official API). See `../../agent/references/lendwise/aave-collateral-discrepancies.md`.
 
 ---
 

@@ -43,16 +43,15 @@ export default function ContactPage() {
       <PageHeader label="COMPANY" title="Contact" />
       <Prose>
         <p>
-          Product issue? The fastest path is the{' '}
-          <Link href="/support">support page</Link> or a{' '}
+          Product issue? Visit the <Link href="/support">support page</Link> or{' '}
           <a
             href="https://github.com/lendwise-fi/lendwise/issues/new/choose"
             target="_blank"
             rel="noopener noreferrer"
           >
-            GitHub issue
+            open a GitHub issue
           </a>
-          . For everything else:
+          . For partnerships, press, feedback or general inquiries:
         </p>
       </Prose>
       <ul className="m-0 mt-8 flex list-none flex-col gap-4 p-0">

@@ -24,47 +24,47 @@ export default async function AboutPage() {
   const catalog = await catalogStatsSafe()
   return (
     <>
-      <PageHeader label="COMPANY" title="One standard for lending markets." />
+      <PageHeader label="COMPANY" title="Unified view for lending markets." />
       <Prose>
         <p>
-          DeFi lending is fragmented. Every protocol quotes rates its own way —
-          APR or APY, per-second or daily compounding — rewards live in separate
-          systems, and fees quietly eat into headline numbers. Comparing two
-          markets side by side is harder than it should be.
+          DeFi lending is fragmented. Protocols use different rate conventions,
+          compounding methods, rewards and fees. As a result, lending markets
+          are not directly comparable.
         </p>
-        <p>Lendwise exists to fix that, with two promises:</p>
+        <p>Lendwise addresses this through four core principles:</p>
         <h2>One standard</h2>
         <p>
           We track {roundedCount(catalog?.activeProducts)} supply and borrow
           markets across Aave, Morpho and Compound on {STANDARDIZED_CHAIN_COUNT}{' '}
-          chains, and standardize every rate to one net APY (base ± fees ±
-          rewards), refreshed every 10 minutes with 180 days of history.
-          Standardized numbers you can actually compare.
+          chains. Every rate is standardized into one comparable net APY,
+          accounting for fees and rewards. Market data is refreshed every 60
+          seconds, with 180 days of history.
         </p>
         <h2>One allocation</h2>
         <p>
-          Comparable rates are the input, not the goal. Our optimizer tells you
-          how to allocate capital across those markets, matched to your risk
-          profile and investment horizon.
+          Standardized rates are the foundation for smart capital allocation.
+          Our optimizer then determines how capital should be allocated across
+          markets based on yield, risk preferences, diversification constraints
+          and investment horizon.
         </p>
         <h2>Open source</h2>
         <p>
-          The platform is open source under the MIT license. The data model, the
-          adapter contract and the validation harness are public — anyone can
-          audit how a number is produced, or{' '}
+          Lendwise is open source under the MIT license. The data model,
+          protocol adapters and validation tools are public. Anyone can audit
+          how each rate is calculated and{' '}
           <a
             href="https://github.com/lendwise-fi/lendwise"
             target="_blank"
             rel="noopener noreferrer"
           >
-            contribute a new protocol adapter on GitHub
+            contribute a new protocol adapter on GitHub.
           </a>
-          .
         </p>
         <h2>Non-custodial by design</h2>
         <p>
-          Lendwise is a read-only analytics layer. We never hold funds, never
-          ask for private keys, and never execute transactions on your behalf.
+          Lendwise is non-custodial. We never hold user funds or ask for private
+          keys. Any on-chain transaction must be approved and signed by the
+          user.
         </p>
         <p>
           Questions? <Link href="/contact">Get in touch</Link>.
