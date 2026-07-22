@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import { Reveal, RevealGroup } from '@/components/motion/reveal'
 import { Button } from '@/components/ui/button'
 import { TX_CHAIN_COUNT } from '@/config/chains'
 import { STANDARDIZED_CHAIN_COUNT } from '@/config/chains-coverage'
@@ -45,22 +46,31 @@ export function HeroSection({ marketCount }: { marketCount: number | null }) {
         />
         <CubeField />
         <div className="wrap w-full">
-          <div className="desk:pl-22 relative z-2 max-w-180">
-            <p className="mono-label mb-6.5">
+          <RevealGroup
+            trigger="mount"
+            className="desk:pl-22 relative z-2 max-w-180"
+          >
+            <Reveal as="p" className="mono-label mb-6.5">
               <Cube /> DEFI LENDING AGGREGATOR
-            </p>
-            <h1 className="text-foreground m-0 mb-6 flex flex-col text-7xl leading-18 font-semibold text-balance">
+            </Reveal>
+            <Reveal
+              as="h1"
+              className="text-foreground m-0 mb-6 flex flex-col text-7xl leading-18 font-semibold text-balance"
+            >
               Unified view for lending markets.{' '}
               <span className="from-brand-bright to-brand-deep bg-linear-to-r bg-clip-text text-transparent">
                 One standard.
               </span>
-            </h1>
-            <p className="text-muted-foreground mb-9 max-w-[44ch] text-[17px] leading-[1.6] text-pretty">
+            </Reveal>
+            <Reveal
+              as="p"
+              className="text-muted-foreground mb-9 max-w-[44ch] text-[17px] leading-[1.6] text-pretty"
+            >
               Track, compare and analyze lending markets across protocols and
               chains. Transform fragmented APY data into actionable market
               insights and smart decisions.
-            </p>
-            <div className="max-xs:flex-col max-xs:items-stretch flex items-center gap-3">
+            </Reveal>
+            <Reveal className="max-xs:flex-col max-xs:items-stretch flex items-center gap-3">
               <Button
                 asChild
                 className="hover:bg-brand-bright active:bg-brand-deep bg-primary text-primary-foreground h-11 rounded px-5.5 text-sm font-medium"
@@ -74,14 +84,14 @@ export function HeroSection({ marketCount }: { marketCount: number | null }) {
               >
                 <Link href="/docs">Read the docs</Link>
               </Button>
-            </div>
-          </div>
+            </Reveal>
+          </RevealGroup>
         </div>
       </div>
       <div className="bg-background border-border/60 relative z-2 border-t">
-        <div className="desk:grid-cols-4 wrap grid grid-cols-2">
+        <RevealGroup className="desk:grid-cols-4 wrap grid grid-cols-2">
           {stats.map((s, i) => (
-            <div
+            <Reveal
               className={cn(
                 'desk:border-t-0 py-5.5',
                 i % 2 === 0 ? 'pl-0' : 'border-border/60 border-l pl-6',
@@ -96,9 +106,9 @@ export function HeroSection({ marketCount }: { marketCount: number | null }) {
                 <CountUp suffix={s.suffix} value={s.value} />
               </b>
               <span className="text-ink-faint text-[12.5px]">{s.label}</span>
-            </div>
+            </Reveal>
           ))}
-        </div>
+        </RevealGroup>
       </div>
     </header>
   )

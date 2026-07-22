@@ -218,43 +218,6 @@
   }
 }
 
-@keyframes slide-in {
-  from {
-    width: 0;
-  }
-  to {
-    width: var(--target-width, 100%);
-  }
-}
-
-/* Panel-content animations, gated like .reveal so reduced-motion users get
- * the static end state (the elements' inline width / default opacity). */
-@media (prefers-reduced-motion: no-preference) {
-  /* Slider bars grow from 0 to their inline width once the parent reveals;
-   * `both` keeps the 0-width start state during each bar's stagger delay. */
-  .reveal.in .slider-animate {
-    animation: slide-in 0.8s ease-out both;
-    animation-delay: var(--animation-delay, 0s);
-  }
-
-  /* Typing animation for code - line by line reveal */
-  .reveal.in .code-typing > * {
-    animation: fade-in-line 0.3s ease-out both;
-    animation-delay: calc(0.1s * var(--line, 1));
-  }
-}
-
-@keyframes fade-in-line {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 /* Centered max-width container used across the marketing sections */
 .wrap {
   @apply relative mx-auto w-full max-w-300 px-5 sm:px-8;
@@ -263,19 +226,4 @@
 /* Monospace eyebrow label */
 .mono-label {
   @apply text-muted-foreground inline-flex items-center gap-2.5 font-mono text-[11px] font-medium tracking-[0.14em] whitespace-nowrap uppercase;
-}
-
-/* Scroll-reveal hook (toggled to .in by the IntersectionObserver in page.tsx) */
-@media (prefers-reduced-motion: no-preference) {
-  .reveal {
-    opacity: 0;
-    transform: translateY(22px);
-    transition:
-      opacity 650ms ease-out,
-      transform 650ms ease-out;
-  }
-  .reveal.in {
-    opacity: 1;
-    transform: none;
-  }
 }

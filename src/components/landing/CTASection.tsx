@@ -4,6 +4,7 @@ import Link from 'next/link'
 
 import posthog from 'posthog-js'
 
+import { Reveal, RevealGroup } from '@/components/motion/reveal'
 import { Button } from '@/components/ui/button'
 
 import { LogoIcon } from '../logo-icon'
@@ -21,33 +22,41 @@ export function CTASection() {
       >
         <LogoIcon className="h-152.5 w-200" />
       </span>
-      <div className="wrap py-30">
-        <p className="mono-label text-on-brand-faint">
+      <RevealGroup className="wrap py-30">
+        <Reveal as="p" className="mono-label text-on-brand-faint">
           <span className="text-on-brand">/ 05</span> Get started
-        </p>
-        <h2 className="mt-4.5 mb-4 max-w-[14ch] text-[clamp(40px,5.4vw,68px)] leading-none font-semibold tracking-[-0.04em] text-white">
+        </Reveal>
+        <Reveal
+          as="h2"
+          className="mt-4.5 mb-4 max-w-[14ch] text-[clamp(40px,5.4vw,68px)] leading-none font-semibold tracking-[-0.04em] text-white"
+        >
           Ready to optimize?
-        </h2>
-        <p className="text-on-brand-muted m-0 mb-8.5 max-w-[46ch] text-base">
+        </Reveal>
+        <Reveal
+          as="p"
+          className="text-on-brand-muted m-0 mb-8.5 max-w-[46ch] text-base"
+        >
           Stop guessing. Start making fully informed decisions across the entire
           lending market.
-        </p>
-        <Button
-          asChild
-          className="text-brand-deep h-11 rounded bg-white px-5.5 text-sm font-medium hover:bg-white/90"
-        >
-          <Link
-            href="/portfolio"
-            onClick={() =>
-              posthog.capture('landing_cta_clicked', {
-                location: 'cta_section',
-              })
-            }
+        </Reveal>
+        <Reveal>
+          <Button
+            asChild
+            className="text-brand-deep h-11 rounded bg-white px-5.5 text-sm font-medium hover:bg-white/90"
           >
-            Get started free
-          </Link>
-        </Button>
-      </div>
+            <Link
+              href="/portfolio"
+              onClick={() =>
+                posthog.capture('landing_cta_clicked', {
+                  location: 'cta_section',
+                })
+              }
+            >
+              Get started free
+            </Link>
+          </Button>
+        </Reveal>
+      </RevealGroup>
     </section>
   )
 }

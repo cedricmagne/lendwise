@@ -1,62 +1,53 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect } from 'react'
+
+import {
+  animate,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from 'motion/react'
+
+import { useRevealed } from '@/components/motion/reveal'
+import { motionTokens } from '@/lib/motion'
 
 /**
- * Counts from 0 to `value` when the element enters the viewport. Runs once;
- * renders the final value immediately for reduced-motion users.
+ * Counts from 0 to `value` when its <RevealGroup> enters the viewport, so the
+ * number climbs in step with the row's fade instead of on its own observer.
+ * Renders the final value immediately for reduced-motion users.
  */
 export function CountUp({
   value,
   suffix = '',
-  duration = 1200,
+  duration = motionTokens.countUp,
 }: {
   value: number
   suffix?: string
+  /** Seconds. */
   duration?: number
 }) {
-  const ref = useRef<HTMLSpanElement>(null)
-  const [display, setDisplay] = useState(0)
+  const revealed = useRevealed()
+  const reduced = useReducedMotion() ?? false
+  const count = useMotionValue(0)
+  const text = useTransform(count, (v) => `${Math.round(v)}${suffix}`)
 
   useEffect(() => {
-    const el = ref.current
-    if (!el) return
+    if (!revealed) return
 
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setDisplay(value)
+    if (reduced) {
+      count.set(value)
       return
     }
 
-    let raf = 0
-    let started = false
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting || started) return
-        started = true
-        observer.disconnect()
-        const t0 = performance.now()
-        const tick = (t: number) => {
-          const progress = Math.min(1, (t - t0) / duration)
-          const eased = 1 - Math.pow(1 - progress, 3)
-          setDisplay(Math.round(eased * value))
-          if (progress < 1) raf = requestAnimationFrame(tick)
-        }
-        raf = requestAnimationFrame(tick)
-      },
-      { threshold: 0.4 }
-    )
-    observer.observe(el)
+    const controls = animate(count, value, {
+      duration,
+      ease: motionTokens.ease,
+    })
 
-    return () => {
-      observer.disconnect()
-      cancelAnimationFrame(raf)
-    }
-  }, [value, duration])
+    return () => controls.stop()
+  }, [count, duration, reduced, revealed, value])
 
-  return (
-    <span ref={ref}>
-      {display}
-      {suffix}
-    </span>
-  )
+  return <motion.span>{text}</motion.span>
 }

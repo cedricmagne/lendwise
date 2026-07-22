@@ -3,9 +3,12 @@
 import type { CSSProperties, ReactNode } from 'react'
 
 import { ArrowUpRight } from 'lucide-react'
+import { motion, useReducedMotion } from 'motion/react'
 import { useTheme } from 'next-themes'
 
 import { CodeBlock } from '@/components/animate-ui/primitives/animate/code-block'
+import { Reveal, useRevealed } from '@/components/motion/reveal'
+import { sliderTransition } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
 import { Cube } from './Cube'
@@ -70,10 +73,10 @@ function Feature({
   visual: ReactNode
 }) {
   return (
-    <div
+    <Reveal
       id={id}
       className={cn(
-        'reveal border-border/60 grid scroll-mt-17 grid-cols-[5fr_6fr] items-center gap-18 border-t py-22',
+        'border-border/60 grid scroll-mt-17 grid-cols-[5fr_6fr] items-center gap-18 border-t py-22',
         'max-desk:grid-cols-1 max-desk:gap-10 max-desk:py-16',
         first && 'max-desk:pt-0 border-t-0 pt-0',
         last && 'max-desk:pb-0 pb-0'
@@ -92,7 +95,7 @@ function Feature({
         <Points items={points} />
       </div>
       <div className={cn(flip && 'max-desk:order-2 order-1')}>{visual}</div>
-    </div>
+    </Reveal>
   )
 }
 
@@ -190,6 +193,9 @@ const deltaStyle: CSSProperties = {
 }
 
 function OptimizerPanel() {
+  const revealed = useRevealed()
+  const reduced = useReducedMotion() ?? false
+
   return (
     <Panel>
       <PanelBar label="optimized_portfolio" right="4 positions" />
@@ -221,20 +227,16 @@ function OptimizerPanel() {
               {p.pct}% · {p.apy}
             </span>
             <span className="bg-border/60 col-span-full h-1 overflow-hidden rounded-sm">
-              <i
+              <motion.i
                 className={cn(
-                  'slider-animate block h-full rounded-sm',
+                  'block h-full rounded-sm',
                   p.hot ? 'bg-brand-bright' : 'bg-primary'
                 )}
-                style={
-                  {
-                    // inline width is the reduced-motion / no-JS end state;
-                    // the gated slide-in animation overrides it while playing
-                    width: `${p.pct}%`,
-                    '--target-width': `${p.pct}%`,
-                    '--animation-delay': `${index * 0.15}s`,
-                  } as CSSProperties
-                }
+                data-slider=""
+                style={{ '--target-width': `${p.pct}%` } as CSSProperties}
+                initial={{ width: reduced ? `${p.pct}%` : 0 }}
+                animate={{ width: revealed || reduced ? `${p.pct}%` : 0 }}
+                transition={sliderTransition(reduced, index)}
               />
             </span>
           </div>
@@ -290,6 +292,8 @@ function ApiPanel() {
           writing={true}
           duration={5000}
           delay={0}
+          inView
+          inViewOnce
           className="min-h-90 text-xs"
         />
       </div>
