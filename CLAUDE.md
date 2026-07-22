@@ -96,7 +96,7 @@ Beware: subgraph `BigDecimal` fields come back as **strings** (`any` in codegen)
 
 ## Token icons
 
-`<TokenIcon symbol="USDC" size={24} />` (`src/components/icon/`). Resolution: `/public/icons/native/{symbol}.svg` → localStorage → server cache 24h → CoinGecko API. Internal API: `GET /api/token-icon?symbol=BTC`. Details: `../../agent/references/lendwise/COINGECKO_TOKEN_ICONS.md`.
+`<TokenIcon symbol="USDC" size={24} />` (`src/components/icon/`). Resolution: `/public/icons/native/{symbol}.svg` → localStorage → server cache 24h → CoinGecko API. Server action: `getTokenIcon(symbol)` (`src/app/actions/token-icon.actions.ts`). Details: `../../agent/references/lendwise/COINGECKO_TOKEN_ICONS.md`.
 
 ---
 

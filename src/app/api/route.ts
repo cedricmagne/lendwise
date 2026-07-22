@@ -3,11 +3,11 @@ import { NextResponse } from 'next/server'
 /**
  * API discovery index.
  *
- * Lists the public API surface only. Frontend-internal routes (/api/prices,
- * /api/token-icon, /api/status/*) are implementation details of the dashboard
- * and may change without notice; pipeline routes (/api/yield/*, /api/cron/*)
- * are QStash/secret-protected and never meant to be called directly. Neither
- * belongs here — see agent/specs/2026-07-22-api-endpoints-map.md.
+ * Lists the public API surface only. Frontend-only data needs go through
+ * server actions (src/app/actions/), not routes; pipeline routes
+ * (/api/yield/*, /api/cron/*) are QStash/secret-protected and never meant to
+ * be called directly. Neither belongs here — see
+ * agent/specs/2026-07-22-api-endpoints-map.md.
  */
 export const dynamic = 'force-static'
 

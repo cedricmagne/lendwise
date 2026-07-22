@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
+import { getPrices } from '@/app/actions/prices.actions'
 import { getCurrencyByCode } from '@/config/currencies'
 
 /**
@@ -118,27 +119,14 @@ export function useCurrencyConverter(targetCurrencyCode: string) {
       // For fiat currencies, we get USD price in that fiat
       const isCrypto = targetCurrency.type === 'crypto'
 
-      // Build the API URL based on currency type
-      let url: string
-      if (isCrypto) {
-        // For crypto: Get USD price in terms of the crypto (e.g., how much BTC is 1 USD)
-        // We fetch the crypto's USD price and invert it
-        url = `/api/prices?ids=${targetCurrency.coinGeckoId}&vs_currencies=usd`
-      } else {
-        // For fiat: Get how many units of fiat = 1 USD
-        // We use a stable coin (USDT) as proxy for USD
-        url = `/api/prices?ids=tether&vs_currencies=${targetCurrency.coinGeckoId}`
-      }
-
       // Create the fetch promise
       const fetchPromise = (async (): Promise<ExchangeRates> => {
-        const response = await fetch(url)
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-
-        const data = await response.json()
+        // For crypto: get the crypto's USD price and invert it (how much
+        // crypto is 1 USD). For fiat: how many units of fiat = 1 USD, using
+        // a stablecoin (USDT) as proxy for USD.
+        const data = isCrypto
+          ? await getPrices([targetCurrency.coinGeckoId], 'usd', false)
+          : await getPrices(['tether'], targetCurrency.coinGeckoId, false)
 
         let exchangeRate: number
 

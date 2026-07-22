@@ -2,9 +2,11 @@
 
 import useSWR from 'swr'
 
+import { getTokenIcon } from '@/app/actions/token-icon.actions'
+
 /**
  * Fetcher function for SWR
- * Checks localStorage first, then fetches from API
+ * Checks localStorage first, then resolves via the server action
  */
 async function fetchCoinIcon(symbol: string): Promise<string | null> {
   const key = `token-icon-${symbol.toLowerCase()}`
@@ -13,16 +15,8 @@ async function fetchCoinIcon(symbol: string): Promise<string | null> {
   const cached = localStorage.getItem(key)
   if (cached) return cached
 
-  // Fetch from API
   try {
-    const response = await fetch(`/api/token-icon?symbol=${symbol}`)
-
-    if (!response.ok) {
-      return null
-    }
-
-    const data = await response.json()
-    const url = data.url
+    const url = await getTokenIcon(symbol)
 
     // Store in localStorage
     if (url) {

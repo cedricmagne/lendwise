@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 
+import { getPrices } from '@/app/actions/prices.actions'
+
 // Price data interface matching CoinGecko API response
 // Mock data fallback for development/testing when API is unavailable
 const MOCK_PRICE_DATA: PriceData = {
@@ -93,8 +95,6 @@ export interface PriceData {
 // Supported currencies
 export type Currency = 'usd' | 'eur' | 'btc' | 'eth'
 
-// CoinGecko API base URL - now using our own proxy to avoid CORS
-const COINGECKO_BASE_URL = '/api/prices'
 export function useCryptoPrices(
   coinIds: string[] = ['ethereum'],
   currency: Currency = 'usd'
@@ -146,20 +146,9 @@ export function useCryptoPrices(
         return
       }
 
-      const ids = coinIds.join(',')
-      const url = `${COINGECKO_BASE_URL}?ids=${ids}&vs_currencies=${currency}&include_24hr_change=true`
-
       // Create the fetch promise
       const fetchPromise = (async () => {
-        console.log('Fetching prices from:', url)
-
-        const response = await fetch(url)
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-
-        const data = await response.json()
+        const data: PriceData = await getPrices(coinIds, currency, true)
 
         // Cache the response
         setCachedPrices(coinIds, currency, data)
@@ -181,15 +170,6 @@ export function useCryptoPrices(
         }
       } catch (err) {
         console.error('Price fetch error:', err)
-        console.error(
-          'Error type:',
-          err instanceof Error ? err.constructor.name : typeof err
-        )
-        console.error(
-          'Error message:',
-          err instanceof Error ? err.message : String(err)
-        )
-        console.error('Fetching URL:', url)
 
         if (mounted) {
           const errorMessage =
