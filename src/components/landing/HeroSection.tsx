@@ -48,19 +48,19 @@ export function HeroSection({ marketCount }: { marketCount: number | null }) {
         <div className="wrap w-full">
           <RevealGroup
             trigger="mount"
-            className="desk:pl-22 relative z-2 max-w-180"
+            className="desk:pl-22 relative z-2 max-w-240"
           >
             <Reveal as="p" className="mono-label mb-6.5">
               <Cube /> DEFI LENDING AGGREGATOR
             </Reveal>
             <Reveal
               as="h1"
-              className="text-foreground m-0 mb-6 flex flex-col text-7xl leading-18 font-semibold text-balance"
+              className="text-foreground m-0 mb-6 flex flex-col text-7xl leading-20 font-semibold tracking-tighter text-balance"
             >
-              Unified view for lending markets.{' '}
               <span className="from-brand-bright to-brand-deep bg-linear-to-r bg-clip-text text-transparent">
                 One standard.
               </span>
+              <span className="">for lending markets.</span>
             </Reveal>
             <Reveal
               as="p"
