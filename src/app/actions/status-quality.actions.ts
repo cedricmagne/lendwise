@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+'use server'
 
 import { sql } from 'drizzle-orm'
 
@@ -6,9 +6,9 @@ import { db } from '@/lib/db/postgres'
 import { expectedAt } from '@/lib/db/repositories/gaps'
 import { latestReport } from '@/lib/db/repositories/reports'
 
-// ─── Handler ─────────────────────────────────────────────────────────────────
+// ─── Quality overview (formerly GET /api/status/quality) ────────────────────
 
-async function qualityHandler(): Promise<NextResponse> {
+export async function getStatusQuality() {
   const hours = 168
   const now = new Date()
   // windowEnd = start of the current hour → boundary between settled history and
@@ -235,7 +235,7 @@ async function qualityHandler(): Promise<NextResponse> {
     noDonor?: number
   }
 
-  return NextResponse.json({
+  return {
     window: {
       start: windowStart.toISOString(),
       end: windowEnd.toISOString(),
@@ -246,7 +246,7 @@ async function qualityHandler(): Promise<NextResponse> {
       gapDetection: gap
         ? {
             id: gap.id,
-            createdAt: gap.createdAt,
+            createdAt: gap.createdAt.toISOString(),
             missingSlots: gp.collected?.missingSlots ?? 0,
             incompleteSlots: gp.collected?.incompleteSlots ?? 0,
             expectedSlots: gp.collected?.expectedSlots ?? 0,
@@ -255,7 +255,7 @@ async function qualityHandler(): Promise<NextResponse> {
       gapHealing: heal
         ? {
             id: heal.id,
-            createdAt: heal.createdAt,
+            createdAt: heal.createdAt.toISOString(),
             totalGaps: hp.totalGaps ?? 0,
             healed: hp.healed ?? 0,
             healedByRefetch: hp.healedByRefetch ?? 0,
@@ -264,17 +264,104 @@ async function qualityHandler(): Promise<NextResponse> {
           }
         : null,
     },
-  })
-}
-
-// ─── Endpoint ────────────────────────────────────────────────────────────────
-
-export async function GET() {
-  try {
-    return await qualityHandler()
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error('[status:quality] Error:', message)
-    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+export type StatusQuality = Awaited<ReturnType<typeof getStatusQuality>>
+
+// ─── Slot drill-down (formerly GET /api/status/quality/slot) ────────────────
+// Per-pool data-quality breakdown for a single (provider, hour) cell, so the
+// status heatmap can answer "which pool is missing data?".
+
+interface PoolRow {
+  id: string
+  protocolName: string
+  chainName: string
+  assetSymbol: string
+  kind: string
+  /** Spots reported this hour (0–6), or null when the pool reported nothing. */
+  spots: number | null
+  healed: boolean
+}
+
+export async function getStatusQualitySlot(provider: string, hourParam: string) {
+  const hour = new Date(hourParam)
+  if (Number.isNaN(hour.getTime())) {
+    throw new Error('invalid hour')
+  }
+
+  // Spots that could have landed by now: 6 for a settled hour, but only
+  // :00..:50-so-far for the live one. Scoring the in-progress hour against a
+  // hard 6 reports every pool of every provider as "incomplete" for the whole
+  // hour — which is what the heatmap cell already avoids via the same formula
+  // (see getStatusQuality above). Keep the two in step or the drill-down
+  // contradicts the cell it was opened from.
+  const now = new Date()
+  const currentHour = new Date(now)
+  currentHour.setUTCMinutes(0, 0, 0)
+  const expectedSpots =
+    hour.getTime() === currentHour.getTime()
+      ? Math.min(6, Math.floor(now.getUTCMinutes() / 10) + 1)
+      : 6
+
+  const res = await db.execute(sql`
+    SELECT
+      pr.id,
+      pr.protocol_name AS protocol_name,
+      pr.chain_name    AS chain_name,
+      pr.asset_symbol  AS asset_symbol,
+      pr.kind          AS kind,
+      h.quality_count  AS spots,
+      COALESCE(h.healed, false) AS healed
+    FROM products pr
+    LEFT JOIN apy_hourly h ON h.product_id = pr.id AND h.hour = ${hour}
+    WHERE pr.provider = ${provider}
+      -- Exactly the pools that were LISTED this hour — same predicate as the
+      -- heatmap and the healer. A market created later is not "missing" for the
+      -- hours before it existed; a delisted one still appears in the drill-down of
+      -- an hour inside its former life, and stops appearing after it.
+      AND ${expectedAt(sql.raw('pr'), sql`${hour}`)}
+    ORDER BY (h.quality_count IS NULL) DESC, h.quality_count ASC, pr.asset_symbol ASC
+  `)
+
+  const pools: PoolRow[] = (
+    res.rows as {
+      id: string
+      protocol_name: string
+      chain_name: string
+      asset_symbol: string
+      kind: string
+      spots: number | null
+      healed: boolean
+    }[]
+  ).map((r) => ({
+    id: r.id,
+    protocolName: r.protocol_name,
+    chainName: r.chain_name,
+    assetSymbol: r.asset_symbol,
+    kind: r.kind,
+    spots: r.spots,
+    healed: r.healed,
+  }))
+
+  // Healed pools have usable (neighbor-copied) APY even at quality_count < 6, so
+  // they count as full — keeps this breakdown consistent with the heatmap, where
+  // `healed` also satisfies "complete". (Missing rows never have healed=true.)
+  const missing = pools.filter((p) => p.spots == null)
+  const incomplete = pools.filter(
+    (p) => p.spots != null && p.spots < expectedSpots && !p.healed
+  )
+  const full = pools.length - missing.length - incomplete.length
+
+  return {
+    provider,
+    hour: hour.toISOString(),
+    expected: pools.length,
+    expectedSpots,
+    full,
+    missing,
+    incomplete,
+  }
+}
+
+export type StatusQualitySlot = Awaited<ReturnType<typeof getStatusQualitySlot>>

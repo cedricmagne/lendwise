@@ -14,6 +14,10 @@ import {
   XCircle,
 } from 'lucide-react'
 
+import {
+  getStatusQuality,
+  getStatusQualitySlot,
+} from '@/app/actions/status-quality.actions'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -701,9 +705,7 @@ export default function StatusPage() {
     if (!silent) setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/status/quality')
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setData(await res.json())
+      setData(await getStatusQuality())
       setLastUpdated(new Date())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -727,14 +729,8 @@ export default function StatusPage() {
     setSlotLoading(true)
     setSlotError(null)
     setSlotDetail(null)
-    fetch(
-      `/api/status/quality/slot?provider=${encodeURIComponent(selected.provider)}&hour=${encodeURIComponent(selected.hour)}`
-    )
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
-      .then((json: SlotDetail) => {
+    getStatusQualitySlot(selected.provider, selected.hour)
+      .then((json) => {
         if (!cancelled) setSlotDetail(json)
       })
       .catch((err) => {
