@@ -1,0 +1,22 @@
+# Lendwise
+
+> Lendwise is a unified layer for DeFi lending. It compares and monitors 700+ lending markets across Aave V3, Morpho (Blue + MetaMorpho), Compound V3, Blend and more, standardizes rates to net APY (base ± fees ± rewards), and helps optimize capital allocation across chains and protocols.
+
+Lendwise standardizes DeFi lending yields onto one metric — net APY — so markets that quote rates differently (APR vs APY, per-second vs daily compounding, separate reward systems) can actually be compared. Every market is re-sampled every 10 minutes, with hourly and daily historical aggregates kept for 180 days. Connect a wallet to see existing positions across protocols/chains and where they could earn more; the optimizer suggests allocations based on risk profile and investment horizon.
+
+Supported protocols: Aave V3, Morpho Blue + MetaMorpho, Compound V3, Blend. Coverage spans 27 standardized chains (16 wallet-transactable), including Ethereum, Optimism, Polygon, Base, Arbitrum, Avalanche, Linea, and BSC.
+
+## Product
+
+- [Live app](https://lendwise.fi): Compare net APY across supply and borrow markets, connect a wallet to view positions, and get optimizer allocation suggestions.
+
+## Docs
+
+- [Documentation](https://github.com/lendwise-fi/lendwise/tree/main/docs): Technical docs for the Lendwise codebase.
+- [README](https://github.com/lendwise-fi/lendwise/blob/main/README.md): Project overview, supported protocols/chains, and setup instructions.
+
+## Community
+
+- [X / Twitter](https://x.com/Lendwisefi)
+- [Farcaster](https://farcaster.xyz/lendwise)
+- [GitHub Discussions](https://github.com/lendwise-fi/lendwise/discussions)
