@@ -39,23 +39,34 @@ export type { HistoryDataPoint }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function emptySupplyMarket(): SupplyMarketState {
+/**
+ * Market state for a backfilled Aave history point: UNKNOWN, not empty.
+ *
+ * Aave's offchain APY_HISTORY query returns rates only — no TVL/utilization
+ * timeseries — so a backfilled point genuinely has no market state. It used to
+ * record zeros, and a zero is not a blank, it's a claim: "this reserve holds
+ * nothing." Those zeros were add-only (`ON CONFLICT DO NOTHING`), so once
+ * written they never self-correct, and the chart rendered a full year of flat
+ * $0 TVL / 0% utilization for every reserve. NULL says what is true: we don't
+ * know. See the identical Morpho lesson on unknownBorrowMarket below.
+ */
+function unknownSupplyMarket(): SupplyMarketState {
   return {
-    supplyAssets: 0,
-    supplyAssetsUsd: 0,
-    utilizationRate: 0,
-    assetPriceUsd: 0,
+    supplyAssets: null,
+    supplyAssetsUsd: null,
+    utilizationRate: null,
+    assetPriceUsd: null,
   }
 }
 
-function emptyBorrowMarket(): BorrowMarketState {
+function unknownBorrowMarket(): BorrowMarketState {
   return {
-    supplyAssets: 0,
-    supplyAssetsUsd: 0,
-    borrowAssets: 0,
-    borrowAssetsUsd: 0,
-    utilizationRate: 0,
-    assetPriceUsd: 0,
+    supplyAssets: null,
+    supplyAssetsUsd: null,
+    borrowAssets: null,
+    borrowAssetsUsd: null,
+    utilizationRate: null,
+    assetPriceUsd: null,
     collateralAssetsUsd: null,
     priceCollateralInLoanAsset: null,
   }
@@ -191,7 +202,7 @@ export async function fetchAaveHistory(opts?: {
             net: rates.supplyApy,
             rewardItems: [],
           },
-          market: emptySupplyMarket(),
+          market: unknownSupplyMarket(),
         })
 
         // Borrow point
@@ -206,7 +217,7 @@ export async function fetchAaveHistory(opts?: {
             net: rates.borrowApy,
             rewardItems: [],
           },
-          market: emptyBorrowMarket(),
+          market: unknownBorrowMarket(),
         })
       }
 

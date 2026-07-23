@@ -714,6 +714,12 @@ export function ProductDetailDrawer({
   // which is wrong; hide the chart when no slot carries a reading. The stat card
   // still shows the current value, derived from deposits vs liquidity.
   const hasUtilizationHistory = utilPoints.some((p) => (p.utilization ?? 0) > 0)
+  // Same reasoning for TVL: a backfilled/healed point whose provider carries no
+  // market state at all (e.g. Aave's history API returns rates only) used to be
+  // stored as a literal 0 rather than left unknown — a flat-zero line read as a
+  // real "$0 deposited" history. Fixed at the source (null, not 0), but this
+  // guards existing zero-filled rows too instead of rendering a false flat line.
+  const hasTvlHistory = tvlPoints.some((p) => ((p[tvlKey] as number) ?? 0) > 0)
 
   const sizeLabel = kind === 'supply' ? 'Total Deposits' : 'Total Borrowed'
   const assetLabel = kind === 'supply' ? 'Asset' : 'Loan Asset'
@@ -927,26 +933,31 @@ export function ProductDetailDrawer({
                 </p>
               ) : (
                 <>
-                  {/* TVL / size */}
-                  <Separator />
-                  <SectionTitle>
-                    {kind === 'supply' ? 'Total Deposits' : 'Total Borrowed'}{' '}
-                    (USD)
-                  </SectionTitle>
-                  <HistoryChart
-                    data={tvlPoints}
-                    series={[
-                      {
-                        key: tvlKey,
-                        label: 'USD',
-                        color: 'var(--chart-2)',
-                        variant: 'area',
-                      },
-                    ]}
-                    timeframe={selectedTimeframe}
-                    valueFormatter={fmtUsd}
-                    dead={dead}
-                  />
+                  {/* TVL / size — only when the pipeline carries real readings
+                      (backfilled points with no market state are hidden). */}
+                  {hasTvlHistory && (
+                    <>
+                      <Separator />
+                      <SectionTitle>
+                        {kind === 'supply' ? 'Total Deposits' : 'Total Borrowed'}{' '}
+                        (USD)
+                      </SectionTitle>
+                      <HistoryChart
+                        data={tvlPoints}
+                        series={[
+                          {
+                            key: tvlKey,
+                            label: 'USD',
+                            color: 'var(--chart-2)',
+                            variant: 'area',
+                          },
+                        ]}
+                        timeframe={selectedTimeframe}
+                        valueFormatter={fmtUsd}
+                        dead={dead}
+                      />
+                    </>
+                  )}
 
                   {/* Utilization — only when the pipeline carries real readings
                       (Morpho vaults report a flat 0 and are hidden). */}

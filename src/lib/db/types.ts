@@ -231,10 +231,16 @@ export interface ApyBreakdown {
 // ─── Market state — split by kind ─────────────────────────────────────────────
 
 export interface SupplyMarketState {
-  /** Average total amount supplied in native token units. */
-  supplyAssets: number
-  /** Average total value supplied in USD. */
-  supplyAssetsUsd: number
+  /**
+   * Average total amount supplied in native token units. `null` when unknown,
+   * e.g. backfilled Aave reserve history, whose offchain API carries APY
+   * rates only — no liquidity timeseries at all (a zero would be a false
+   * "market holds nothing" claim). Same lesson as BorrowMarketState below,
+   * hitting the supply side via Aave instead of Morpho.
+   */
+  supplyAssets: number | null
+  /** Average total value supplied in USD. `null` when unknown — see supplyAssets. */
+  supplyAssetsUsd: number | null
   /**
    * Average utilization rate — 0 to 1. `null` when unknown, e.g. backfilled
    * Morpho vault history, whose API carries no liquidity timeseries to derive
@@ -242,8 +248,8 @@ export interface SupplyMarketState {
    * note on unknownBorrowMarket in morpho/v1/apy-history.ts.
    */
   utilizationRate: number | null
-  /** Average loan asset price in USD. */
-  assetPriceUsd: number
+  /** Average loan asset price in USD. `null` when unknown — see supplyAssets. */
+  assetPriceUsd: number | null
 }
 
 /**
