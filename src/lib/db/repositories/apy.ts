@@ -260,6 +260,131 @@ export async function aggregateDaily(
   return res.rowCount ?? 0
 }
 
+// ─── One-time daily backfill (ADD-ONLY) ─────────────────────────────────────
+
+/**
+ * One authoritative daily reading sourced from a protocol's own DAY-interval
+ * history (getApyHistory) — NOT an aggregate of our hourly slots. Market-state
+ * fields are optional: a provider whose history carries only rates (Morpho
+ * markets) leaves them undefined → stored as NULL ("unknown"), never a false 0.
+ */
+export interface DailyBackfillInput {
+  productId: string
+  /** Any instant within the day; floored to midnight UTC on write. */
+  date: Date
+  apy: {
+    base: number
+    rewards: number
+    fees: number
+    net: number
+    rewardItems: unknown[]
+  }
+  market?: {
+    supplyAssets?: number | null
+    supplyAssetsUsd?: number | null
+    utilizationRate?: number | null
+    assetPriceUsd?: number | null
+    borrowAssets?: number | null
+    borrowAssetsUsd?: number | null
+    collateralAssetsUsd?: number | null
+    priceCollateralInLoanAsset?: number | null
+  }
+}
+
+/** Midnight-UTC boundary for a day — matches the apy_daily `date` convention. */
+function floorUtcDay(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+}
+
+/** Composite key "productId|<midnight-UTC ISO>" for existence diffing. */
+export function dailyKey(productId: string, date: Date): string {
+  return `${productId}|${floorUtcDay(date).toISOString()}`
+}
+
+/**
+ * The (product_id, date) pairs that ALREADY exist in apy_daily for these
+ * products within [from, to]. Lets a dry run report how many rows a backfill
+ * would actually add vs skip, without writing anything.
+ */
+export async function existingDailyKeys(
+  productIds: string[],
+  from: Date,
+  to: Date
+): Promise<Set<string>> {
+  if (productIds.length === 0) return new Set()
+  const keys = new Set<string>()
+  for (let i = 0; i < productIds.length; i += MAX_PRODUCT_IDS) {
+    const chunk = productIds.slice(i, i + MAX_PRODUCT_IDS)
+    const rows = await db
+      .select({ productId: apyDaily.productId, date: apyDaily.date })
+      .from(apyDaily)
+      .where(
+        and(
+          inArray(apyDaily.productId, chunk),
+          gte(apyDaily.date, from),
+          lte(apyDaily.date, to)
+        )
+      )
+    for (const r of rows) keys.add(dailyKey(r.productId, r.date))
+  }
+  return keys
+}
+
+function dailyBackfillTuple(r: DailyBackfillInput, computedAt: Date) {
+  const a = r.apy
+  const m = r.market ?? {}
+  // quality: one complete daily reading from the provider (expected = actual =
+  // 1), so it is never flagged low-quality — distinct from a 24-hourly aggregate.
+  return sql`(
+    ${r.productId}, ${floorUtcDay(r.date)},
+    ${a.base}, ${a.rewards}, ${a.fees}, ${a.net},
+    ${JSON.stringify(a.rewardItems ?? [])}::jsonb,
+    ${m.supplyAssets ?? null}, ${m.supplyAssetsUsd ?? null}, ${m.utilizationRate ?? null}, ${m.assetPriceUsd ?? null},
+    ${m.borrowAssets ?? null}, ${m.borrowAssetsUsd ?? null}, ${m.collateralAssetsUsd ?? null}, ${m.priceCollateralInLoanAsset ?? null},
+    1, 1, 1, 'complete', 0, ${computedAt}
+  )`
+}
+
+/**
+ * Backfill daily rows from provider history. ADD-ONLY: ON CONFLICT
+ * (product_id, date) DO NOTHING — never overwrites a row the daily aggregation
+ * (or a prior backfill) already wrote. Guarded to the active catalogue, and
+ * deduped to the last reading per (productId, day) so one statement never
+ * touches the same key twice. Returns the number of rows actually inserted.
+ */
+export async function backfillDailyRows(
+  inputs: DailyBackfillInput[],
+  computedAt: Date
+): Promise<number> {
+  if (inputs.length === 0) return 0
+
+  const listed = await listedProductIds()
+  const byKey = new Map<string, DailyBackfillInput>()
+  for (const p of inputs) {
+    if (listed.size > 0 && !listed.has(p.productId)) continue
+    byKey.set(dailyKey(p.productId, p.date), p)
+  }
+  const rows = [...byKey.values()]
+
+  let written = 0
+  for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
+    const chunk = rows.slice(i, i + UPSERT_CHUNK)
+    const tuples = chunk.map((r) => dailyBackfillTuple(r, computedAt))
+    const res = await db.execute(sql`
+      INSERT INTO apy_daily (
+        product_id, date, apy_base, apy_rewards, apy_fees, apy_net, reward_items,
+        supply_assets, supply_assets_usd, utilization_rate, asset_price_usd,
+        borrow_assets, borrow_assets_usd, collateral_assets_usd, price_collateral_in_loan_asset,
+        quality_actual_count, quality_expected_count, quality_completeness, quality_status,
+        quality_revision, quality_computed_at
+      ) VALUES ${sql.join(tuples, sql`, `)}
+      ON CONFLICT (product_id, date) DO NOTHING
+    `)
+    written += res.rowCount ?? 0
+  }
+  return written
+}
+
 // ─── Enrichment reads (used by products.actions) ────────────────────────────
 
 export interface LatestHourly {
@@ -365,8 +490,7 @@ export async function apyEnrichments(
 
 export interface ApyFilters {
   kind: 'supply' | 'borrow'
-  productId?: string // exact products.id PK match — no parsing
-  productIds?: string[] // exact PK batch — lets a client fetch N products in one query
+  productIds?: string[] // exact products.id PK batch match — no parsing
   protocol?: string // 'aave' | 'morpho' | 'compound' (or '<provider>_<version>')
   market?: string // protocol_name, e.g. "AaveV3Ethereum"
   chainId?: number
@@ -487,7 +611,6 @@ function finiteApy(
 /** Shared product-level predicates. Typed, indexed columns only — no productId parsing. */
 function productConds(f: ApyFilters) {
   const conds = [eq(products.kind, f.kind)]
-  if (f.productId) conds.push(eq(products.id, f.productId))
   if (f.productIds?.length)
     conds.push(inArray(products.id, f.productIds.slice(0, MAX_PRODUCT_IDS)))
   if (f.protocol) conds.push(eq(products.provider, f.protocol.split('_')[0]))

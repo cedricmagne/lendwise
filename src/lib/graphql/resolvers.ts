@@ -96,7 +96,6 @@ type AnyApyRow = {
 }
 
 type AnyFilters = {
-  productId?: string
   productIds?: string[]
   protocol?: string
   market?: string
@@ -225,7 +224,6 @@ function toApyFilters(
 ): ApyFilters {
   return {
     kind,
-    productId: filters.productId,
     productIds: filters.productIds,
     protocol: filters.protocol,
     market: filters.market,
@@ -298,7 +296,7 @@ async function resolvePg(
 // ─── Product registry ────────────────────────────────────────────────────────
 
 type GqlProductFilters = {
-  productId?: string
+  productIds?: string[]
   kind?: string
   protocol?: string
   market?: string
@@ -320,7 +318,7 @@ type ProductQueryArgs = {
 function toProductFilters(filters?: GqlProductFilters): ProductFilters {
   const kind = filters?.kind
   return {
-    productId: filters?.productId,
+    productIds: filters?.productIds,
     kind: kind === 'supply' || kind === 'borrow' ? kind : undefined,
     protocol: filters?.protocol,
     market: filters?.market,

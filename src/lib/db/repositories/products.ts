@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 
-import { clampPage } from '@/lib/db/pagination'
+import { clampPage, MAX_PRODUCT_IDS } from '@/lib/db/pagination'
 import { db } from '@/lib/db/postgres'
 import { productAvailabilityPeriods, products } from '@/lib/db/schema'
 import type { Product } from '@/lib/db/types'
@@ -251,7 +251,7 @@ export async function listActiveProducts(): Promise<
 // ─── Public catalogue reads (GraphQL / MCP) ─────────────────────────────────
 
 export interface ProductFilters {
-  productId?: string // exact products.id PK match — no parsing
+  productIds?: string[] // exact products.id PK batch match — no parsing
   kind?: 'supply' | 'borrow'
   protocol?: string // provider — aave | morpho | compound
   market?: string // protocol_name, e.g. "AaveV3Ethereum"
@@ -267,7 +267,8 @@ export interface ProductFilters {
  */
 function filterConds(f: ProductFilters) {
   const conds = []
-  if (f.productId) conds.push(eq(products.id, f.productId))
+  if (f.productIds?.length)
+    conds.push(inArray(products.id, f.productIds.slice(0, MAX_PRODUCT_IDS)))
   if (f.kind) conds.push(eq(products.kind, f.kind))
   if (f.protocol) conds.push(eq(products.provider, f.protocol))
   if (f.market) conds.push(eq(products.protocolName, f.market))

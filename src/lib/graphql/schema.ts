@@ -339,8 +339,6 @@ export const typeDefs = /* GraphQL */ `
 
   "Shared filters for hourly queries."
   input HourlyFilters {
-    "Filter by exact productId — e.g. morpho:v1:ethereum:vault:0x…:supply."
-    productId: String
     "Filter by a batch of exact productIds — max 50."
     productIds: [String!]
     "Filter by protocol name — aave | morpho | compound."
@@ -373,7 +371,6 @@ export const typeDefs = /* GraphQL */ `
   and ignoring it would be a filter that silently does nothing.
   """
   input LatestFilters {
-    productId: String
     "Filter by a batch of exact productIds — max 50."
     productIds: [String!]
     protocol: ProtocolName
@@ -392,7 +389,6 @@ export const typeDefs = /* GraphQL */ `
 
   "Latest-snapshot filters for borrow products."
   input LatestBorrowFilters {
-    productId: String
     "Filter by a batch of exact productIds — max 50."
     productIds: [String!]
     protocol: ProtocolName
@@ -412,8 +408,8 @@ export const typeDefs = /* GraphQL */ `
 
   "Filters for the product registry. Typed columns only — the productId slug is never parsed."
   input ProductFilters {
-    "Exact productId (primary key) — matched whole, never parsed."
-    productId: String
+    "Filter by a batch of exact productIds (primary keys) — matched whole, never parsed. Max 50."
+    productIds: [String!]
     "supply | borrow."
     kind: String
     protocol: ProtocolName
@@ -426,8 +422,6 @@ export const typeDefs = /* GraphQL */ `
 
   "Shared filters for daily queries."
   input DailyFilters {
-    "Filter by exact productId — e.g. morpho:v1:ethereum:vault:0x…:supply."
-    productId: String
     "Filter by a batch of exact productIds — max 50."
     productIds: [String!]
     protocol: ProtocolName
@@ -451,8 +445,6 @@ export const typeDefs = /* GraphQL */ `
   }
 
   input BorrowHourlyFilters {
-    "Filter by exact productId — e.g. aave:v3:ethereum:reserve:0x…:borrow."
-    productId: String
     "Filter by a batch of exact productIds — max 50."
     productIds: [String!]
     protocol: ProtocolName
@@ -475,8 +467,6 @@ export const typeDefs = /* GraphQL */ `
   }
 
   input BorrowDailyFilters {
-    "Filter by exact productId — e.g. aave:v3:ethereum:reserve:0x…:borrow."
-    productId: String
     "Filter by a batch of exact productIds — max 50."
     productIds: [String!]
     protocol: ProtocolName
