@@ -1,9 +1,21 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm'
 
 import { clampPage, MAX_PRODUCT_IDS } from '@/lib/db/pagination'
 import { db } from '@/lib/db/postgres'
-import { productAvailabilityPeriods, products } from '@/lib/db/schema'
+import {
+  apyHourly,
+  productAvailabilityPeriods,
+  products,
+} from '@/lib/db/schema'
 import type { Product } from '@/lib/db/types'
+
+/**
+ * How long a product may be absent from the catalogue fetch while still
+ * producing spot observations before its availability period is closed. Covers a
+ * missed poll or a short deploy blip without deferring a real delisting by more
+ * than a poll or two. See the debounce in syncProviderProducts.
+ */
+const CLOSE_GRACE_MS = 2 * 60 * 60 * 1000
 
 /** Map a fetched Product document (current Mongo-shaped object) → products row. */
 function toRow(p: Product) {
@@ -148,7 +160,35 @@ export async function syncProviderProducts(
   }
 
   const returned = new Set(fetchedIds)
-  const staleIds = [...openIds].filter((id) => !returned.has(id))
+  let staleIds = [...openIds].filter((id) => !returned.has(id))
+
+  // Debounce poll/deploy flicker. A product missing from THIS catalogue fetch
+  // but still producing spot observations was not delisted — the fetch merely
+  // missed it (a single degraded poll during a deploy did this to ~285 products
+  // on 2026-07-17/18, cutting their charts across a stretch they lived through).
+  // Close only periods whose product has gone quiet: no fresh, non-healed hourly
+  // slot within the grace window. A genuinely delisted pool stops being
+  // collected and crosses that line within an hour or two, so it still closes —
+  // just one poll later, which the +1h boundary below already tolerates.
+  if (staleIds.length > 0) {
+    const graceStart = new Date(syncStartedAt.getTime() - CLOSE_GRACE_MS)
+    const freshIds = new Set<string>()
+    for (let i = 0; i < staleIds.length; i += MAX_PRODUCT_IDS) {
+      const chunk = staleIds.slice(i, i + MAX_PRODUCT_IDS)
+      const rows = await db
+        .selectDistinct({ id: apyHourly.productId })
+        .from(apyHourly)
+        .where(
+          and(
+            inArray(apyHourly.productId, chunk),
+            eq(apyHourly.healed, false),
+            gte(apyHourly.hour, graceStart)
+          )
+        )
+      for (const r of rows) freshIds.add(r.id)
+    }
+    staleIds = staleIds.filter((id) => !freshIds.has(id))
+  }
 
   if (staleIds.length > 0) {
     await db
@@ -231,6 +271,133 @@ export async function syncProviderProducts(
     deactivated: staleIds.length,
     unchanged: fetchedIds.length - activated,
   }
+}
+
+// ─── Availability flicker cleanup ───────────────────────────────────────────
+
+export interface FlickerMerge {
+  productId: string
+  /** activated_at (PK part) of periods deleted because a short gap merged them. */
+  removed: Date[]
+  /** The bridged gaps, in hours, for the report. */
+  gapsHours: number[]
+  /** The surviving first period, extended to the run's final deactivated_at. */
+  survivor: { activatedAt: Date; deactivatedAt: Date | null }
+}
+
+/**
+ * Coalesce consecutive availability periods of one product separated by a gap
+ * shorter than `maxGapHours`. Such a gap is a poll/deploy artifact, not a real
+ * delisting: the sync is a poll (§syncProviderProducts), so a single missed
+ * catalogue fetch closes a period that reopens minutes-to-hours later, and the
+ * chart then cuts its line across a stretch the pool lived through (every such
+ * gap has real, non-healed hourly observations inside it).
+ *
+ * Merge = extend the run's FIRST period to the run's last deactivated_at (null
+ * if the run ends open) and delete the intermediate periods. On write, the
+ * delete runs BEFORE the extend, so a run ending open never momentarily leaves
+ * two open periods — which the partial unique index would reject.
+ *
+ * `dryRun` returns the plan without writing.
+ */
+export async function coalesceAvailabilityFlicker(
+  maxGapHours: number,
+  opts: { dryRun: boolean }
+): Promise<{
+  productsAffected: number
+  periodsRemoved: number
+  plans: FlickerMerge[]
+}> {
+  const maxGapMs = maxGapHours * 3600 * 1000
+
+  const rows = await db
+    .select({
+      productId: productAvailabilityPeriods.productId,
+      activatedAt: productAvailabilityPeriods.activatedAt,
+      deactivatedAt: productAvailabilityPeriods.deactivatedAt,
+    })
+    .from(productAvailabilityPeriods)
+    .orderBy(
+      asc(productAvailabilityPeriods.productId),
+      asc(productAvailabilityPeriods.activatedAt)
+    )
+
+  const byProduct = new Map<string, typeof rows>()
+  for (const r of rows) {
+    const list = byProduct.get(r.productId) ?? []
+    list.push(r)
+    byProduct.set(r.productId, list)
+  }
+
+  const plans: FlickerMerge[] = []
+  for (const [productId, periods] of byProduct) {
+    if (periods.length < 2) continue
+
+    // Walk the ordered periods, growing a run while each gap stays sub-threshold.
+    let runStartAt = periods[0].activatedAt
+    let runEndDeact = periods[0].deactivatedAt
+    let removed: Date[] = []
+    let gapsHours: number[] = []
+
+    const flush = () => {
+      if (removed.length > 0) {
+        plans.push({
+          productId,
+          removed,
+          gapsHours,
+          survivor: { activatedAt: runStartAt, deactivatedAt: runEndDeact },
+        })
+      }
+      removed = []
+      gapsHours = []
+    }
+
+    for (let k = 1; k < periods.length; k++) {
+      const p = periods[k]
+      const gapMs = runEndDeact
+        ? p.activatedAt.getTime() - runEndDeact.getTime()
+        : Infinity
+      if (runEndDeact && gapMs < maxGapMs) {
+        removed.push(p.activatedAt)
+        gapsHours.push(gapMs / 3_600_000)
+        runEndDeact = p.deactivatedAt // extend the run (may be null = open)
+      } else {
+        flush()
+        runStartAt = p.activatedAt
+        runEndDeact = p.deactivatedAt
+      }
+    }
+    flush()
+  }
+
+  const periodsRemoved = plans.reduce((n, p) => n + p.removed.length, 0)
+  const productsAffected = new Set(plans.map((p) => p.productId)).size
+
+  if (!opts.dryRun) {
+    for (const plan of plans) {
+      // Delete merged periods first (a run ending open would otherwise collide
+      // with the extended survivor under the one-open-period unique index).
+      await db
+        .delete(productAvailabilityPeriods)
+        .where(
+          and(
+            eq(productAvailabilityPeriods.productId, plan.productId),
+            inArray(productAvailabilityPeriods.activatedAt, plan.removed)
+          )
+        )
+      await db
+        .update(productAvailabilityPeriods)
+        .set({ deactivatedAt: plan.survivor.deactivatedAt })
+        .where(
+          and(
+            eq(productAvailabilityPeriods.productId, plan.productId),
+            eq(productAvailabilityPeriods.activatedAt, plan.survivor.activatedAt)
+          )
+        )
+    }
+  }
+
+  return { productsAffected, periodsRemoved, plans }
 }
 
 /** Active product ids (+ createdAt) — used by gap detection / status. */

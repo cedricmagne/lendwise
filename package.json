@@ -16,6 +16,7 @@
     "adapter:test": "dotenv -- tsx scripts/adapter-test.ts",
     "collect:apy": "dotenv -- tsx scripts/collect-apy.ts",
     "backfill:history": "dotenv -- tsx scripts/backfill-history.ts",
+    "clean:availability-flicker": "dotenv -- tsx scripts/clean-availability-flicker.ts",
     "fix:daily-nan": "dotenv -- tsx scripts/fix-daily-nan.ts",
     "clean:non-finite-apy": "dotenv -- tsx scripts/clean-non-finite-apy.ts",
     "clean:reward-spikes": "dotenv -- tsx scripts/clean-reward-spikes.ts",
