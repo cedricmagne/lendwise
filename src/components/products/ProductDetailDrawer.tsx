@@ -2,7 +2,16 @@
 
 import { useMemo, useState, useTransition } from 'react'
 
-import { AlertCircle, Gift, Percent, TrendingUp } from 'lucide-react'
+import {
+  AlertCircle,
+  ArrowUpRightFromSquare,
+  Check,
+  Copy,
+  Gift,
+  Percent,
+  TrendingUp,
+  X,
+} from 'lucide-react'
 import posthog from 'posthog-js'
 import {
   Area,
@@ -40,7 +49,6 @@ import {
   DrawerClose,
   DrawerContent,
   DrawerDescription,
-  DrawerFooter,
   DrawerHeader,
   DrawerTitle,
   DrawerTrigger,
@@ -465,6 +473,34 @@ function ApyBreakdownChart({
   )
 }
 
+/** Click-to-copy a productId, with brief "copied" feedback. */
+function CopyIdButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value)
+          setCopied(true)
+          setTimeout(() => setCopied(false), 1200)
+        } catch {
+          /* clipboard unavailable — ignore */
+        }
+      }}
+      title="Copy product ID"
+      aria-label="Copy product ID"
+      className="hover:bg-secondary text-muted-foreground hover:text-foreground shrink-0 rounded p-1 transition-colors"
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-emerald-400" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
+    </button>
+  )
+}
+
 function SectionTitle({
   children,
   icon,
@@ -673,6 +709,11 @@ export function ProductDetailDrawer({
     kind === 'supply' ? 'supplyAssetsUsd' : 'borrowAssetsUsd'
   const tvlPoints = points.filter((p) => typeof p[tvlKey] === 'number')
   const utilPoints = points.filter((p) => typeof p.utilization === 'number')
+  // Some products (Morpho vaults) never report utilization — the pipeline stores
+  // 0 for every slot. A flat-zero line reads as a real "0% utilized" history,
+  // which is wrong; hide the chart when no slot carries a reading. The stat card
+  // still shows the current value, derived from deposits vs liquidity.
+  const hasUtilizationHistory = utilPoints.some((p) => (p.utilization ?? 0) > 0)
 
   const sizeLabel = kind === 'supply' ? 'Total Deposits' : 'Total Borrowed'
   const assetLabel = kind === 'supply' ? 'Asset' : 'Loan Asset'
@@ -703,7 +744,30 @@ export function ProductDetailDrawer({
       </DrawerTrigger>
       <DrawerContent>
         <DrawerHeader className="gap-1">
-          <DrawerTitle>{item.poolName}</DrawerTitle>
+          <DrawerTitle className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1">
+              {item.poolName}
+              {item.productId && <CopyIdButton value={item.productId} />}
+            </span>
+            <div className="flex shrink-0 items-center gap-1">
+              {item.link && (
+                <a
+                  href={item.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-foreground p-1"
+                >
+                  <ArrowUpRightFromSquare size={15} />
+                </a>
+              )}
+              <DrawerClose
+                aria-label="Close"
+                className="text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer rounded p-1 transition-colors"
+              >
+                <X size={16} />
+              </DrawerClose>
+            </div>
+          </DrawerTitle>
           <DrawerDescription asChild>
             <div className="flex flex-wrap gap-2">
               <ProtocolBadge protocol={item.protocol} />
@@ -765,6 +829,36 @@ export function ProductDetailDrawer({
                     <TokenIcon symbol={c.symbol} className="mr-1 h-3 w-3" />
                     {c.symbol}
                   </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Reward breakdown */}
+          {latestRewardItems.length > 0 && (
+            <div>
+              <SectionTitle icon={<Gift className="size-4" />}>
+                Rewards
+              </SectionTitle>
+              <div className="mt-2 flex flex-col gap-1.5">
+                {latestRewardItems.map((r, i) => (
+                  <div
+                    key={`${r.token.symbol}-${r.program ?? i}`}
+                    className="bg-muted/40 flex items-center justify-between rounded-md px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <TokenIcon symbol={r.token.symbol} size={18} />
+                      <span className="text-xs font-medium">
+                        {r.token.symbol}
+                      </span>
+                      <Badge variant="outline" className="text-[10px] capitalize">
+                        {r.source}
+                      </Badge>
+                    </div>
+                    <span className="font-mono text-xs font-semibold text-emerald-400">
+                      +{fmtPct(r.apy)}
+                    </span>
+                  </div>
                 ))}
               </div>
             </div>
@@ -854,57 +948,28 @@ export function ProductDetailDrawer({
                     dead={dead}
                   />
 
-                  {/* Utilization */}
-                  <Separator />
-                  <SectionTitle icon={<Percent className="size-4" />}>
-                    Utilization
-                  </SectionTitle>
-                  <HistoryChart
-                    data={utilPoints}
-                    series={[
-                      {
-                        key: 'utilization',
-                        label: 'Utilization',
-                        color: 'var(--chart-5)',
-                        variant: 'area',
-                      },
-                    ]}
-                    timeframe={selectedTimeframe}
-                    valueFormatter={(v) => fmtPct(v, 1)}
-                    dead={dead}
-                  />
-
-                  {/* Reward breakdown */}
-                  {latestRewardItems.length > 0 && (
+                  {/* Utilization — only when the pipeline carries real readings
+                      (Morpho vaults report a flat 0 and are hidden). */}
+                  {hasUtilizationHistory && (
                     <>
                       <Separator />
-                      <SectionTitle icon={<Gift className="size-4" />}>
-                        Rewards
+                      <SectionTitle icon={<Percent className="size-4" />}>
+                        Utilization
                       </SectionTitle>
-                      <div className="flex flex-col gap-1.5">
-                        {latestRewardItems.map((r, i) => (
-                          <div
-                            key={`${r.token.symbol}-${r.program ?? i}`}
-                            className="bg-muted/40 flex items-center justify-between rounded-md px-3 py-2"
-                          >
-                            <div className="flex items-center gap-2">
-                              <TokenIcon symbol={r.token.symbol} size={18} />
-                              <span className="text-xs font-medium">
-                                {r.token.symbol}
-                              </span>
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] capitalize"
-                              >
-                                {r.source}
-                              </Badge>
-                            </div>
-                            <span className="font-mono text-xs font-semibold text-emerald-400">
-                              +{fmtPct(r.apy)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+                      <HistoryChart
+                        data={utilPoints}
+                        series={[
+                          {
+                            key: 'utilization',
+                            label: 'Utilization',
+                            color: 'var(--chart-5)',
+                            variant: 'area',
+                          },
+                        ]}
+                        timeframe={selectedTimeframe}
+                        valueFormatter={(v) => fmtPct(v, 1)}
+                        dead={dead}
+                      />
                     </>
                   )}
                 </>
@@ -912,12 +977,6 @@ export function ProductDetailDrawer({
             </>
           )}
         </div>
-
-        <DrawerFooter>
-          <DrawerClose asChild>
-            <Button variant="outline">Close</Button>
-          </DrawerClose>
-        </DrawerFooter>
       </DrawerContent>
     </Drawer>
   )

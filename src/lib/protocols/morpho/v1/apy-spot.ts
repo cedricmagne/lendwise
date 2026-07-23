@@ -115,6 +115,20 @@ export async function fetchMorphoV1ApySpot(
       const totalAssetsUsd = state.totalAssetsUsd ?? 0
       const assetPriceUsd = totalAssets > 0 ? totalAssetsUsd / totalAssets : 0
 
+      // Utilization for a MetaMorpho vault = the share of deposits deployed into
+      // markets, i.e. NOT withdrawable. Morpho exposes no single field for it, so
+      // we derive it from total assets vs withdrawable liquidity — the exact
+      // formula the products table uses. Clamped to [0,1] to match the table's
+      // displayed value (withdrawable can exceed deposits via shared liquidity).
+      const liquidityUsd = vault.liquidity?.usd ?? 0
+      const utilizationRate =
+        totalAssetsUsd > 0
+          ? Math.max(
+              0,
+              Math.min(1, (totalAssetsUsd - liquidityUsd) / totalAssetsUsd)
+            )
+          : 0
+
       const supplyPayload: SpotPayload = {
         productId,
         kind: 'supply',
@@ -131,7 +145,7 @@ export async function fetchMorphoV1ApySpot(
         market: {
           supplyAssets: totalAssets,
           supplyAssetsUsd: totalAssetsUsd,
-          utilizationRate: 0,
+          utilizationRate,
           assetPriceUsd,
         } as SupplyMarketState,
       }

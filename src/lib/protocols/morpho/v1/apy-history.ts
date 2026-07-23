@@ -218,6 +218,11 @@ export async function fetchMorphoHistory(opts?: {
       const { data, error } = await client
         .query<VaultHistoryQuery>(VAULT_SUPPLY_HISTORY, {
           address: vault.address,
+          // REQUIRED: vault addresses are not unique across chains. Without
+          // chainId the API defaults to Ethereum and returns "No results" for
+          // every other chain's vault — silently zeroing all non-ETH vault
+          // history (heal refetch + backfill alike).
+          chainId: vault.chainId,
           options: timeseriesOptions,
         })
         .toPromise()
@@ -269,7 +274,9 @@ export async function fetchMorphoHistory(opts?: {
           market: {
             supplyAssets: 0,
             supplyAssetsUsd: totalAssetsUsd,
-            utilizationRate: 0,
+            // No liquidity timeseries in the vault history API, so utilization
+            // can't be derived here — null ("unknown"), never a false 0.
+            utilizationRate: null,
             assetPriceUsd: 0,
           } as SupplyMarketState,
         })

@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import Link from 'next/link'
-
 import { useQuery } from '@tanstack/react-query'
 import { ColumnDef, ColumnFiltersState } from '@tanstack/react-table'
 import {
@@ -26,7 +24,12 @@ import { BorrowingOptimizerView } from '@/components/optimizer/BorrowingOptimize
 import { ProductDetailDrawer } from '@/components/products/ProductDetailDrawer'
 import { TableSkeleton } from '@/components/products/TableSkeleton'
 import { StatsBar } from '@/components/stats/StatsBar'
-import { FilterBar, FilterChip, HorizonPicker } from '@/components/table'
+import {
+  FilterBar,
+  FilterChip,
+  HorizonPicker,
+  RefreshButton,
+} from '@/components/table'
 import {
   DataTable,
   SortableHeader,
@@ -376,13 +379,14 @@ const createColumns = (
     minSize: 80,
     cell: ({ row }) =>
       row.original.link ? (
-        <Link
+        <a
           target="_blank"
+          rel="noopener noreferrer"
           href={row.original.link}
           className="flex w-full items-center justify-center"
         >
           <ArrowUpRightFromSquare size={15} />
-        </Link>
+        </a>
       ) : null,
   },
 ]
@@ -415,13 +419,14 @@ export function BorrowTableClient() {
   const rowSelectionRef = useRef(rowSelection)
   rowSelectionRef.current = rowSelection
 
-  const { data, isPending } = useQuery<BorrowProduct[]>({
-    queryKey: ['borrowProducts'],
-    queryFn: loadBorrowProducts,
-    staleTime: 60_000,
-    refetchInterval: 60_000,
-    gcTime: 5 * 60 * 1000,
-  })
+  const { data, isPending, isFetching, dataUpdatedAt, refetch } =
+    useQuery<BorrowProduct[]>({
+      queryKey: ['borrowProducts'],
+      queryFn: loadBorrowProducts,
+      staleTime: 10 * 60_000,
+      refetchOnWindowFocus: false,
+      gcTime: 5 * 60 * 1000,
+    })
 
   useEffect(() => {
     if (!data || data.length === 0) return
@@ -437,7 +442,10 @@ export function BorrowTableClient() {
         (!collateralFilter ||
           row.collaterals.some((c) => c.symbol === collateralFilter))
     )
-    const sorted = [...filtered].sort((a, b) => (b.apy ?? 0) - (a.apy ?? 0))
+    // Table is sorted ASC (cheapest borrow rate first, see initialSorting
+    // below) — auto-selection must pick the same top 3 rows the user sees,
+    // not the 3 highest APY.
+    const sorted = [...filtered].sort((a, b) => (a.apy ?? 0) - (b.apy ?? 0))
     const top3 = sorted.slice(0, 3)
     if (top3.length === 0) return
 
@@ -482,6 +490,11 @@ export function BorrowTableClient() {
       })
     }
   }, [])
+
+  const handleRefresh = useCallback(() => {
+    posthog.capture('borrow_table_refreshed')
+    void refetch()
+  }, [refetch])
 
   // Stats-bar CTA: narrow the table down to the one market the card names. The
   // collateral filter is dropped on purpose — keeping it would filter the very
@@ -1006,6 +1019,13 @@ export function BorrowTableClient() {
               onColumnFiltersChange={handleFiltersChange}
               renderIcon={(v) => <TokenIcon symbol={v} />}
               counts={collateralCounts}
+            />
+
+            {/* Refresh */}
+            <RefreshButton
+              onRefresh={handleRefresh}
+              isRefreshing={isFetching}
+              updatedAt={dataUpdatedAt}
             />
 
             {/* Reset */}

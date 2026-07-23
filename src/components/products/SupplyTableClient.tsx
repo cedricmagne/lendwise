@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import Link from 'next/link'
-
 import { useQuery } from '@tanstack/react-query'
 import { ColumnDef, ColumnFiltersState } from '@tanstack/react-table'
 import {
@@ -26,7 +24,12 @@ import { SupplyingOptimizerView } from '@/components/optimizer/SupplyingOptimize
 import { ProductDetailDrawer } from '@/components/products/ProductDetailDrawer'
 import { TableSkeleton } from '@/components/products/TableSkeleton'
 import { StatsBar } from '@/components/stats/StatsBar'
-import { FilterBar, FilterChip, HorizonPicker } from '@/components/table'
+import {
+  FilterBar,
+  FilterChip,
+  HorizonPicker,
+  RefreshButton,
+} from '@/components/table'
 import {
   DataTable,
   SortableHeader,
@@ -303,13 +306,14 @@ const createColumns = (
     minSize: 80,
     cell: ({ row }) =>
       row.original.link ? (
-        <Link
+        <a
           target="_blank"
+          rel="noopener noreferrer"
           href={row.original.link}
           className="flex w-full items-center justify-center"
         >
           <ArrowUpRightFromSquare size={15} />
-        </Link>
+        </a>
       ) : null,
   },
 ]
@@ -338,13 +342,14 @@ export function SupplyTableClient() {
   const rowSelectionRef = useRef(rowSelection)
   rowSelectionRef.current = rowSelection
 
-  const { data, isPending } = useQuery<SupplyProduct[]>({
-    queryKey: ['supplyProducts'],
-    queryFn: loadSupplyProducts,
-    staleTime: 60_000,
-    refetchInterval: 60_000,
-    gcTime: 5 * 60 * 1000,
-  })
+  const { data, isPending, isFetching, dataUpdatedAt, refetch } =
+    useQuery<SupplyProduct[]>({
+      queryKey: ['supplyProducts'],
+      queryFn: loadSupplyProducts,
+      staleTime: 10 * 60_000,
+      refetchOnWindowFocus: false,
+      gcTime: 5 * 60 * 1000,
+    })
 
   useEffect(() => {
     if (!data || data.length === 0) return
@@ -398,6 +403,11 @@ export function SupplyTableClient() {
       })
     }
   }, [])
+
+  const handleRefresh = useCallback(() => {
+    posthog.capture('supply_table_refreshed')
+    void refetch()
+  }, [refetch])
 
   // Stats-bar CTA: narrow the table down to the one market the card names.
   const jumpToMarket = useCallback((market: SupplyProduct) => {
@@ -837,6 +847,13 @@ export function SupplyTableClient() {
               onColumnFiltersChange={handleFiltersChange}
               renderIcon={(v) => <TokenIcon symbol={v} />}
               counts={tokenCounts}
+            />
+
+            {/* Refresh */}
+            <RefreshButton
+              onRefresh={handleRefresh}
+              isRefreshing={isFetching}
+              updatedAt={dataUpdatedAt}
             />
 
             {/* Reset */}

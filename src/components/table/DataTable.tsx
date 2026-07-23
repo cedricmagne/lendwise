@@ -354,7 +354,7 @@ export function DataTable<TData, TValue>({
               table.getRowModel().rows.map((row) => {
                 return (
                   <TableRow
-                    key={row.index}
+                    key={row.id}
                     data-state={row.getIsSelected() && 'selected'}
                     className={cn(
                       'border-border/30 hover:bg-secondary/20 border-b transition-colors duration-150',

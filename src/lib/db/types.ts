@@ -235,8 +235,13 @@ export interface SupplyMarketState {
   supplyAssets: number
   /** Average total value supplied in USD. */
   supplyAssetsUsd: number
-  /** Average borrow utilization rate — 0 to 1. */
-  utilizationRate: number
+  /**
+   * Average utilization rate — 0 to 1. `null` when unknown, e.g. backfilled
+   * Morpho vault history, whose API carries no liquidity timeseries to derive
+   * it from (a zero would be a false "0% utilized" claim). See the parallel
+   * note on unknownBorrowMarket in morpho/v1/apy-history.ts.
+   */
+  utilizationRate: number | null
   /** Average loan asset price in USD. */
   assetPriceUsd: number
 }

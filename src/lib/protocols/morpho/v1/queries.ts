@@ -248,6 +248,10 @@ export const VAULTS_APY = gql`
             }
           }
         }
+        liquidity {
+          usd
+          underlying
+        }
       }
       pageInfo {
         count
@@ -260,8 +264,12 @@ export const VAULTS_APY = gql`
 `
 
 export const VAULT_SUPPLY_HISTORY = gql`
-  query VaultHistory($address: String!, $options: TimeseriesOptions) {
-    vaultByAddress(address: $address) {
+  query VaultHistory(
+    $address: String!
+    $chainId: Int
+    $options: TimeseriesOptions
+  ) {
+    vaultByAddress(address: $address, chainId: $chainId) {
       address
       asset {
         symbol
