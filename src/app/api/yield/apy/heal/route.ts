@@ -15,6 +15,7 @@ import {
   latestReport,
   reportById,
 } from '@/lib/db/repositories/reports'
+import { findNearestDonor } from '@/lib/heal/donors'
 import { groupGapsByProvider } from '@/lib/heal/gap-spans'
 import { toHistoryResult } from '@/lib/protocols/core/history-result'
 import type { HistoryDataPoint } from '@/lib/protocols/core/types'
@@ -27,23 +28,6 @@ export const maxDuration = 300
 
 /** Extra hours before/after the gap window to search for nearest-neighbor donors. */
 const DONOR_PADDING_HOURS = 6
-
-/**
- * How far a nearest-neighbor donor may be from the hour it fills.
- *
- * This is NOT the same thing as DONOR_PADDING_HOURS, and conflating the two was a
- * bug. The padding widens the query that FETCHES candidate donors, and that query
- * is bounded by the min/max hour across every gap in the report — so on a report
- * spanning a week, it fetches a week of candidates. Nothing then checked how far
- * the chosen one actually was: 19% of neighbor-healed rows were copies from more
- * than 6 hours away, and 82 of them from more than three days away. A Sunday APY
- * was being written into a Tuesday hole and served as that hour's rate.
- *
- * A copy is only a defensible stand-in while the rate can be assumed not to have
- * moved. Past that, an honest hole — red on /status, retried by the next gap
- * detection — beats a confident fabrication.
- */
-const MAX_DONOR_DISTANCE_HOURS = 6
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -88,31 +72,6 @@ function buildHistoryLookup(
     map.set(lookupKey(pt.productId, normalizeHour(pt.timestamp)), pt)
   }
   return map
-}
-
-/**
- * The closest donor to `targetHour`, or null if the closest one is too far to be
- * a credible stand-in (see MAX_DONOR_DISTANCE_HOURS).
- *
- * Distance is absolute, so a donor may come from AFTER the hole as readily as
- * before it. That is intentional — the hour either side is equally good evidence
- * of what the rate was — but it is exactly why the cap matters.
- */
-function findNearestDonor<T extends { hour: Date }>(
-  targetHour: Date,
-  donors: T[]
-): T | null {
-  if (donors.length === 0) return null
-  let best = donors[0]
-  let bestDist = Math.abs(targetHour.getTime() - best.hour.getTime())
-  for (let i = 1; i < donors.length; i++) {
-    const dist = Math.abs(targetHour.getTime() - donors[i].hour.getTime())
-    if (dist < bestDist) {
-      best = donors[i]
-      bestDist = dist
-    }
-  }
-  return bestDist <= MAX_DONOR_DISTANCE_HOURS * 3600_000 ? best : null
 }
 
 /** Map a snake_case donor row (raw SQL) → camelCase market object. */

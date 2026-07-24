@@ -2,6 +2,7 @@ import { type SQL, inArray, sql } from 'drizzle-orm'
 
 import { db } from '@/lib/db/postgres'
 import { products } from '@/lib/db/schema'
+import type { HistoryTarget } from '@/lib/protocols/core/types'
 
 export interface GapRow {
   productId: string
@@ -239,6 +240,39 @@ export async function fetchDonors(
     WHERE product_id IN ${ids} AND hour >= ${start} AND hour <= ${end}
   `)
   return res.rows as Record<string, unknown>[]
+}
+
+/**
+ * The catalogue rows behind a set of productIds, as adapters want them.
+ *
+ * `meta` is forwarded untouched: it is the adapter's own vocabulary (the
+ * market id, reserve address or cToken it wrote at getProducts time), and
+ * handing it back is what lets a DELISTED product still be fetched by its own
+ * identifier. Nothing here interprets it — the pipeline stays protocol-blind.
+ *
+ * Deliberately NOT filtered on `active`: a product dropped from the catalogue
+ * is exactly the one whose history we can no longer reach any other way.
+ */
+export async function historyTargets(
+  productIds: string[]
+): Promise<HistoryTarget[]> {
+  if (productIds.length === 0) return []
+  const rows = await db
+    .select({
+      id: products.id,
+      chainId: products.chainId,
+      kind: products.kind,
+      meta: products.meta,
+    })
+    .from(products)
+    .where(inArray(products.id, productIds))
+
+  return rows.map((r) => ({
+    productId: r.id,
+    chainId: r.chainId,
+    kind: r.kind as 'supply' | 'borrow',
+    meta: (r.meta ?? {}) as Record<string, unknown>,
+  }))
 }
 
 /** productId → products.provider, resolved by exact id — NEVER by parsing. */

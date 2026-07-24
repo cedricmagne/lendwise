@@ -198,6 +198,16 @@ export async function upsertHourlySlot(
  * Aggregate all hourly rows in [windowStart, windowEnd) into apy_daily,
  * one row per product, in a single statement. reward_items = last slot of the day.
  * Idempotent: re-running the same day replaces rows and bumps quality_revision.
+ *
+ * Joined to `products` so an hourly row with no catalogue entry produces no
+ * daily row. `upsertHourlySlots` and `backfillDailyRows` both guard this way;
+ * this one did not, and 110,388 orphan hourly rows (an Aave listing-predicate
+ * drift, closed 2026-07-13) turned into fresh orphan daily rows every time a
+ * past day was re-aggregated — 1,739 of them in a single maintenance run.
+ *
+ * The guard is EXISTENCE, deliberately not `active = true`: a pool delisted
+ * yesterday must still get its last hours aggregated. Only a product that was
+ * never in the catalogue is dropped.
  */
 export async function aggregateDaily(
   windowStart: Date,
@@ -207,24 +217,25 @@ export async function aggregateDaily(
   const res = await db.execute(sql`
     WITH agg AS (
       SELECT
-        product_id,
-        avg(apy_base)    AS apy_base,
-        avg(apy_rewards) AS apy_rewards,
-        avg(apy_fees)    AS apy_fees,
-        avg(apy_net)     AS apy_net,
-        avg(supply_assets)     AS supply_assets,
-        avg(supply_assets_usd) AS supply_assets_usd,
-        avg(utilization_rate)  AS utilization_rate,
-        avg(asset_price_usd)   AS asset_price_usd,
-        avg(borrow_assets)     AS borrow_assets,
-        avg(borrow_assets_usd) AS borrow_assets_usd,
-        avg(collateral_assets_usd) AS collateral_assets_usd,
-        avg(price_collateral_in_loan_asset) AS price_collateral_in_loan_asset,
+        h.product_id,
+        avg(h.apy_base)    AS apy_base,
+        avg(h.apy_rewards) AS apy_rewards,
+        avg(h.apy_fees)    AS apy_fees,
+        avg(h.apy_net)     AS apy_net,
+        avg(h.supply_assets)     AS supply_assets,
+        avg(h.supply_assets_usd) AS supply_assets_usd,
+        avg(h.utilization_rate)  AS utilization_rate,
+        avg(h.asset_price_usd)   AS asset_price_usd,
+        avg(h.borrow_assets)     AS borrow_assets,
+        avg(h.borrow_assets_usd) AS borrow_assets_usd,
+        avg(h.collateral_assets_usd) AS collateral_assets_usd,
+        avg(h.price_collateral_in_loan_asset) AS price_collateral_in_loan_asset,
         count(*) AS actual_count,
-        (array_agg(reward_items ORDER BY hour DESC))[1] AS reward_items
-      FROM apy_hourly
-      WHERE hour >= ${windowStart} AND hour < ${windowEnd}
-      GROUP BY product_id
+        (array_agg(h.reward_items ORDER BY h.hour DESC))[1] AS reward_items
+      FROM apy_hourly h
+      JOIN products p ON p.id = h.product_id
+      WHERE h.hour >= ${windowStart} AND h.hour < ${windowEnd}
+      GROUP BY h.product_id
     )
     INSERT INTO apy_daily (
       product_id, date, apy_base, apy_rewards, apy_fees, apy_net, reward_items,
