@@ -216,24 +216,67 @@ export async function getStatusQuality() {
     }
   })
 
-  const [gap, heal] = await Promise.all([
-    latestReport('gap-detection'),
-    latestReport('gap-healing'),
-  ])
-  const gp = (gap?.payload ?? {}) as {
-    collected?: {
-      missingSlots?: number
-      incompleteSlots?: number
-      expectedSlots?: number
+  // One reconcile run now does what gap-detection and gap-healing used to do
+  // separately, so both cards are fed from its single report. The legacy types
+  // stay as a fallback: they are what a database written before the 2026-07-24
+  // cutover still holds, and an empty card would read as "nothing ran" rather
+  // than "this predates the change".
+  const reconcile = await latestReport('reconcile')
+  const [legacyGap, legacyHeal] = reconcile
+    ? [null, null]
+    : await Promise.all([
+        latestReport('gap-detection'),
+        latestReport('gap-healing'),
+      ])
+
+  const rp = (reconcile?.payload ?? {}) as {
+    detected?: {
+      missing?: number
+      incomplete?: number
+      collectedProducts?: number
+    }
+    repaired?: {
+      byRefetch?: number
+      byNeighbor?: number
+      noDonor?: number
+      written?: number
     }
   }
-  const hp = (heal?.payload ?? {}) as {
-    totalGaps?: number
-    healed?: number
-    healedByRefetch?: number
-    healedByNeighbor?: number
-    noDonor?: number
-  }
+
+  const gap = reconcile ?? legacyGap
+  const heal = reconcile ?? legacyHeal
+
+  const gp = reconcile
+    ? {
+        collected: {
+          missingSlots: rp.detected?.missing ?? 0,
+          incompleteSlots: rp.detected?.incomplete ?? 0,
+          expectedSlots: (rp.detected?.collectedProducts ?? 0) * hours,
+        },
+      }
+    : ((legacyGap?.payload ?? {}) as {
+        collected?: {
+          missingSlots?: number
+          incompleteSlots?: number
+          expectedSlots?: number
+        }
+      })
+
+  const hp = reconcile
+    ? {
+        totalGaps: (rp.detected?.missing ?? 0) + (rp.detected?.incomplete ?? 0),
+        healed: rp.repaired?.written ?? 0,
+        healedByRefetch: rp.repaired?.byRefetch ?? 0,
+        healedByNeighbor: rp.repaired?.byNeighbor ?? 0,
+        noDonor: rp.repaired?.noDonor ?? 0,
+      }
+    : ((legacyHeal?.payload ?? {}) as {
+        totalGaps?: number
+        healed?: number
+        healedByRefetch?: number
+        healedByNeighbor?: number
+        noDonor?: number
+      })
 
   return {
     window: {

@@ -194,7 +194,10 @@ export const pipelineReports = pgTable(
     id: text('id')
       .primaryKey()
       .default(sql`gen_random_uuid()::text`),
-    type: text('type').notNull(), // 'gap-detection' | 'gap-healing'
+    // 'reconcile' since 2026-07-24. 'gap-detection' | 'gap-healing' are the
+    // pre-cutover types, still present in history — the two jobs they came from
+    // are now the detect and repair steps of one run.
+    type: text('type').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
