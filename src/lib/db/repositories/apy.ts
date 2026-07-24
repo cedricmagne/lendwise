@@ -385,6 +385,101 @@ export async function backfillDailyRows(
   return written
 }
 
+// ─── Market-state patch (historical backfill from a subgraph) ───────────────
+
+/** The market columns a history backfill can fill in on an existing daily row. */
+const PATCHABLE_MARKET_COLUMNS = [
+  'supply_assets',
+  'supply_assets_usd',
+  'utilization_rate',
+  'asset_price_usd',
+  'borrow_assets',
+  'borrow_assets_usd',
+] as const
+
+/**
+ * One day of market state for an existing apy_daily row. Every field is
+ * optional: `undefined`/`null` means "not known from this source" and leaves the
+ * stored value untouched — a backfill must never turn a real reading into a 0,
+ * nor a genuine unknown into a fabricated one.
+ */
+export interface DailyMarketPatch {
+  productId: string
+  /** Any instant within the day; floored to midnight UTC to match the PK. */
+  date: Date
+  supplyAssets?: number | null
+  supplyAssetsUsd?: number | null
+  utilizationRate?: number | null
+  assetPriceUsd?: number | null
+  borrowAssets?: number | null
+  borrowAssetsUsd?: number | null
+}
+
+function marketPatchTuple(p: DailyMarketPatch) {
+  return sql`(
+    ${p.productId}::text, ${floorUtcDay(p.date)}::timestamptz,
+    ${p.supplyAssets ?? null}::double precision,
+    ${p.supplyAssetsUsd ?? null}::double precision,
+    ${p.utilizationRate ?? null}::double precision,
+    ${p.assetPriceUsd ?? null}::double precision,
+    ${p.borrowAssets ?? null}::double precision,
+    ${p.borrowAssetsUsd ?? null}::double precision
+  )`
+}
+
+/**
+ * Fill missing market state on daily rows that already exist. UPDATE-only — a
+ * (product_id, date) with no row is skipped, because apy_* columns are NOT NULL
+ * and this source carries no rates.
+ *
+ * Default is FILL-ONLY: `COALESCE(existing, incoming)`, so a value aggregated
+ * from our own hourly slots always wins over a backfilled one, and only genuine
+ * NULLs are written. Pass `overwrite` to let the incoming value win instead
+ * (still NULL-safe — an incoming NULL never erases a stored reading).
+ *
+ * Returns the number of rows actually changed.
+ */
+export async function patchDailyMarketState(
+  patches: DailyMarketPatch[],
+  opts: { overwrite?: boolean } = {}
+): Promise<number> {
+  if (patches.length === 0) return 0
+
+  // Last patch wins per key so one statement never updates a row twice.
+  const byKey = new Map<string, DailyMarketPatch>()
+  for (const p of patches) byKey.set(dailyKey(p.productId, p.date), p)
+  const rows = [...byKey.values()]
+
+  const set = PATCHABLE_MARKET_COLUMNS.map((c) =>
+    opts.overwrite
+      ? sql`${sql.raw(c)} = COALESCE(v.${sql.raw(c)}, d.${sql.raw(c)})`
+      : sql`${sql.raw(c)} = COALESCE(d.${sql.raw(c)}, v.${sql.raw(c)})`
+  )
+  // Touch only rows the patch would actually change, so rowCount is meaningful.
+  const changes = PATCHABLE_MARKET_COLUMNS.map((c) =>
+    opts.overwrite
+      ? sql`(v.${sql.raw(c)} IS NOT NULL AND d.${sql.raw(c)} IS DISTINCT FROM v.${sql.raw(c)})`
+      : sql`(d.${sql.raw(c)} IS NULL AND v.${sql.raw(c)} IS NOT NULL)`
+  )
+
+  let changed = 0
+  for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
+    const chunk = rows.slice(i, i + UPSERT_CHUNK)
+    const res = await db.execute(sql`
+      UPDATE apy_daily d
+      SET ${sql.join(set, sql`, `)}
+      FROM (VALUES ${sql.join(chunk.map(marketPatchTuple), sql`, `)}) AS v(
+        product_id, date, ${sql.raw(PATCHABLE_MARKET_COLUMNS.join(', '))}
+      )
+      WHERE d.product_id = v.product_id
+        AND d.date = v.date
+        AND (${sql.join(changes, sql` OR `)})
+    `)
+    changed += res.rowCount ?? 0
+  }
+  return changed
+}
+
 // ─── Enrichment reads (used by products.actions) ────────────────────────────
 
 export interface LatestHourly {

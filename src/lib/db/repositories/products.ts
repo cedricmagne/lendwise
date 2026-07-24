@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm'
 
-import { clampPage, MAX_PRODUCT_IDS } from '@/lib/db/pagination'
+import { MAX_PRODUCT_IDS, clampPage } from '@/lib/db/pagination'
 import { db } from '@/lib/db/postgres'
 import {
   apyHourly,
@@ -391,7 +391,10 @@ export async function coalesceAvailabilityFlicker(
         .where(
           and(
             eq(productAvailabilityPeriods.productId, plan.productId),
-            eq(productAvailabilityPeriods.activatedAt, plan.survivor.activatedAt)
+            eq(
+              productAvailabilityPeriods.activatedAt,
+              plan.survivor.activatedAt
+            )
           )
         )
     }

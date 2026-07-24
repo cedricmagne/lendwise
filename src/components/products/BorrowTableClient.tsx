@@ -327,7 +327,10 @@ const createColumns = (
     cell: ({ row }) => (
       <div className="flex items-center">
         <PieChartMini
-          percentage={Math.min(100, Math.max(0, getUtilizationPct(row.original)))}
+          percentage={Math.min(
+            100,
+            Math.max(0, getUtilizationPct(row.original))
+          )}
         />
         <span className="inline-flex w-3.5 shrink-0 items-center">
           {isOverutilized(row.original) && (
@@ -419,14 +422,15 @@ export function BorrowTableClient() {
   const rowSelectionRef = useRef(rowSelection)
   rowSelectionRef.current = rowSelection
 
-  const { data, isPending, isFetching, dataUpdatedAt, refetch } =
-    useQuery<BorrowProduct[]>({
-      queryKey: ['borrowProducts'],
-      queryFn: loadBorrowProducts,
-      staleTime: 10 * 60_000,
-      refetchOnWindowFocus: false,
-      gcTime: 5 * 60 * 1000,
-    })
+  const { data, isPending, isFetching, dataUpdatedAt, refetch } = useQuery<
+    BorrowProduct[]
+  >({
+    queryKey: ['borrowProducts'],
+    queryFn: loadBorrowProducts,
+    staleTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+    gcTime: 5 * 60 * 1000,
+  })
 
   useEffect(() => {
     if (!data || data.length === 0) return
@@ -875,7 +879,7 @@ export function BorrowTableClient() {
                       </div>
                     </div>
                     {/* Scrollable rows */}
-                    <div className="max-h-[30rem] space-y-2 overflow-y-auto px-7 py-4">
+                    <div className="max-h-120 space-y-2 overflow-y-auto px-7 py-4">
                       {selectedData.map((pool) => {
                         const apyCols = [
                           { key: '1d', value: pool.apy },

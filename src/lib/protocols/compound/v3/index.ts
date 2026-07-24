@@ -1,6 +1,7 @@
 import { defineYieldAdapter } from '@/lib/protocols/core/define'
 import type { AppAdapter } from '@/lib/protocols/core/types'
 
+import { getCompoundApyHistory } from './apy-history'
 import { fetchCompoundV3ApySpot } from './apy-spot'
 import { getBorrowProducts } from './borrow-products'
 import { COMPOUND_V3_CHAINS } from './config'
@@ -21,8 +22,10 @@ export const adapter = defineYieldAdapter({
   chains: COMPOUND_V3_CHAINS,
   getProducts: fetchCompoundV3Products,
   getApySpot: fetchCompoundV3ApySpot,
-  // no getApyHistory: subgraph history serves the one-time sync route only;
-  // heal deliberately uses nearest-neighbor donors for Compound (spec §3).
+  // The subgraphs' hourly/daily accountings had always been fetchable; leaving
+  // them out of the contract is what forced the heal job to fill every Compound
+  // hole with a copied neighbour hour. Declared 2026-07-24.
+  getApyHistory: getCompoundApyHistory,
 })
 
 export const appAdapter: AppAdapter = {

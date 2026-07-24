@@ -67,16 +67,83 @@ export interface YieldAdapter {
 
   getProducts(opts?: FetchOpts): Promise<(SupplyProduct | BorrowProduct)[]>
   getApySpot(opts?: FetchOpts): Promise<SpotPayload[]>
-  /** OPTIONAL — omit it and the heal job falls back to donor hours. */
-  getApyHistory?(params: HistoryParams): Promise<HistoryDataPoint[]>
+  /** OPTIONAL — omit it and the repair job falls back to donor hours. */
+  getApyHistory?(
+    params: HistoryParams
+  ): Promise<HistoryDataPoint[] | HistoryResult>
 }
 ```
 
 - `getProducts` — full catalogue of listed markets (hourly sync into the `products` table).
 - `getApySpot` — one rate snapshot per product (10-minute collector into `apy_hourly`).
-- `getApyHistory` — backfill source for gap healing. Optional: Compound omits it (its
-  subgraph history only serves the one-time `/api/cron/sync-history` route, via plain module
-  exports `fetchCompoundDailyHistory`/`fetchCompoundHourlyHistory`).
+- `getApyHistory` — backfill source for gap healing and for `scripts/backfill-history.ts`.
+  Optional, but **omitting it is expensive**: without it the heal job has no refetch
+  path and fills every hole for that protocol by copying a neighbouring hour instead.
+  Compound went 1,160 healed rows without a single real observation that way, purely
+  because its subgraphs' hourly/daily accountings were never declared on the adapter
+  (fixed 2026-07-24). Omit only when the protocol genuinely publishes no history.
+
+### The history contract — one method, one merged dataset
+
+A `HistoryDataPoint` carries the rates AND as much `market` state (TVL, borrows,
+utilization, asset price) as the protocol can source **for that day**. Rules:
+
+- **NULL means unknown, never 0.** A zero is a claim — "this market holds nothing" —
+  and backfilled rows are add-only, so a false zero never self-corrects. It renders as a
+  flat $0 TVL line for the whole period.
+- **If rates and market state come from different upstreams, the ADAPTER merges them**
+  by (productId, day) before returning. Callers never see two datasets and never learn
+  which protocol needs how many fetches. Aave is the case in point: its unified API has
+  rates only, its per-pool subgraphs have state only, and `getAaveApyHistory` joins them.
+  Compound's single subgraph entity carries both and needs no merge.
+- **`params.productIds` means "these products, not your catalogue".** When it is
+  present the adapter MUST drop its ingestion floors from the enumeration,
+  intersect the result with the requested set, and fan out over that intersection
+  only. A productId is timeless; a listing predicate is not — it describes what
+  we collect TODAY, so applying it to a question about a past hour makes a
+  market that has since been delisted, or that dipped under a floor,
+  permanently unrepairable. One Morpho market oscillating between $10,766 and
+  $10,990 of borrow was exactly that: under the floor the collector skipped it,
+  and the refetch could not see it either, so its holes were filled by copying
+  neighbouring hours. Absent = "everything you list", which is what the backfill
+  wants.
+
+  Honouring it is also what keeps a targeted repair under the upstream's rate
+  limit: Aave was fetching ~1000 reserves to repair 216, and the API cut off the
+  tail of the batch. **Ignoring the field leaves an adapter conforming but slow**
+  — and slow here means silently incomplete.
+
+- **`params.targets` is the same request with each product's catalogue row**,
+  and supersedes `productIds` when present. Use it to reach what enumeration
+  cannot: a product the protocol has stopped LISTING is absent from every
+  `where` clause, floors or no floors — but its by-id endpoint still answers
+  (Morpho's `marketById` returned 49 hourly points for a delisted market on
+  2026-07-24). The identifier is in `target.meta`, because **your adapter put
+  it there** at `getProducts` time (`underlyingToken` for Aave, `cToken` for
+  Compound, `id` for Morpho). Reading back your own vocabulary is symmetric;
+  the pipeline forwards the row untouched and never learns your shape.
+
+  Derive the requested set with `requestedProducts(params)` rather than
+  reading either field directly — it takes whichever form the caller used, so
+  the two can never disagree.
+
+- **Report what you could not answer.** Return `HistoryResult { points, failures }`
+  rather than a bare array when you can attribute a miss to a product. A bare
+  array stays valid (`toHistoryResult` normalizes both), but without failures a
+  rate-limit storm is indistinguishable from a protocol with no history — which
+  is how a heal run announced `success: true, errors: []` while neighbour copies
+  filled everything in.
+- **`params.includeMarket === false` is the cheap path**, for callers that only want
+  rates (the hourly heal job, `/api/cron/sync-history`, `--skip-market`). An adapter with
+  one combined source can ignore the flag. Never a correctness switch: an adapter with no
+  market source emits NULLs either way.
+- **USD conversion from another provider's price is NOT an adapter's job.** That lookup
+  reads our own `apy_daily`, so it lives in `src/lib/backfill/enrich-usd.ts`, applied by
+  the pipeline after the fetch.
+
+`scripts/backfill-history.ts` consumes this and nothing else — it imports no
+`@/lib/protocols/<name>/…` module. A new protocol becomes backfillable the moment its
+adapter is registered, with zero edits to the script.
 
 `AppAdapter` (also in `core/types.ts`) powers the app UI — wallet positions, market-rate
 charts, and the live `/supply` / `/borrow` product lists. It is optional per protocol: a
@@ -186,6 +253,8 @@ min/median/max, supply TVL — paste it in your PR.
 - [ ] `pnpm typecheck && pnpm lint && pnpm test && pnpm build` green
 - [ ] Harness summary table pasted in the PR description
 - [ ] New protocol: `PROTOCOLS_META` + `YIELD_ADAPTERS` entries added together
+- [ ] `getApyHistory` honours `productIds` (fans out over the requested products
+      only, floors dropped) — or the PR says why the upstream cannot filter
 
 ## Disabling a protocol
 

@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+import { adapterIdsForProvider } from '@/config/protocols-meta'
 import { YIELD_ADAPTERS } from '@/config/protocols-server'
-// Compound has no history in the YieldAdapter contract (see compound/v3/index.ts) —
-// its one-time daily backfill is served by this direct import, a documented exception.
-import { fetchCompoundDailyHistory } from '@/lib/protocols/compound/v3/apy-history'
+import { toHistoryResult } from '@/lib/protocols/core/history-result'
 
 /**
  * One-time historical APY sync endpoint.
  * Protected by CRON_SECRET. Call with:
  *   curl -H "Authorization: Bearer <CRON_SECRET>" http://localhost:3000/api/cron/sync-history?protocol=aave
  *
- * Supported protocols: aave, morpho, compound
+ * `protocol` is a provider name — every adapter version under it that declares
+ * getApyHistory is fetched. Compound used to be a hardcoded case here, calling
+ * fetchCompoundDailyHistory directly because its adapter did not declare the
+ * method; now that it does, all three providers go through the same path.
  */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -18,9 +20,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const protocol = request.nextUrl.searchParams.get('protocol')
-
+  const protocol = request.nextUrl.searchParams.get('protocol') ?? ''
   const startTime = Date.now()
+
+  const adapterIds = adapterIdsForProvider(protocol)
+  if (adapterIds.length === 0) {
+    return NextResponse.json(
+      { error: `Unknown or missing protocol: ${protocol || '(none)'}` },
+      { status: 400 }
+    )
+  }
 
   try {
     let total = 0
@@ -28,38 +37,27 @@ export async function GET(request: NextRequest) {
 
     // Reproduces today's defaults: Aave LAST_YEAR window, Morpho DAY interval,
     // both anchored to a one-year lookback ending now.
+    //
+    // includeMarket: false — this route only COUNTS the points it fetched; the
+    // per-reserve market-state fan-out (~1k subgraph requests for Aave) buys it
+    // nothing and would blow the request budget. Market state is backfilled by
+    // scripts/backfill-history.ts, which persists what it fetches.
     const now = Math.floor(Date.now() / 1000)
     const yearRange = {
       startTimestamp: now - 365 * 86400,
       endTimestamp: now,
       interval: 'DAY' as const,
+      includeMarket: false,
     }
 
-    switch (protocol) {
-      case 'aave': {
-        const adapter = await YIELD_ADAPTERS['aave_v3']()
-        const points = await adapter.getApyHistory!(yearRange)
-        total = points.length
-        break
+    for (const adapterId of adapterIds) {
+      const adapter = await YIELD_ADAPTERS[adapterId]()
+      if (!adapter.getApyHistory) {
+        errors.push(`${adapterId}: no getApyHistory`)
+        continue
       }
-      case 'morpho': {
-        const adapter = await YIELD_ADAPTERS['morpho_v1']()
-        const points = await adapter.getApyHistory!(yearRange)
-        total = points.length
-        break
-      }
-      case 'compound': {
-        const points = await fetchCompoundDailyHistory()
-        total = points.length
-        break
-      }
-      default:
-        return NextResponse.json(
-          {
-            error: `Unknown or missing protocol: ${protocol}. Supported: aave, morpho, compound`,
-          },
-          { status: 400 }
-        )
+      const { points } = toHistoryResult(await adapter.getApyHistory(yearRange))
+      total += points.length
     }
 
     return NextResponse.json({

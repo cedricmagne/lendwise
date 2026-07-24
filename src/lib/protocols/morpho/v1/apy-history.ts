@@ -1,12 +1,16 @@
 import { isFiniteApyBlock } from '@/lib/apy-validation'
 import type { BorrowMarketState, SupplyMarketState } from '@/lib/db/types'
+import { requestedProducts } from '@/lib/protocols/core/history-result'
 import {
   createGraphQLClient,
   processBatches,
 } from '@/lib/protocols/core/toolkit'
 import type {
   HistoryDataPoint,
+  HistoryFailure,
   HistoryParams,
+  HistoryResult,
+  HistoryTarget,
 } from '@/lib/protocols/core/types'
 import {
   MORPHO_V1_API_URL,
@@ -119,6 +123,52 @@ function unknownBorrowMarket(): BorrowMarketState {
 }
 
 /**
+ * Requested products the listing did not return, rebuilt from their catalogue
+ * row so they can be fetched by their own identifier.
+ *
+ * This is what reaches a market Morpho has DELISTED. Dropping the ingestion
+ * floors is not enough there — `listed: true` excludes it from every
+ * enumeration — but `marketById` / `vaultByAddress` still answer. The key
+ * (`meta.id`, falling back to `meta.address`) is what this adapter wrote at
+ * getProducts time, so reading it back is symmetric, not a leak.
+ *
+ * A target whose row carries no usable key is left out; it will surface as a
+ * failure with the rest.
+ */
+function unlistedTargets(
+  wanted: Set<string> | null,
+  targetsById: Map<string, HistoryTarget>,
+  alreadyCovered: Set<string>,
+  kind: 'supply' | 'borrow'
+): { address: string; chainId: number; network: string; symbol: string }[] {
+  if (!wanted || targetsById.size === 0) return []
+
+  const extra: {
+    address: string
+    chainId: number
+    network: string
+    symbol: string
+  }[] = []
+
+  for (const productId of wanted) {
+    if (alreadyCovered.has(productId)) continue
+    const target = targetsById.get(productId)
+    if (!target || target.kind !== kind) continue
+
+    const key = target.meta.id ?? target.meta.address
+    if (typeof key !== 'string' || key.length === 0) continue
+
+    extra.push({
+      address: key,
+      chainId: target.chainId,
+      network: String(target.chainId),
+      symbol: 'delisted',
+    })
+  }
+  return extra
+}
+
+/**
  * Build a map of timestamp → value from a FloatDataPoint timeseries.
  * x is a Unix timestamp in seconds.
  */
@@ -142,11 +192,13 @@ function toMap(series: FloatDataPoint[]): Map<number, number> {
  */
 export async function fetchMorphoHistory(opts?: {
   chainIds?: number[]
+  productIds?: string[]
+  targets?: HistoryTarget[]
   startTimestamp?: number
   endTimestamp?: number
   interval?: string
   onProgress?: (msg: string) => void
-}): Promise<HistoryDataPoint[]> {
+}): Promise<HistoryResult> {
   const log = opts?.onProgress ?? console.log
   const client = createGraphQLClient(MORPHO_V1_API_URL, undefined, 60_000)
 
@@ -154,6 +206,16 @@ export async function fetchMorphoHistory(opts?: {
   if (opts?.chainIds?.length) {
     chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
   }
+
+  // A caller that names its products gets a targeted run: the listing drops its
+  // ingestion floors (so a market that has since fallen under them is still
+  // reachable) and the fan-out covers the intersection only. See ListingOpts.
+  const requested = requestedProducts(opts ?? {})
+  const wanted = requested?.ids ?? null
+  const targetsById = requested?.byId ?? new Map()
+  const listingOpts = { unfloored: wanted !== null }
+  const answered = new Set<string>()
+  const failures: HistoryFailure[] = []
 
   const timeseriesOptions: Record<string, unknown> = {}
   if (opts?.startTimestamp)
@@ -180,7 +242,7 @@ export async function fetchMorphoHistory(opts?: {
       .query<VaultsListQuery>(VAULTS_APY, {
         first: 100,
         skip,
-        where: morphoVaultWhere(chainIds),
+        where: morphoVaultWhere(chainIds, listingOpts),
       })
       .toPromise()
 
@@ -208,12 +270,36 @@ export async function fetchMorphoHistory(opts?: {
     }
   }
 
+  const targetVaults = wanted
+    ? vaultAddresses.filter((v) =>
+        wanted.has(buildProductId(v.chainId, v.address, 'supply'))
+      )
+    : vaultAddresses
+
+  // Vaults the catalogue still knows but Morpho has stopped LISTING: the
+  // enumeration above cannot see them, yet `vaultByAddress` answers for them.
+  // The address comes from the products row this adapter itself wrote.
+  for (const v of unlistedTargets(
+    wanted,
+    targetsById,
+    new Set(
+      targetVaults.map((v) => buildProductId(v.chainId, v.address, 'supply'))
+    ),
+    'supply'
+  )) {
+    targetVaults.push(v)
+  }
+
+  for (const v of targetVaults) {
+    answered.add(buildProductId(v.chainId, v.address, 'supply'))
+  }
+
   log(
-    `[history:morpho] Found ${vaultAddresses.length} vaults (fetching in parallel batches)`
+    `[history:morpho] Found ${vaultAddresses.length} vaults, fetching ${targetVaults.length} (parallel batches)`
   )
 
   // Fetch history for each vault (batched)
-  const vaultPoints = await processBatches(vaultAddresses, async (vault) => {
+  const vaultPoints = await processBatches(targetVaults, async (vault) => {
     try {
       const { data, error } = await client
         .query<VaultHistoryQuery>(VAULT_SUPPLY_HISTORY, {
@@ -272,12 +358,16 @@ export async function fetchMorphoHistory(opts?: {
           kind: 'supply',
           apy,
           market: {
-            supplyAssets: 0,
+            // The vault history API gives the USD total and nothing else: no
+            // token amount, no price, no liquidity timeseries. All three are
+            // therefore null ("unknown"), never a 0 — a 0 is a claim, and
+            // backfilled rows are add-only, so a false one never self-corrects.
+            // (supplyAssets and assetPriceUsd used to be 0 here while the
+            // comment below only spared utilizationRate.)
+            supplyAssets: null,
             supplyAssetsUsd: totalAssetsUsd,
-            // No liquidity timeseries in the vault history API, so utilization
-            // can't be derived here — null ("unknown"), never a false 0.
             utilizationRate: null,
-            assetPriceUsd: 0,
+            assetPriceUsd: null,
           } as SupplyMarketState,
         })
       }
@@ -314,7 +404,7 @@ export async function fetchMorphoHistory(opts?: {
       .query<MarketsListQuery>(MARKETS_APY, {
         first: 100,
         skip,
-        where: morphoMarketWhere(chainIds),
+        where: morphoMarketWhere(chainIds, listingOpts),
       })
       .toPromise()
 
@@ -345,11 +435,40 @@ export async function fetchMorphoHistory(opts?: {
     }
   }
 
+  const targetMarkets = wanted
+    ? marketKeys.filter((m) =>
+        wanted.has(buildProductId(m.chainId, m.marketId, 'borrow'))
+      )
+    : marketKeys
+
+  // Same rescue as the vault side: a DELISTED market is invisible to the
+  // enumeration but `marketById` still returns its history.
+  for (const m of unlistedTargets(
+    wanted,
+    targetsById,
+    new Set(
+      targetMarkets.map((m) => buildProductId(m.chainId, m.marketId, 'borrow'))
+    ),
+    'borrow'
+  )) {
+    targetMarkets.push({
+      id: m.address,
+      marketId: m.address,
+      chainId: m.chainId,
+      network: m.network,
+      loanSymbol: m.symbol,
+    })
+  }
+
+  for (const m of targetMarkets) {
+    answered.add(buildProductId(m.chainId, m.marketId, 'borrow'))
+  }
+
   log(
-    `[history:morpho] Found ${marketKeys.length} borrow markets (fetching in parallel batches)`
+    `[history:morpho] Found ${marketKeys.length} borrow markets, fetching ${targetMarkets.length} (parallel batches)`
   )
 
-  const marketPoints = await processBatches(marketKeys, async (market) => {
+  const marketPoints = await processBatches(targetMarkets, async (market) => {
     try {
       const { data, error } = await client
         .query<MarketBorrowHistoryQuery>(MARKET_BORROW_HISTORY, {
@@ -421,10 +540,26 @@ export async function fetchMorphoHistory(opts?: {
     for (const pt of pts) allPoints.push(pt)
   }
 
+  // A requested product the catalogue never offered is a reportable miss, not a
+  // silent absence: the caller can tell "the protocol has no history for this"
+  // from "we quietly fetched something else".
+  if (wanted) {
+    const returned = new Set(allPoints.map((p) => p.productId))
+    for (const productId of wanted) {
+      if (returned.has(productId)) continue
+      failures.push({
+        productId,
+        reason: answered.has(productId)
+          ? 'listed but returned no history points'
+          : 'not in the Morpho catalogue',
+      })
+    }
+  }
+
   log(
-    `[history:morpho] Total: ${allPoints.length} data points (${allPoints.filter((p) => p.kind === 'supply').length} supply, ${allPoints.filter((p) => p.kind === 'borrow').length} borrow)`
+    `[history:morpho] Total: ${allPoints.length} data points (${allPoints.filter((p) => p.kind === 'supply').length} supply, ${allPoints.filter((p) => p.kind === 'borrow').length} borrow)${failures.length > 0 ? `, ${failures.length} unanswered` : ''}`
   )
-  return allPoints
+  return { points: allPoints, failures }
 }
 
 // ─── Contract mapping ─────────────────────────────────────────────────────────
@@ -438,12 +573,14 @@ export async function fetchMorphoHistory(opts?: {
  */
 export async function getMorphoApyHistory(
   params: HistoryParams
-): Promise<HistoryDataPoint[]> {
+): Promise<HistoryResult> {
   return fetchMorphoHistory({
     startTimestamp: params.startTimestamp,
     endTimestamp: params.endTimestamp,
     interval: params.interval,
     chainIds: params.chainIds,
+    productIds: params.productIds,
+    targets: params.targets,
     onProgress: params.onProgress,
   })
 }

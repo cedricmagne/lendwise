@@ -77,12 +77,10 @@ export interface RegisteredChain {
   caip2: string
 }
 
-export const CHAIN_REGISTRY: readonly RegisteredChain[] = REGISTRY.map(
-  (c) => ({
-    ...c,
-    caip2: 'caip2' in c ? c.caip2 : `eip155:${c.chainId}`,
-  })
-)
+export const CHAIN_REGISTRY: readonly RegisteredChain[] = REGISTRY.map((c) => ({
+  ...c,
+  caip2: 'caip2' in c ? c.caip2 : `eip155:${c.chainId}`,
+}))
 
 export const CHAIN_BY_SLUG = Object.fromEntries(
   CHAIN_REGISTRY.map((c) => [c.slug, c])

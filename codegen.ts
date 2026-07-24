@@ -50,25 +50,6 @@ const config: CodegenConfig = {
         fragmentMasking: false,
       },
     },
-    // 'src/lib/protocols/aave/subgraph/ethereum/generated/': {
-    //   schema:
-    //     'https://gateway.thegraph.com/api/9b0da1f7098ab2fd2e701f84324c48cc/subgraphs/id/Cd2gEDVeqnjBn1hSeqFMitw8Q1iiyV9FYUZkLNRcL87g',
-    //   documents: 'src/lib/protocols/aave/subgraph/ethereum/queries.ts',
-    //   preset: 'client',
-    //   presetConfig: {
-    //     fragmentMasking: false,
-    //   },
-    // },
-    // 'src/lib/protocols/aave/subgraph/arbitrum/generated/': {
-    //   schema:
-    //     'https://gateway.thegraph.com/api/9b0da1f7098ab2fd2e701f84324c48cc/subgraphs/id/DLuE98kEb5pQNXAcKFQGQgfSQ57Xdou4jnVbAEqMfy3B',
-    //   documents: 'src/lib/protocols/aave/subgraph/arbitrum/queries.ts',
-    //   preset: 'client',
-    //   presetConfig: {
-    //     fragmentMasking: false,
-    //   },
-    // },
-
     // COMPOUND V3 - Onchain (Subgraph)
     // Schema URL is imported from src/lib/protocols/compound/v3/config.ts
     'src/lib/protocols/compound/v3/generated/': {
@@ -104,15 +85,6 @@ const config: CodegenConfig = {
         },
       },
     },
-    // 'src/lib/protocols/morpho/subgraph/ethereum/generated/': {
-    //   schema:
-    //     'https://gateway.thegraph.com/api/9b0da1f7098ab2fd2e701f84324c48cc/subgraphs/id/EgcP7xm9H7dw7q219oLyxVUHuXySt3FCqrAa4HqVgRvu',
-    //   documents: 'src/lib/protocols/morpho/subgraph/ethereum/queries.ts',
-    //   preset: 'client',
-    //   presetConfig: {
-    //     fragmentMasking: false,
-    //   },
-    // },
   },
 }
 

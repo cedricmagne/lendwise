@@ -236,7 +236,10 @@ const createColumns = (
     cell: ({ row }) => (
       <div className="flex items-center">
         <PieChartMini
-          percentage={Math.min(100, Math.max(0, getUtilizationPct(row.original)))}
+          percentage={Math.min(
+            100,
+            Math.max(0, getUtilizationPct(row.original))
+          )}
         />
         <span className="inline-flex w-3.5 shrink-0 items-center">
           {isOverutilized(row.original) && (
@@ -342,14 +345,15 @@ export function SupplyTableClient() {
   const rowSelectionRef = useRef(rowSelection)
   rowSelectionRef.current = rowSelection
 
-  const { data, isPending, isFetching, dataUpdatedAt, refetch } =
-    useQuery<SupplyProduct[]>({
-      queryKey: ['supplyProducts'],
-      queryFn: loadSupplyProducts,
-      staleTime: 10 * 60_000,
-      refetchOnWindowFocus: false,
-      gcTime: 5 * 60 * 1000,
-    })
+  const { data, isPending, isFetching, dataUpdatedAt, refetch } = useQuery<
+    SupplyProduct[]
+  >({
+    queryKey: ['supplyProducts'],
+    queryFn: loadSupplyProducts,
+    staleTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+    gcTime: 5 * 60 * 1000,
+  })
 
   useEffect(() => {
     if (!data || data.length === 0) return

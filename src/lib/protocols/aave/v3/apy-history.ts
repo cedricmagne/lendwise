@@ -1,16 +1,25 @@
 import type { BorrowMarketState, SupplyMarketState } from '@/lib/db/types'
 import {
+  type AaveMarketDayState,
+  fetchAaveMarketHistory,
+  marketDayKey,
+} from '@/lib/protocols/aave/v3/market-history'
+import {
   APY_HISTORY,
   MARKETS_WITH_TOKENS,
 } from '@/lib/protocols/aave/v3/queries'
 import { buildProductNetworkSlug } from '@/lib/protocols/aave/v3/utils'
+import { requestedProducts } from '@/lib/protocols/core/history-result'
 import {
   createGraphQLClient,
   processBatches,
 } from '@/lib/protocols/core/toolkit'
 import type {
   HistoryDataPoint,
+  HistoryFailure,
   HistoryParams,
+  HistoryResult,
+  HistoryTarget,
 } from '@/lib/protocols/core/types'
 
 import { AAVE_V3_API_URL, AAVE_V3_CHAINS } from './config'
@@ -82,10 +91,12 @@ function unknownBorrowMarket(): BorrowMarketState {
  */
 export async function fetchAaveHistory(opts?: {
   chainIds?: number[]
+  productIds?: string[]
+  targets?: HistoryTarget[]
   /** AAVE API window — e.g. 'LAST_DAY' (hourly points) or 'LAST_YEAR' (daily). Default: 'LAST_YEAR'. */
   window?: string
   onProgress?: (msg: string) => void
-}): Promise<HistoryDataPoint[]> {
+}): Promise<HistoryResult> {
   const log = opts?.onProgress ?? console.log
   const client = createGraphQLClient(AAVE_V3_API_URL)
 
@@ -130,12 +141,25 @@ export async function fetchAaveHistory(opts?: {
     }
   }
 
+  // A caller that names its products pays for those reserves only. One reserve
+  // answers BOTH sides in a single query, so it is fetched when EITHER side is
+  // wanted — and only once.
+  const wanted = requestedProducts(opts ?? {})?.ids ?? null
+  const sidesOf = (r: (typeof reserves)[number]) => {
+    const network = buildProductNetworkSlug(r.marketChainName)
+    const base = `aave:v3:${network}:reserve:${r.tokenAddress.toLowerCase()}`
+    return [`${base}:supply`, `${base}:borrow`]
+  }
+  const targets = wanted
+    ? reserves.filter((r) => sidesOf(r).some((id) => wanted.has(id)))
+    : reserves
+
   log(
-    `[history:aave] Found ${reserves.length} reserves across ${marketsData.markets.length} markets (fetching in parallel batches)`
+    `[history:aave] Found ${reserves.length} reserves across ${marketsData.markets.length} markets, fetching ${targets.length} (parallel batches)`
   )
 
   // Step 2: Fetch history for each reserve (batched)
-  const reservePoints = await processBatches(reserves, async (reserve) => {
+  const reservePoints = await processBatches(targets, async (reserve) => {
     try {
       const historyRequest = {
         chainId: reserve.chainId,
@@ -158,16 +182,20 @@ export async function fetchAaveHistory(opts?: {
         return null
       }
 
-      // Build date → { supplyApy, borrowApy } map
+      // Build date → { supplyApy, borrowApy } map. A side is `null` when the
+      // API simply has no entry for that date on that side — the two history
+      // queries can disagree on which dates they cover, and a missing date is
+      // not a real 0% rate. Emitting a fabricated 0% point here would be the
+      // same zero-vs-null lie as the market-state bug above, just on the rate.
       const dateMap = new Map<
         string,
-        { supplyApy: number; borrowApy: number }
+        { supplyApy: number | null; borrowApy: number | null }
       >()
 
       for (const entry of data?.supplyAPYHistory ?? []) {
         const existing = dateMap.get(entry.date) ?? {
-          supplyApy: 0,
-          borrowApy: 0,
+          supplyApy: null,
+          borrowApy: null,
         }
         existing.supplyApy = entry.avgRate.value
         dateMap.set(entry.date, existing)
@@ -175,8 +203,8 @@ export async function fetchAaveHistory(opts?: {
 
       for (const entry of data?.borrowAPYHistory ?? []) {
         const existing = dateMap.get(entry.date) ?? {
-          supplyApy: 0,
-          borrowApy: 0,
+          supplyApy: null,
+          borrowApy: null,
         }
         existing.borrowApy = entry.avgRate.value
         dateMap.set(entry.date, existing)
@@ -190,35 +218,40 @@ export async function fetchAaveHistory(opts?: {
       for (const [date, rates] of dateMap) {
         const timestamp = new Date(date)
 
-        // Supply point
-        points.push({
-          timestamp,
-          productId: supplyProductId,
-          kind: 'supply',
-          apy: {
-            base: rates.supplyApy,
-            rewards: 0,
-            fees: 0,
-            net: rates.supplyApy,
-            rewardItems: [],
-          },
-          market: unknownSupplyMarket(),
-        })
+        // Supply point — only when the API actually reported a supply rate
+        // for this date; otherwise this date is a gap for the supply side.
+        if (rates.supplyApy !== null) {
+          points.push({
+            timestamp,
+            productId: supplyProductId,
+            kind: 'supply',
+            apy: {
+              base: rates.supplyApy,
+              rewards: 0,
+              fees: 0,
+              net: rates.supplyApy,
+              rewardItems: [],
+            },
+            market: unknownSupplyMarket(),
+          })
+        }
 
-        // Borrow point
-        points.push({
-          timestamp,
-          productId: borrowProductId,
-          kind: 'borrow',
-          apy: {
-            base: rates.borrowApy,
-            rewards: 0,
-            fees: 0,
-            net: rates.borrowApy,
-            rewardItems: [],
-          },
-          market: unknownBorrowMarket(),
-        })
+        // Borrow point — only when the API actually reported a borrow rate.
+        if (rates.borrowApy !== null) {
+          points.push({
+            timestamp,
+            productId: borrowProductId,
+            kind: 'borrow',
+            apy: {
+              base: rates.borrowApy,
+              rewards: 0,
+              fees: 0,
+              net: rates.borrowApy,
+              rewardItems: [],
+            },
+            market: unknownBorrowMarket(),
+          })
+        }
       }
 
       log(
@@ -233,13 +266,41 @@ export async function fetchAaveHistory(opts?: {
     }
   })
 
-  const allPoints: HistoryDataPoint[] = []
+  const collected: HistoryDataPoint[] = []
   for (const pts of reservePoints) {
-    for (const pt of pts) allPoints.push(pt)
+    for (const pt of pts) collected.push(pt)
   }
 
-  log(`[history:aave] Total: ${allPoints.length} data points`)
-  return allPoints
+  // One reserve answers both sides, so fetching it for its supply side also
+  // yields a borrow point nobody asked for. Drop it: a targeted caller writes
+  // what it receives, and an unrequested row is one it never reconciled.
+  const allPoints = wanted
+    ? collected.filter((p) => wanted.has(p.productId))
+    : collected
+
+  // A requested product that no market carries is a reportable miss. Note the
+  // asymmetry with "fetched but empty": a reserve can legitimately have no
+  // borrow-side history, so only products whose RESERVE was never found are
+  // failures here — the caller learns the difference from the reason string.
+  const failures: HistoryFailure[] = []
+  if (wanted) {
+    const reachable = new Set(targets.flatMap(sidesOf))
+    const returned = new Set(allPoints.map((p) => p.productId))
+    for (const productId of wanted) {
+      if (returned.has(productId)) continue
+      failures.push({
+        productId,
+        reason: reachable.has(productId)
+          ? 'reserve fetched but returned no history for this side'
+          : 'no Aave market carries this reserve',
+      })
+    }
+  }
+
+  log(
+    `[history:aave] Total: ${allPoints.length} data points${failures.length > 0 ? `, ${failures.length} unanswered` : ''}`
+  )
+  return { points: allPoints, failures }
 }
 
 // ─── Contract mapping ─────────────────────────────────────────────────────────
@@ -262,29 +323,99 @@ export function aaveWindowForRange(
 }
 
 /**
+ * Merge day-closing market state from the subgraphs into rate-only points.
+ *
+ * Aave is the one adapter whose history needs two upstreams: the unified API
+ * has the rates and nothing else, the per-pool subgraphs have the state and no
+ * rates. The contract says a caller must never see that split, so the join
+ * happens here, on (productId, UTC day).
+ *
+ * A point with no matching state keeps its NULLs — unknown, not zero. Borrow
+ * points additionally get the borrow-side columns; supply points never do.
+ */
+export function mergeMarketStates(
+  points: HistoryDataPoint[],
+  states: Map<string, AaveMarketDayState>
+): HistoryDataPoint[] {
+  return points.map((p) => {
+    const state = states.get(marketDayKey(p.productId, p.timestamp))
+    if (!state) return p
+
+    const price = state.priceUsd
+    const supplyState: SupplyMarketState = {
+      supplyAssets: state.supplyAssets,
+      supplyAssetsUsd: price == null ? null : state.supplyAssets * price,
+      utilizationRate: state.utilizationRate,
+      assetPriceUsd: price,
+    }
+    if (p.kind === 'supply') return { ...p, market: supplyState }
+
+    const borrowState: BorrowMarketState = {
+      ...supplyState,
+      borrowAssets: state.borrowAssets,
+      borrowAssetsUsd: price == null ? null : state.borrowAssets * price,
+      // AAVE is multi-collateral — no single collateral value or price ratio.
+      collateralAssetsUsd: null,
+      priceCollateralInLoanAsset: null,
+    }
+    return { ...p, market: borrowState }
+  })
+}
+
+/**
  * YieldAdapter.getApyHistory implementation for Aave v3.
  *
  * Maps the contract's (startTimestamp, endTimestamp) range onto an Aave API
- * window, delegates to `fetchAaveHistory`, then trims the (now-anchored) points
- * back down to the requested range.
+ * window, delegates to `fetchAaveHistory`, trims the (now-anchored) points back
+ * down to the requested range, then merges in the subgraphs' market state.
+ *
+ * The merge runs only for `interval: 'DAY'` and only when `includeMarket` is
+ * not false: subgraph states are day-closing values by construction, and the
+ * fan-out is ~1k requests — the hourly heal job must never pay for it.
+ * A total market-source failure degrades to rates-with-NULLs; it never costs
+ * the caller the rates it asked for.
  */
 export async function getAaveApyHistory(
   params: HistoryParams
-): Promise<HistoryDataPoint[]> {
+): Promise<HistoryResult> {
   const window = aaveWindowForRange(
     params.startTimestamp,
     Math.floor(Date.now() / 1000)
   )
-  const points = await fetchAaveHistory({
+  const { points, failures } = await fetchAaveHistory({
     window,
     chainIds: params.chainIds,
+    productIds: params.productIds,
+    targets: params.targets,
     onProgress: params.onProgress,
   })
   // The API windows are anchored to now — trim to the requested range.
-  return points.filter((p) => {
+  const inRange = points.filter((p) => {
     const t = p.timestamp.getTime() / 1000
     return t >= params.startTimestamp && t <= params.endTimestamp
   })
+
+  const wantsMarket =
+    params.interval === 'DAY' &&
+    params.includeMarket !== false &&
+    // Every pool with a published subgraph is on Ethereum (chainId 1).
+    (params.chainIds === undefined || params.chainIds.includes(1))
+  if (!wantsMarket) return { points: inRange, failures }
+
+  const log = params.onProgress ?? console.log
+  try {
+    const states = await fetchAaveMarketHistory({
+      from: new Date(params.startTimestamp * 1000),
+      to: new Date(params.endTimestamp * 1000),
+      onProgress: params.onProgress,
+    })
+    return { points: mergeMarketStates(inRange, states), failures }
+  } catch (err) {
+    log(
+      `[history:aave] market state unavailable, returning rates only: ${err instanceof Error ? err.message : String(err)}`
+    )
+    return { points: inRange, failures }
+  }
 }
 
 // Re-export for backwards compatibility

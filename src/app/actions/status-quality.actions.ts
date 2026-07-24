@@ -284,7 +284,10 @@ interface PoolRow {
   healed: boolean
 }
 
-export async function getStatusQualitySlot(provider: string, hourParam: string) {
+export async function getStatusQualitySlot(
+  provider: string,
+  hourParam: string
+) {
   const hour = new Date(hourParam)
   if (Number.isNaN(hour.getTime())) {
     throw new Error('invalid hour')

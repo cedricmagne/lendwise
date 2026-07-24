@@ -34,14 +34,33 @@ import { MORPHO_V1_INGESTION } from './config'
  */
 const floors = MORPHO_V1_INGESTION
 
+/**
+ * `unfloored` drops the ingestion floors from the `where`.
+ *
+ * ONLY for a caller that already knows which productIds it wants — a targeted
+ * history refetch. The floors describe what we collect TODAY; applying them to a
+ * question about a PAST hour makes a market that has since dipped under them
+ * permanently unrepairable. One market oscillating between $10,766 and $10,990
+ * of borrow produced exactly that: under the floor the collector skipped it, and
+ * the refetch could not see it either, so the hole was filled by copying a
+ * neighbouring hour instead.
+ *
+ * Never pass it on an enumeration whose result gets COLLECTED — ingestion is the
+ * one irreversible filter in the pipeline.
+ */
+export interface ListingOpts {
+  unfloored?: boolean
+}
+
 /** The markets (Morpho Blue) we list — i.e. the borrow side. */
-export function morphoMarketWhere(chainIds: number[]) {
+export function morphoMarketWhere(chainIds: number[], opts?: ListingOpts) {
   return {
     listed: true,
     chainId_in: chainIds,
-    ...(floors.minBorrowAssetsUsd != null && {
-      borrowAssetsUsd_gte: floors.minBorrowAssetsUsd,
-    }),
+    ...(!opts?.unfloored &&
+      floors.minBorrowAssetsUsd != null && {
+        borrowAssetsUsd_gte: floors.minBorrowAssetsUsd,
+      }),
   }
 }
 
@@ -51,10 +70,11 @@ export function morphoMarketWhere(chainIds: number[]) {
  * Unfloored unless the config says otherwise. A vault's TVL is legitimately near
  * zero while it is being seeded, and its APY is meaningful long before it is big.
  */
-export function morphoVaultWhere(chainIds: number[]) {
+export function morphoVaultWhere(chainIds: number[], opts?: ListingOpts) {
   return {
     listed: true,
     chainId_in: chainIds,
-    ...(floors.minTvlUsd != null && { totalAssetsUsd_gte: floors.minTvlUsd }),
+    ...(!opts?.unfloored &&
+      floors.minTvlUsd != null && { totalAssetsUsd_gte: floors.minTvlUsd }),
   }
 }

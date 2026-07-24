@@ -707,19 +707,23 @@ export function ProductDetailDrawer({
 
   const tvlKey: keyof ProductHistoryPoint =
     kind === 'supply' ? 'supplyAssetsUsd' : 'borrowAssetsUsd'
-  const tvlPoints = points.filter((p) => typeof p[tvlKey] === 'number')
-  const utilPoints = points.filter((p) => typeof p.utilization === 'number')
+  // Keep every timestamp (not just ones with a real reading) so the chart's x
+  // axis spans the same range as the Supply APY chart above it — Recharts gaps
+  // a null value instead of connecting through it (connectNulls={false}), same
+  // mechanism the "dead stretch" cut already relies on. Filtering the array
+  // itself, like before, shrank the domain down to whatever few points still
+  // had data — a 1M selection could render as a 5-day-wide chart.
   // Some products (Morpho vaults) never report utilization — the pipeline stores
   // 0 for every slot. A flat-zero line reads as a real "0% utilized" history,
   // which is wrong; hide the chart when no slot carries a reading. The stat card
   // still shows the current value, derived from deposits vs liquidity.
-  const hasUtilizationHistory = utilPoints.some((p) => (p.utilization ?? 0) > 0)
+  const hasUtilizationHistory = points.some((p) => (p.utilization ?? 0) > 0)
   // Same reasoning for TVL: a backfilled/healed point whose provider carries no
   // market state at all (e.g. Aave's history API returns rates only) used to be
   // stored as a literal 0 rather than left unknown — a flat-zero line read as a
   // real "$0 deposited" history. Fixed at the source (null, not 0), but this
   // guards existing zero-filled rows too instead of rendering a false flat line.
-  const hasTvlHistory = tvlPoints.some((p) => ((p[tvlKey] as number) ?? 0) > 0)
+  const hasTvlHistory = points.some((p) => ((p[tvlKey] as number) ?? 0) > 0)
 
   const sizeLabel = kind === 'supply' ? 'Total Deposits' : 'Total Borrowed'
   const assetLabel = kind === 'supply' ? 'Asset' : 'Loan Asset'
@@ -857,7 +861,10 @@ export function ProductDetailDrawer({
                       <span className="text-xs font-medium">
                         {r.token.symbol}
                       </span>
-                      <Badge variant="outline" className="text-[10px] capitalize">
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] capitalize"
+                      >
                         {r.source}
                       </Badge>
                     </div>
@@ -939,11 +946,13 @@ export function ProductDetailDrawer({
                     <>
                       <Separator />
                       <SectionTitle>
-                        {kind === 'supply' ? 'Total Deposits' : 'Total Borrowed'}{' '}
+                        {kind === 'supply'
+                          ? 'Total Deposits'
+                          : 'Total Borrowed'}{' '}
                         (USD)
                       </SectionTitle>
                       <HistoryChart
-                        data={tvlPoints}
+                        data={points}
                         series={[
                           {
                             key: tvlKey,
@@ -968,7 +977,7 @@ export function ProductDetailDrawer({
                         Utilization
                       </SectionTitle>
                       <HistoryChart
-                        data={utilPoints}
+                        data={points}
                         series={[
                           {
                             key: 'utilization',

@@ -1,15 +1,23 @@
 import type { BorrowMarketState, SupplyMarketState } from '@/lib/db/types'
-import type { HistoryDataPoint } from '@/lib/protocols/aave/v3/apy-history'
 import { COMPOUND_V3_CHAINS } from '@/lib/protocols/compound/v3/config'
 import {
+  MARKETS_ALL,
   MARKET_DAILY_ACCOUNTING,
   MARKET_HOURLY_ACCOUNTING,
 } from '@/lib/protocols/compound/v3/queries'
 import { buildProductId } from '@/lib/protocols/compound/v3/utils'
+import { requestedProducts } from '@/lib/protocols/core/history-result'
 import {
   createGraphQLClient,
   processBatches,
 } from '@/lib/protocols/core/toolkit'
+import type {
+  HistoryDataPoint,
+  HistoryFailure,
+  HistoryParams,
+  HistoryResult,
+  HistoryTarget,
+} from '@/lib/protocols/core/types'
 
 // ─── Response types ───────────────────────────────────────────────────────────
 
@@ -153,135 +161,98 @@ async function fetchAllSnapshots<T>(
   return all
 }
 
-// ─── Daily fetcher ────────────────────────────────────────────────────────────
+// ─── Fetchers ─────────────────────────────────────────────────────────────────
 
 /**
- * Fetch historical Compound V3 daily APY data from on-chain subgraphs.
+ * The chain's market ids whose supply or borrow product was asked for.
  *
- * Compound subgraphs store full accounting snapshots per day per market,
- * including supply/borrow APR, reward APR, TVL, and utilization.
+ * `MARKETS_ALL` is a single unpaginated query, so this is cheap next to the
+ * snapshot pagination it narrows or avoids.
  */
-export async function fetchCompoundDailyHistory(opts?: {
-  chainFilter?: string
-  startTimestamp?: number
-  endTimestamp?: number
-  onProgress?: (msg: string) => void
-}): Promise<HistoryDataPoint[]> {
-  const log = opts?.onProgress ?? console.log
-  const allPoints: HistoryDataPoint[] = []
+async function marketsMatching(
+  client: ReturnType<typeof createGraphQLClient>,
+  chainId: number,
+  chainName: string,
+  wanted: Set<string>
+): Promise<string[]> {
+  const { data, error } = await client
+    .query<{ markets: { id: string }[] }>(MARKETS_ALL, {})
+    .toPromise()
 
-  let chainIds = Object.keys(COMPOUND_V3_CHAINS).map(Number)
+  if (error || !data?.markets) return []
 
-  if (opts?.chainFilter) {
-    const found = Object.entries(COMPOUND_V3_CHAINS).find(
-      ([, c]) => c.name.toLowerCase() === opts.chainFilter!.toLowerCase()
-    )
-    if (!found) {
-      log(`[history:compound] Chain filter '${opts.chainFilter}' not found`)
-      return []
-    }
-    chainIds = [Number(found[0])]
-  }
-
-  const validChains = chainIds
-    .map((id) => ({ chainId: id, chainConfig: COMPOUND_V3_CHAINS[id] }))
-    .filter((c) => c.chainConfig?.custom?.subgraphUrl)
-
-  log(
-    `[history:compound] Fetching daily snapshots for ${validChains.length} chains (in parallel batches)`
-  )
-
-  const chainPoints = await processBatches(
-    validChains,
-    async ({ chainId, chainConfig }) => {
-      const chainClient = createGraphQLClient(
-        chainConfig.custom!.subgraphUrl!,
-        process.env.THEGRAPH_API_KEY,
-        60_000
+  const chain = { id: chainId, name: chainName }
+  return data.markets
+    .filter((m) =>
+      (['supply', 'borrow'] as const).some((kind) =>
+        wanted.has(buildProductId(m.id, chain, kind))
       )
-      const chainName = chainConfig.name.toLowerCase()
-
-      try {
-        const where: Record<string, unknown> = {}
-        if (opts?.startTimestamp)
-          where.timestamp_gte = String(opts.startTimestamp)
-        if (opts?.endTimestamp) where.timestamp_lte = String(opts.endTimestamp)
-
-        const snapshots = await fetchAllSnapshots<AccountingSnapshot>(
-          chainClient,
-          MARKET_DAILY_ACCOUNTING,
-          where,
-          'dailyMarketAccountings',
-          'timestamp'
-        )
-
-        const points: HistoryDataPoint[] = []
-        for (const snapshot of snapshots) {
-          const [supply, borrow] = snapshotToPoints(
-            snapshot,
-            chainId,
-            chainName
-          )
-          points.push(supply, borrow)
-        }
-
-        log(
-          `[history:compound] ${chainName}: ${snapshots.length} daily snapshots`
-        )
-        return points
-      } catch (err) {
-        log(
-          `[history:compound] ${chainName} daily failed: ${err instanceof Error ? err.message : String(err)}`
-        )
-        return null
-      }
-    }
-  )
-
-  for (const pts of chainPoints) {
-    for (const pt of pts) allPoints.push(pt)
-  }
-
-  log(`[history:compound] Total daily: ${allPoints.length} data points`)
-  return allPoints
+    )
+    .map((m) => m.id)
 }
 
-// ─── Hourly fetcher ───────────────────────────────────────────────────────────
-
 /**
- * Fetch historical Compound V3 hourly APY data from on-chain subgraphs.
- *
- * Same as daily but at hourly granularity. Use for shorter lookback
- * periods (≤ 180 days) to avoid exceeding subgraph pagination limits.
+ * The two accounting granularities the Compound subgraphs expose. Both entities
+ * carry the SAME fields — rates, TVL, borrows, utilization and price in one
+ * snapshot — so a single fetcher serves them; only the query and the entity key
+ * differ.
  */
-export async function fetchCompoundHourlyHistory(opts?: {
-  chainFilter?: string
+const GRANULARITY = {
+  DAY: {
+    query: MARKET_DAILY_ACCOUNTING,
+    entityKey: 'dailyMarketAccountings',
+    label: 'daily',
+  },
+  HOUR: {
+    query: MARKET_HOURLY_ACCOUNTING,
+    entityKey: 'hourlyMarketAccountings',
+    label: 'hourly',
+  },
+} as const
+
+export interface CompoundHistoryOpts {
+  /** Canonical chain ids. Omitted = every Compound chain with a subgraph. */
+  chainIds?: number[]
+  /** Products to cover. Omitted = every market the subgraphs list. */
+  productIds?: string[]
+  targets?: HistoryTarget[]
   startTimestamp?: number
   endTimestamp?: number
   onProgress?: (msg: string) => void
-}): Promise<HistoryDataPoint[]> {
+}
+
+/**
+ * Fetch historical Compound V3 accounting snapshots from the on-chain subgraphs.
+ *
+ * Unlike Aave — whose rates and market state live in two different upstreams and
+ * must be merged — one Compound snapshot already carries everything, so these
+ * points come out of the box satisfying the history contract's market-state rule.
+ *
+ * Per-chain failures are logged and skipped: one unavailable subgraph never
+ * costs the other chains their history.
+ */
+async function fetchCompoundHistory(
+  granularity: keyof typeof GRANULARITY,
+  opts?: CompoundHistoryOpts
+): Promise<HistoryResult> {
   const log = opts?.onProgress ?? console.log
-  const allPoints: HistoryDataPoint[] = []
+  const { query, entityKey, label } = GRANULARITY[granularity]
 
   let chainIds = Object.keys(COMPOUND_V3_CHAINS).map(Number)
-
-  if (opts?.chainFilter) {
-    const found = Object.entries(COMPOUND_V3_CHAINS).find(
-      ([, c]) => c.name.toLowerCase() === opts.chainFilter!.toLowerCase()
-    )
-    if (!found) {
-      log(`[history:compound] Chain filter '${opts.chainFilter}' not found`)
-      return []
-    }
-    chainIds = [Number(found[0])]
+  if (opts?.chainIds?.length) {
+    chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
   }
 
   const validChains = chainIds
     .map((id) => ({ chainId: id, chainConfig: COMPOUND_V3_CHAINS[id] }))
     .filter((c) => c.chainConfig?.custom?.subgraphUrl)
 
+  const wanted = requestedProducts(opts ?? {})?.ids ?? null
+
+  if (validChains.length === 0) return { points: [], failures: [] }
+
   log(
-    `[history:compound] Fetching hourly snapshots for ${validChains.length} chains (in parallel batches)`
+    `[history:compound] Fetching ${label} snapshots for ${validChains.length} chains (in parallel batches)`
   )
 
   const chainPoints = await processBatches(
@@ -300,11 +271,32 @@ export async function fetchCompoundHourlyHistory(opts?: {
           where.timestamp_gte = String(opts.startTimestamp)
         if (opts?.endTimestamp) where.timestamp_lte = String(opts.endTimestamp)
 
+        // Targeted run: resolve which market ids matter from ONE cheap markets
+        // query, then narrow the (paginated, heavy) snapshot fetch to them —
+        // or skip this chain outright when none of them live here. Market ids
+        // come from the subgraph and go through buildProductId; a productId is
+        // never taken apart to get them.
+        if (wanted) {
+          const targetMarkets = await marketsMatching(
+            chainClient,
+            chainId,
+            chainName,
+            wanted
+          )
+          if (targetMarkets.length === 0) {
+            log(
+              `[history:compound] ${chainName}: no requested market — skipped`
+            )
+            return []
+          }
+          where.market_in = targetMarkets
+        }
+
         const snapshots = await fetchAllSnapshots<AccountingSnapshot>(
           chainClient,
-          MARKET_HOURLY_ACCOUNTING,
+          query,
           where,
-          'hourlyMarketAccountings',
+          entityKey,
           'timestamp'
         )
 
@@ -319,22 +311,80 @@ export async function fetchCompoundHourlyHistory(opts?: {
         }
 
         log(
-          `[history:compound] ${chainName}: ${snapshots.length} hourly snapshots`
+          `[history:compound] ${chainName}: ${snapshots.length} ${label} snapshots`
         )
         return points
       } catch (err) {
         log(
-          `[history:compound] ${chainName} hourly failed: ${err instanceof Error ? err.message : String(err)}`
+          `[history:compound] ${chainName} ${label} failed: ${err instanceof Error ? err.message : String(err)}`
         )
         return null
       }
     }
   )
 
+  const collected: HistoryDataPoint[] = []
   for (const pts of chainPoints) {
-    for (const pt of pts) allPoints.push(pt)
+    for (const pt of pts) collected.push(pt)
   }
 
-  log(`[history:compound] Total hourly: ${allPoints.length} data points`)
-  return allPoints
+  // One snapshot carries both sides, so a market fetched for its supply side
+  // also yields a borrow point nobody asked for — drop it rather than write a
+  // row the caller did not request.
+  const allPoints = wanted
+    ? collected.filter((p) => wanted.has(p.productId))
+    : collected
+
+  const failures: HistoryFailure[] = []
+  if (wanted) {
+    const returned = new Set(allPoints.map((p) => p.productId))
+    for (const productId of wanted) {
+      if (returned.has(productId)) continue
+      failures.push({ productId, reason: 'no Compound market carries it' })
+    }
+  }
+
+  log(
+    `[history:compound] Total ${label}: ${allPoints.length} data points${failures.length > 0 ? `, ${failures.length} unanswered` : ''}`
+  )
+  return { points: allPoints, failures }
+}
+
+export function fetchCompoundDailyHistory(
+  opts?: CompoundHistoryOpts
+): Promise<HistoryResult> {
+  return fetchCompoundHistory('DAY', opts)
+}
+
+export function fetchCompoundHourlyHistory(
+  opts?: CompoundHistoryOpts
+): Promise<HistoryResult> {
+  return fetchCompoundHistory('HOUR', opts)
+}
+
+// ─── Contract mapping ─────────────────────────────────────────────────────────
+
+/**
+ * YieldAdapter.getApyHistory implementation for Compound V3.
+ *
+ * The subgraphs have exposed hourly and daily accountings all along; until
+ * 2026-07-24 the adapter simply did not declare them, so the heal job had no
+ * refetch path for Compound and filled EVERY Compound hole by copying a
+ * neighbouring hour instead (1,160 rows, not one of them a real observation).
+ * Wiring the contract turns those copies into fetched values.
+ *
+ * `includeMarket` is ignored: one snapshot carries rates and market state
+ * together, so there is no cheaper rates-only path to offer.
+ */
+export function getCompoundApyHistory(
+  params: HistoryParams
+): Promise<HistoryResult> {
+  return fetchCompoundHistory(params.interval, {
+    chainIds: params.chainIds,
+    productIds: params.productIds,
+    targets: params.targets,
+    startTimestamp: params.startTimestamp,
+    endTimestamp: params.endTimestamp,
+    onProgress: params.onProgress,
+  })
 }

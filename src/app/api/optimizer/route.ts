@@ -220,7 +220,7 @@ export async function POST(request: NextRequest) {
     const distinctId =
       request.headers.get('x-posthog-distinct-id') ?? 'anonymous'
     const posthog = getPostHogClient()
-    posthog.capture({
+    posthog?.capture({
       distinctId,
       event: 'optimizer_api_called',
       properties: {

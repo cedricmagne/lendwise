@@ -57,7 +57,9 @@ async function main(): Promise<void> {
   )
 
   if (!write) {
-    console.log('\nDry run — nothing written. Re-run with --write to persist.\n')
+    console.log(
+      '\nDry run — nothing written. Re-run with --write to persist.\n'
+    )
   } else {
     console.log('\n✅ Done.\n')
   }

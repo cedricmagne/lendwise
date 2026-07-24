@@ -15,6 +15,8 @@ import {
   latestReport,
   reportById,
 } from '@/lib/db/repositories/reports'
+import { groupGapsByProvider } from '@/lib/heal/gap-spans'
+import { toHistoryResult } from '@/lib/protocols/core/history-result'
 import type { HistoryDataPoint } from '@/lib/protocols/core/types'
 
 // Healing fetches protocol history then writes thousands of rows; the default
@@ -137,8 +139,11 @@ function donorMarket(
  * Gap healing endpoint for the APY pipeline.
  *
  * Strategy (priority order):
- *   1. Re-fetch — Morpho (HOUR interval) and AAVE (LAST_WEEK window) history APIs.
- *   2. Nearest-neighbor — copy the closest existing hourly row (Compound / fallback).
+ *   1. Re-fetch — every adapter exposing getApyHistory, each over ITS OWN gap
+ *      span (Morpho HOUR interval, Aave LAST_WEEK window, Compound hourly
+ *      subgraph accountings).
+ *   2. Nearest-neighbor — copy the closest existing hourly row, for whatever
+ *      phase 1 could not reach.
  *
  * Healed rows are marked healed=true with heal_source + healed_from. Missing
  * rows use INSERT … DO NOTHING (never overwrite organic data); incomplete rows
@@ -207,37 +212,37 @@ async function healHandler(req: NextRequest): Promise<NextResponse> {
     ...new Set(allEntries.map((e) => e.productId)),
   ])
 
-  // Group entries by provider + compute gap time boundaries.
-  const gapsByProvider = new Map<string, { productId: string; hour: Date }[]>()
-  let minTs = Infinity
-  let maxTs = -Infinity
-  for (const entry of allEntries) {
-    const provider = providerOf.get(entry.productId) ?? 'unknown'
-    const list = gapsByProvider.get(provider) ?? []
-    list.push({ productId: entry.productId, hour: new Date(entry.hour) })
-    gapsByProvider.set(provider, list)
-    const t = new Date(entry.hour).getTime()
-    if (t < minTs) minTs = t
-    if (t > maxTs) maxTs = t
-  }
+  // Bucket the gaps per provider, with each provider's own refetch span plus the
+  // global one the donor query needs (see lib/heal/gap-spans).
+  const { spanByProvider, globalSpan } = groupGapsByProvider(
+    allEntries,
+    providerOf
+  )
+  const minTs = globalSpan.min
+  const maxTs = globalSpan.max
 
   // Phase 1: re-fetch historical data via the adapter registry (generic).
   // Each provider resolves to its adapter ids; an adapter without getApyHistory
-  // (Compound) is skipped here and left to the donor phase below — unchanged. Aave
-  // gap ranges within the last week map to its LAST_WEEK window inside
-  // getApyHistory (via aaveWindowForRange), the same window this route used before.
+  // is skipped here and left to the donor phase below. Aave gap ranges within the
+  // last week map to its LAST_WEEK window inside getApyHistory (via
+  // aaveWindowForRange), the same window this route used before.
   const historyLookup = new Map<string, HistoryDataPoint>()
-  for (const provider of gapsByProvider.keys()) {
+  for (const [provider, span] of spanByProvider) {
     for (const adapterId of adapterIdsForProvider(provider)) {
       try {
         const adapter = await YIELD_ADAPTERS[adapterId]()
         if (!adapter.getApyHistory) continue
-        const points = await adapter.getApyHistory({
-          startTimestamp: Math.floor(minTs / 1000) - 3600,
-          endTimestamp: Math.floor(maxTs / 1000) + 3600,
-          interval: 'HOUR',
-          onProgress: (m) => console.log(`[cron:heal] ${m}`),
-        })
+        const { points, failures } = toHistoryResult(
+          await adapter.getApyHistory({
+            startTimestamp: Math.floor(span.min / 1000) - 3600,
+            endTimestamp: Math.floor(span.max / 1000) + 3600,
+            interval: 'HOUR',
+            onProgress: (m) => console.log(`[cron:heal] ${m}`),
+          })
+        )
+        for (const f of failures) {
+          errors.push(`${adapterId}-history: ${f.productId} — ${f.reason}`)
+        }
         for (const [k, v] of buildHistoryLookup(points)) historyLookup.set(k, v)
       } catch (err) {
         errors.push(

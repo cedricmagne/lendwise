@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import {
   Inter,
   JetBrains_Mono,
+  Noto_Serif_Georgian,
   Zalando_Sans_SemiExpanded,
 } from 'next/font/google'
 
@@ -10,17 +11,22 @@ import { ThemeProvider } from '@/contexts'
 
 import './globals.css'
 
-const inter = Inter({
+const fontSans = Inter({
   subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
+  variable: '--font-sans',
+  // display: 'swap',
 })
 
-const jetbrainsMono = JetBrains_Mono({
+const fontSerif = Noto_Serif_Georgian({
   subsets: ['latin'],
-  variable: '--font-jetbrains-mono',
-  weight: ['400', '500'],
-  display: 'swap',
+  variable: '--font-serif',
+})
+
+const fontMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono',
+  // weight: ['400', '500'],
+  // display: 'swap',
 })
 
 const zalando = Zalando_Sans_SemiExpanded({
@@ -45,7 +51,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} ${zalando.variable} antialiased`}
+        className={`${fontSans.variable} ${fontMono.variable} ${fontSerif.variable} ${zalando.variable} antialiased`}
       >
         <ThemeProvider
           attribute="class"
