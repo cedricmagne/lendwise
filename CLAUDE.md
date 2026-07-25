@@ -6,22 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 DeFi yield aggregator: supply/borrow markets on Aave V3 (21 chains), Morpho Blue + MetaMorpho (12 chains), and Compound V3 (5 chains) — 27 standardized chains total, 16 of them wallet-transactable. ~940 active products / ~130 assets (July 2026). Chain identity lives in the registry `src/lib/protocols/core/toolkit/chain-slugs.ts` (slug/chainId/caip2; non-EVM = negative chainId), adapter configs pick coverage from it, `src/config/chains.ts` holds the execution (RPC/wagmi) subset. Counts are derived — `STANDARDIZED_CHAIN_COUNT` (`src/config/chains-coverage.ts`), `TX_CHAIN_COUNT` (`src/config/chains.ts`), live market/asset counts from `/api/stats` — never hardcode them in copy. Production: https://lendwise.fi.
 
-**Stack:** Next.js 16 (App Router) · TypeScript strict · Tailwind 4 + Radix UI · viem/wagmi · PostgreSQL (Neon) + Drizzle ORM · graphql-yoga + URQL + GraphQL codegen · The Graph · QStash (cron) · Vitest
-
 ---
 
 ## Commands
 
+Standard scripts (`dev`, `build`, `lint`, `typecheck`, `test`, `format:check`)
+are in `package.json`. The ones with a catch:
+
 ```bash
-pnpm install
-pnpm dev              # Dev server → localhost:3000
 pnpm codegen          # Regenerate GraphQL types — REQUIRED before typecheck/test
                       # after a fresh clone (needs THEGRAPH_API_KEY)
-pnpm build            # codegen + next build
-pnpm lint             # ESLint
-pnpm typecheck        # tsc --noEmit
-pnpm test             # Vitest
-pnpm format:check     # Prettier check
 pnpm adapter:test <id>     # Live adapter harness (aave_v3 | morpho_v1 | compound_v3)
 pnpm db:generate           # Drizzle migration from schema.ts
 pnpm db:migrate            # Apply migrations (Neon)
@@ -128,27 +122,13 @@ Beware: subgraph `BigDecimal` fields come back as **strings** (`any` in codegen)
 
 ## Environment variables
 
-```env
-# PostgreSQL (Neon)
-DATABASE_URL=                       # pooled — app runtime
-DATABASE_URL_UNPOOLED=              # direct — drizzle-kit migrations
+The full list is `.env.example`.
 
-# Cron security
-QSTASH_CURRENT_SIGNING_KEY=         # QStash signature verification (every /api/yield/* job)
-QSTASH_NEXT_SIGNING_KEY=
+Behaviour you cannot infer from the names:
 
-# Rate limiting — public endpoints (/api/graphql 60/min/IP, /api/optimizer 10/min/IP)
-UPSTASH_REDIS_REST_URL=             # unset → limiter is a no-op (allows everything)
-UPSTASH_REDIS_REST_TOKEN=           # REQUIRED in prod; fails OPEN if Redis unreachable
+- `QSTASH_CURRENT_SIGNING_KEY` / `QSTASH_NEXT_SIGNING_KEY` gate every `/api/yield/*` job; unset means the pipeline returns 401 to QStash and silently stops ingesting.
 
-# External APIs
-THEGRAPH_API_KEY=                   # codegen + Compound V3 subgraph
-NEXT_PUBLIC_INFURA_API_KEY=
-OPTIMIZER_API_URL=                  # external optimizer service
-
-# Frontend
-NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID=
-NEXT_PUBLIC_API_URL=
-NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=  # analytics (optional)
-NEXT_PUBLIC_POSTHOG_HOST=
-```
+- `UPSTASH_REDIS_REST_URL` unset → the rate limiter becomes a no-op and allows everything.
+- `UPSTASH_REDIS_REST_TOKEN` is REQUIRED in prod, and the limiter fails **OPEN** if Redis is unreachable.
+- `THEGRAPH_API_KEY` is needed by codegen, not only at runtime — a fresh clone cannot typecheck without it.
+- Rate limits on public endpoints: `/api/graphql` 60/min/IP, `/api/optimizer` 10/min/IP.
