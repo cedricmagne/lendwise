@@ -1,10 +1,10 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to coding agents (Claude Code, Codex, …) when working with code in this repository. `CLAUDE.md` is a symlink to it — edit this file, never the link.
 
 ## Overview
 
-DeFi yield optimization platform: aggregates and compares supply/borrow positions on Aave V3, Morpho Blue/MetaMorpho, and Compound V3 across 8 chains — Ethereum, Optimism, Polygon, Base, Arbitrum, Avalanche, Linea, BSC (the last three are Aave-only). ~700 active products / ~120 assets in the DB (July 2026). Production: https://lendwise.fi.
+DeFi yield aggregator: supply/borrow markets on Aave V3 (21 chains), Morpho Blue + MetaMorpho (12 chains), and Compound V3 (5 chains) — 27 standardized chains total, 16 of them wallet-transactable. ~940 active products / ~130 assets (July 2026). Chain identity lives in the registry `src/lib/protocols/core/toolkit/chain-slugs.ts` (slug/chainId/caip2; non-EVM = negative chainId), adapter configs pick coverage from it, `src/config/chains.ts` holds the execution (RPC/wagmi) subset. Counts are derived — `STANDARDIZED_CHAIN_COUNT` (`src/config/chains-coverage.ts`), `TX_CHAIN_COUNT` (`src/config/chains.ts`), live market/asset counts from `/api/stats` — never hardcode them in copy. Production: https://lendwise.fi.
 
 **Stack:** Next.js 16 (App Router) · TypeScript strict · Tailwind 4 + Radix UI · viem/wagmi · PostgreSQL (Neon) + Drizzle ORM · The Graph (GraphQL) · graphql-yoga · URQL · Zustand · QStash (cron)
 
@@ -12,22 +12,20 @@ DeFi yield optimization platform: aggregates and compares supply/borrow position
 
 ## Commands
 
+Standard scripts (`dev`, `build`, `lint`, `typecheck`, `test`, `format:check`)
+are in `package.json`. The ones with a catch:
+
 ```bash
-pnpm install          # Install dependencies
-pnpm dev              # Dev server → localhost:3000
-pnpm build            # codegen + next build
-pnpm lint             # ESLint
-pnpm typecheck        # tsc --noEmit
-pnpm format:check     # Prettier check
-pnpm codegen          # Regenerate GraphQL types (from schema + protocol subgraphs)
-pnpm codegen:clean    # Wipe generated/ folders then regenerate
-pnpm db:generate      # Generate a Drizzle migration from schema.ts
-pnpm db:migrate       # Apply migrations to Postgres (Neon)
+pnpm codegen          # Regenerate GraphQL types — REQUIRED before typecheck/test
+                      # after a fresh clone (needs THEGRAPH_API_KEY)
+pnpm codegen:clean         # Wipe generated/ folders, then regenerate
+pnpm adapter:test <id>     # Live adapter harness (aave_v3 | morpho_v1 | compound_v3)
+pnpm db:generate           # Drizzle migration from schema.ts
+pnpm db:migrate            # Apply migrations (Neon)
 pnpm run products:sync     # Sync products to DB
-pnpm run test:collateral   # Manual collateral validation (Aave)
 ```
 
-No test runner is configured — code quality relies on TypeScript strict mode and ESLint.
+CI (`.github/workflows/ci.yml`) runs format + lint, then codegen + test + typecheck (needs the `THEGRAPH_API_KEY` repo secret).
 
 ---
 
@@ -36,93 +34,80 @@ No test runner is configured — code quality relies on TypeScript strict mode a
 ### Data pipeline
 
 ```
-QStash cron (every 10 min)
+QStash cron (every 10 min, signature-verified)
   → POST /api/yield/apy/spot
-  → collectApySpot() server action
-  → Protocol adapters (Aave/Morpho/Compound GraphQL + on-chain)
-  → Postgres upsert: apy_hourly (chunked multi-row, deduped per slot)
+  → adapters (Aave/Morpho/Compound) → Postgres upsert: apy_hourly
 
-QStash cron (daily 00:10 UTC)
-  → POST /api/yield/apy/daily
-  → Aggregates apy_hourly → apy_daily (single GROUP BY) + prunes rows >180d
+QStash cron (daily 00:30 UTC)
+  → POST /api/yield/apy/reconcile   { days: 7 }
+  → 1. detect   gaps + incomplete slots over the window
+    2. repair   targeted refetch by productId, nearest-neighbour as fallback
+    3. aggregate apy_hourly → apy_daily, oldest day first
+    4. prune    hourly rows >180d
+  → report in pipeline_reports (see ../../agent/docs/lendwise/apy-pipeline-reconcile.md)
 
-graphql-yoga at /api/graphql
-  ← URQL client (React components)
+QStash cron (hourly)
+  → POST /api/yield/products      (catalogue sync + availability periods)
+  → POST /api/yield/apy/eligibility (display flags, hysteresis 3/12)
+
+graphql-yoga at /api/graphql ← URQL client (React)
 ```
+
+**The order in reconcile is the point.** Repair, aggregation and pruning used to
+be three independently scheduled jobs, so a row repaired at 01:00 was never seen
+by the aggregation that had run at 00:10 — a repaired hour never reached
+`apy_daily`. One job in one sequence is what makes the repair converge.
 
 ### Protocol adapters (`src/lib/protocols/`)
 
-Each protocol has `offchain/` (protocol GraphQL API) and/or `onchain/` (The Graph subgraph) adapters. Add a new protocol by:
+**Read `src/lib/protocols/README.md` before touching adapters** — it is the authoritative guide (contract, conventions, validation, how to add a protocol).
 
-1. Adding to `Protocol` union in `src/types/supplying.ts`
-2. Creating `src/lib/protocols/{name}/index.ts` with `getAccountPositions`
-3. Registering in `SUPPORTED_PROTOCOLS` in `src/config/protocols.ts`
+Essentials:
 
-`Promise.allSettled` is used everywhere multiple sources are aggregated — one failure doesn't block others. To disable a protocol temporarily, comment its entry in `SUPPORTED_PROTOCOLS`.
-
-### Compound V3 chain overrides
-
-Compound V3 subgraphs differ by chain (Messari vs Spencer schema). Override pattern: `src/lib/protocols/compound/v3/onchain/{chainName}/` with `queries.ts`, `transformers.ts`, `index.ts` calling `registerChain(...)`. Runtime uses the chain-specific version if present, else default.
+- One adapter per protocol+version at `src/lib/protocols/{name}/{version}/`, built with `defineYieldAdapter()` — implements `getProducts` + `getApySpot` (+ optional `getApyHistory`).
+- Two registries wire adapters in: `src/config/protocols-meta.ts` (client-safe metadata) and `src/config/protocols-server.ts` (server-only dynamic imports). `Record<ProtocolName, …>` typing forces them to stay in sync. Disable a protocol = comment its entries in **both**.
+- `listing.ts` is the single enumeration predicate per adapter — `getProducts` and `getApySpot` must emit the exact same productId set.
+- Compound V3 has per-chain subgraph overrides (chain dirs + `createChainRegistry` from `core/toolkit`).
+- `Promise.allSettled` everywhere multiple sources aggregate — one failure never blocks the others.
 
 ---
 
 ## PostgreSQL (Neon)
 
-Drizzle ORM. Schema in `src/lib/db/schema.ts`, client in `src/lib/db/postgres.ts` (neon-http), repositories in `src/lib/db/repositories/`. Migrations via drizzle-kit (`pnpm db:generate` → `pnpm db:migrate`).
+Drizzle ORM. Schema `src/lib/db/schema.ts`, client `src/lib/db/postgres.ts` (neon-http), repositories `src/lib/db/repositories/`.
 
-**Rule — never parse `productId`.** Filters hit typed, indexed columns; provider/chain/asset/kind are resolved by JOIN to `products`. (The productId string is irregular — morpho has no `:kind` suffix — so regex/substring filtering is wrong.)
+**Rule — never parse `productId`.** It is an opaque key; provider/chain/asset/kind are typed columns on `products` — resolve by JOIN.
 
-4 tables:
+**Rule — filter/group chains by `chain_id`, never `chain_name`.** Names are inconsistent across adapters (`Ethereum` vs `ethereum` vs `op mainnet`); only the numeric id is canonical.
 
-### `products` — static registry
+6 tables:
 
-- PK `id` = deterministic productId slug (e.g. `aave:v3:ethereum:reserve:0x…:supply`)
-- Typed columns: `kind`, `provider`, `product_type`, `version`, `protocol_name`, `chain_id`, `chain_name`, `asset_*`, `protocol_address`
-- `meta` (jsonb) — protocol-specific params · `collaterals` (jsonb) — borrow only
-- Indexes: `(provider, asset_symbol, kind)`, `(protocol_name, asset_symbol, kind)`, `(active, chain_id)`
-- **Rule — filter/group chains by `chain_id`, never `chain_name`.** `chain_name` is inconsistent across adapters for the same chain: Aave writes capitalized names (`Ethereum`, `Optimism`, `Arbitrum`), Morpho/Compound write viem-style lowercase (`ethereum`, `op mainnet`, `arbitrum one`). Only `chain_id` is canonical.
+- **`products`** — static registry. PK `id` = productId slug (e.g. `aave:v3:ethereum:reserve:0x…:supply`). Typed columns (`kind`, `provider`, `chain_id`, `asset_*`, …), `meta`/`collaterals` jsonb. Indexes: `(provider, asset_symbol, kind)`, `(protocol_name, asset_symbol, kind)`, `(active, chain_id)`.
+- **`apy_hourly`** — PK `(product_id, hour)`. Running mean via `ON CONFLICT DO UPDATE` every 10 min. All rates stored as **APY**; net = supply `base − fees + rewards`, borrow `base + fees − rewards`. Pruned >180 days. Two filters on write: duplicate productIds within a slot collapse to one row (Compound emits one per collateral), then rows absent from the catalogue are dropped — but an *empty* catalogue fails open and collects unfiltered, because dropping a whole slot is worse than a few orphans.
+- **`apy_daily`** — PK `(product_id, date)`. One GROUP BY over the day's hourly rows. `quality_completeness` = hourly rows / 24; `< 0.5` → unreliable. Idempotent — reruns bump `quality_revision`.
+- **`product_availability_periods`** — PK `(product_id, activated_at)`. Half-open intervals `activated_at <= hour < deactivated_at`, `deactivated_at` null = still listed. Written by the product-sync job; this is what makes a delisted pool's gap legitimate rather than missing data.
+- **`product_display_flags`** — PK `product_id`. Pools withheld from public rankings *right now* (`low_liquidity` | `outlier_apy`), rebuilt hourly by `/api/yield/apy/eligibility`. Clearing a flag deletes the row, so it is a projection, not an audit log. Deliberately separate from `products.active`: a hidden pool is still active and still collected.
+- **`pipeline_reports`** — job run reports (jsonb). Type `reconcile` since 2026-07-24; `gap-detection` / `gap-healing` are legacy rows from the jobs it replaced.
 
-### `apy_hourly` — rolling average per `(product_id, hour)`
-
-- PK `(product_id, hour)` · running mean via `INSERT … ON CONFLICT DO UPDATE` every 10 min
-- Duplicate productIds within a slot are deduped (one observation/product — Compound emits one per collateral)
-- All rates stored as **APY** · Net: Supply `base - fees + rewards` / Borrow `base + fees - rewards`
-- Pruned > 180 days by the daily job (`pruneHourly`)
-
-### `apy_daily` — daily aggregate
-
-- PK `(product_id, date)` · one `GROUP BY` over the day's hourly rows (`avg()` per field; `reward_items` = last slot)
-- `quality_completeness` = hourly rows present / 24 · `< 0.5` → unreliable
-- Idempotent — reruns bump `quality_revision`
-
-### `pipeline_reports`
-
-- gap-detection + gap-healing run reports (`jsonb` payload), read by the heal job + `/status`
+Schema field semantics: `../../agent/docs/lendwise/PRODUCTS_SCHEMA.md`, `../../agent/docs/lendwise/APY_DAILY_SCHEMA.md`.
 
 ---
 
 ## GraphQL
 
-- **Server:** `graphql-yoga` at `/api/graphql` — schema in `src/lib/graphql/schema.ts`, resolvers in `src/lib/graphql/resolvers.ts`
-- **Client:** URQL (React, suspense-compatible)
-- **Codegen:** `@graphql-codegen/cli` — generates types into `src/**/generated/` from schema + subgraph introspection. Run before build (`pnpm build` does this automatically).
+- **Server:** graphql-yoga at `/api/graphql` — schema `src/lib/graphql/schema.ts`, resolvers `src/lib/graphql/resolvers.ts`. Protected by graphql-armor (cost limit scales with `first`).
+- **Client:** URQL (suspense-compatible).
+- **Codegen:** types generated into `src/**/generated/` (gitignored) from schema + subgraph introspection.
+
+Beware: subgraph `BigDecimal` fields come back as **strings** (`any` in codegen) — wrap in `toNumber()`.
 
 ---
 
 ## Token icons
 
-Single component `<TokenIcon symbol="USDC" size={24} />`.
+`<TokenIcon symbol="USDC" size={24} />` (`src/components/icon/`). Resolution: `/public/icons/native/{symbol}.svg` → localStorage → server cache 24h → CoinGecko API. Server action: `getTokenIcon(symbol)` (`src/app/actions/token-icon.actions.ts`). Details: `../../agent/docs/lendwise/COINGECKO_TOKEN_ICONS.md`.
 
-Resolution priority:
-
-1. `/public/icons/native/{symbol}.svg` — instant
-2. `localStorage` — client-side persistence
-3. Server memory cache — 24h
-4. CoinGecko API — fallback (50 calls/min, 1 call/token/24h)
-
-Internal API: `GET /api/token-icon?symbol=BTC`
-
-Fiat currencies: `<CurrencyIcon currency="USD" />` → financial-flag-icons.
+The barrel `src/components/icon/index.ts` also exports `NetworkIcon` and `ProtocolIcon`. `CurrencyIcon` (fiat, backed by financial-flag-icons) is **not** in the barrel — import it from `@/components/icon/CurrencyIcon`, and note its prop is `symbol`, not `currency`.
 
 ---
 
@@ -130,35 +115,27 @@ Fiat currencies: `<CurrencyIcon currency="USD" />` → financial-flag-icons.
 
 - **TypeScript strict** — no `any`
 - **Functional only** — no classes
-- **RPC batching** — group on-chain calls as much as possible
-- **Promise.allSettled** wherever multiple sources are aggregated
-- **APR → APY**: always `(1 + APR/365)^365 - 1` before storage
+- **RPC batching** — group on-chain calls (multicall) where possible
+- **`Promise.allSettled`** wherever multiple sources are aggregated
+- **APR → APY**: always `(1 + APR/365)^365 − 1` before storage (helpers in `src/lib/utils.ts`)
 
 ---
 
 ## Known issues
 
-**rsETH on AaveV3Arbitrum**: GraphQL API returns `canBeCollateral: false` while Aave UI shows `true`. Code is correct (trusts official API). See `docs/aave-collateral-discrepancies.md`.
+**rsETH on AaveV3Arbitrum**: GraphQL API returns `canBeCollateral: false` while the Aave UI shows `true`. Code is correct (trusts the official API). See `../../agent/docs/lendwise/aave-collateral-discrepancies.md`.
 
 ---
 
 ## Environment variables
 
-```env
-# PostgreSQL (Neon)
-DATABASE_URL=                       # pooled URL — app runtime
-DATABASE_URL_UNPOOLED=              # direct URL — drizzle-kit migrations
+The full list is `.env.example`.
 
-# Cron security
-UPSTASH_QSTASH_TOKEN=               # QStash signature verification
+Behaviour you cannot infer from the names:
 
-# External APIs
-THEGRAPH_API_KEY=
-NEXT_PUBLIC_INFURA_API_KEY=
-OPTIMIZER_API_URL=                  # External optimizer service (also used by codegen:optimizer)
+- `QSTASH_CURRENT_SIGNING_KEY` / `QSTASH_NEXT_SIGNING_KEY` gate every `/api/yield/*` job; unset means the pipeline returns 401 to QStash and silently stops ingesting.
 
-# Wallet / frontend
-NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
-NEXT_PUBLIC_ENABLE_TESTNETS=false
-NEXT_PUBLIC_API_URL=
-```
+- `UPSTASH_REDIS_REST_URL` unset → the rate limiter becomes a no-op and allows everything.
+- `UPSTASH_REDIS_REST_TOKEN` is REQUIRED in prod, and the limiter fails **OPEN** if Redis is unreachable.
+- `THEGRAPH_API_KEY` is needed by codegen, not only at runtime — a fresh clone cannot typecheck without it.
+- Rate limits on public endpoints: `/api/graphql` 60/min/IP, `/api/optimizer` 10/min/IP.
