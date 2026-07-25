@@ -6,9 +6,8 @@
  * Aave's subgraphs record `priceInUsd = 0` for most reserves (no oracle answer
  * they track), so a whole year of TVL would render blank despite the amounts
  * being known. But another provider's `apy_daily` row for the SAME asset on the
- * SAME day usually does have `asset_price_usd` — Compound carries deep, correct
- * price history for the majors. (Morpho does too on paper, but its price is
- * currently broken and is excluded — see UNTRUSTED_PRICE_PROVIDERS below.)
+ * SAME day usually does have `asset_price_usd` — Compound and Morpho both carry
+ * deep price history for the majors.
  *
  * That lookup reads OUR database, so it cannot live inside an adapter (an
  * adapter talks to its protocol, never to our tables). It is generic across
@@ -69,27 +68,18 @@ async function symbolsFor(productIds: string[]): Promise<Map<string, string>> {
 }
 
 /**
- * Providers whose `asset_price_usd` cannot be trusted as a cross-provider
- * reference, and are excluded from the average below.
+ * Same-day USD price per (symbol, day) observed in apy_daily. Averaged across
+ * providers: several rows for one asset-day are independent observations of the
+ * same price, and their mean is the least arbitrary pick.
  *
- * Morpho derives its price as `totalAssetsUsd / totalAssets` with a RAW
- * (undivided) `totalAssets`, so every Morpho price is off by 10^decimals —
- * ~1e-15 for an 18-decimal token, ~1e-6 for a 6-decimal one. Not one of the
- * 1.1M stored Morpho prices reaches 1.0. Left in an `avg()`, a single Morpho
- * row on an asset-day halves the true price (WETH: (1918 + ~0)/2 ≈ 959).
- *
- * Excluding it loses nothing real — every Morpho price is already garbage — and
- * turns a fabricated ~$0 into an honest NULL for assets only Morpho prices.
- * REMOVE this once Morpho's price is fixed at the source:
- * see agent/specs/2026-07-24-market-amount-units-normalization-design.md item 2.
- */
-const UNTRUSTED_PRICE_PROVIDERS = ['morpho'] as const
-
-/**
- * Same-day USD price per (symbol, day) observed by a TRUSTED provider in
- * apy_daily. Averaged across providers: several rows for one asset-day are
- * independent observations of the same price, and their mean is the least
- * arbitrary pick.
+ * No provider is excluded. Morpho used to be, and the exclusion mattered: it
+ * derived its price as `totalAssetsUsd / totalAssets` with a RAW (undivided)
+ * `totalAssets`, so every stored Morpho price was off by 10^decimals and a
+ * single Morpho row on an asset-day halved the average (WETH: (1918 + ~0)/2 ≈
+ * 959). Both ends of that are now closed — the adapter reads the oracle price
+ * and divides by 10^decimals (`morpho/v1/apy-spot.ts`), and the rows written
+ * before that deployment were migrated by `scripts/fix-amount-units.ts`.
+ * Trusting Morpho again is what gives a price to the assets only it lists.
  */
 async function pricesFor(
   symbols: string[],
@@ -107,10 +97,6 @@ async function pricesFor(
         chunk.map((v) => sql`${v}`),
         sql`, `
       )})
-        AND p.provider NOT IN (${sql.join(
-          UNTRUSTED_PRICE_PROVIDERS.map((v) => sql`${v}`),
-          sql`, `
-        )})
         AND d.asset_price_usd > 0
         AND d.date >= ${from} AND d.date <= ${to}
       GROUP BY 1, 2

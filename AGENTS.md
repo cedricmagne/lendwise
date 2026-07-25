@@ -150,7 +150,6 @@ DATABASE_URL=                       # pooled URL — app runtime
 DATABASE_URL_UNPOOLED=              # direct URL — drizzle-kit migrations
 
 # Cron security
-CRON_SECRET=                        # Bearer token for /api/cron/sync-history
 UPSTASH_QSTASH_TOKEN=               # QStash signature verification
 
 # External APIs

@@ -66,11 +66,12 @@ describe('enrichPointsWithUsd', () => {
     expect(report.unpriced).toBe(0)
   })
 
-  it('excludes untrusted-price providers from the price query', async () => {
-    // Morpho's asset_price_usd is off by 10^decimals; leaving it in the avg()
-    // halves the true price. Guard that the price query keeps it out at the SQL
-    // level — the stub returns pre-filtered rows, so this is the only place the
-    // exclusion is observable in a unit test.
+  it('excludes no provider from the price query', async () => {
+    // Morpho was excluded by name while its stored price was off by
+    // 10^decimals — a single Morpho row on an asset-day halved the avg(). Both
+    // the source and the stored rows are fixed, so the exclusion is gone: the
+    // query must name no provider at all. The stub returns pre-filtered rows,
+    // so the SQL itself is the only place this is observable in a unit test.
     stubDb(
       [{ id: SUPPLY_ID, asset_symbol: 'WETH' }],
       [{ sym: 'WETH', date: '2026-03-15T00:00:00.000Z', price: 2000 }]
@@ -80,7 +81,8 @@ describe('enrichPointsWithUsd', () => {
 
     // Second execute call is the price aggregation.
     const priceCall = execute.mock.calls[1][0]
-    expect(JSON.stringify(priceCall)).toContain('morpho')
+    expect(JSON.stringify(priceCall)).not.toContain('morpho')
+    expect(JSON.stringify(priceCall)).not.toContain('provider')
   })
 
   it('derives the borrow side too', async () => {

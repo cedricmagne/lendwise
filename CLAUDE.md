@@ -41,15 +41,25 @@ QStash cron (every 10 min, signature-verified)
   → POST /api/yield/apy/spot
   → adapters (Aave/Morpho/Compound) → Postgres upsert: apy_hourly
 
-QStash cron (daily 00:10 UTC)
-  → POST /api/yield/apy/daily
-  → aggregates apy_hourly → apy_daily + prunes rows >180d
+QStash cron (daily 00:30 UTC)
+  → POST /api/yield/apy/reconcile   { days: 7 }
+  → 1. detect   gaps + incomplete slots over the window
+    2. repair   targeted refetch by productId, nearest-neighbour as fallback
+    3. aggregate apy_hourly → apy_daily, oldest day first
+    4. prune    hourly rows >180d
+  → report in pipeline_reports (see ../../agent/docs/lendwise/apy-pipeline-reconcile.md)
 
-Gap detection + healing: /api/yield/apy/gaps + /api/yield/apy/heal
-  → reports in pipeline_reports (see ../../agent/docs/lendwise/apy-pipeline-gap-heal.md)
+QStash cron (hourly)
+  → POST /api/yield/products      (catalogue sync + availability periods)
+  → POST /api/yield/apy/eligibility (display flags, hysteresis 3/12)
 
 graphql-yoga at /api/graphql ← URQL client (React)
 ```
+
+**The order in reconcile is the point.** Repair, aggregation and pruning used to
+be three independently scheduled jobs, so a row repaired at 01:00 was never seen
+by the aggregation that had run at 00:10 — a repaired hour never reached
+`apy_daily`. One job in one sequence is what makes the repair converge.
 
 ### Protocol adapters (`src/lib/protocols/`)
 
@@ -78,7 +88,7 @@ Drizzle ORM. Schema `src/lib/db/schema.ts`, client `src/lib/db/postgres.ts` (neo
 - **`products`** — static registry. PK `id` = productId slug. Typed columns (`kind`, `provider`, `chain_id`, `asset_*`, …), `meta`/`collaterals` jsonb.
 - **`apy_hourly`** — PK `(product_id, hour)`. Running mean via `ON CONFLICT DO UPDATE` every 10 min. All rates stored as **APY**; net = supply `base − fees + rewards`, borrow `base + fees − rewards`. Pruned >180 days.
 - **`apy_daily`** — PK `(product_id, date)`. One GROUP BY over the day's hourly rows. `quality_completeness` = hourly rows / 24; `< 0.5` → unreliable. Idempotent reruns.
-- **`pipeline_reports`** — gap-detection/heal run reports (jsonb).
+- **`pipeline_reports`** — job run reports (jsonb). Type `reconcile` since 2026-07-24; `gap-detection` / `gap-healing` are legacy rows from the jobs it replaced.
 
 Schema field semantics: `../../agent/docs/lendwise/PRODUCTS_SCHEMA.md`, `../../agent/docs/lendwise/APY_DAILY_SCHEMA.md`.
 
@@ -124,8 +134,7 @@ DATABASE_URL=                       # pooled — app runtime
 DATABASE_URL_UNPOOLED=              # direct — drizzle-kit migrations
 
 # Cron security
-CRON_SECRET=                        # Bearer token for /api/cron/sync-history
-QSTASH_CURRENT_SIGNING_KEY=         # QStash signature verification (apy/spot, apy/daily)
+QSTASH_CURRENT_SIGNING_KEY=         # QStash signature verification (every /api/yield/* job)
 QSTASH_NEXT_SIGNING_KEY=
 
 # Rate limiting — public endpoints (/api/graphql 60/min/IP, /api/optimizer 10/min/IP)

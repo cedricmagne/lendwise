@@ -45,7 +45,7 @@ Two registries wire adapters into the app:
   this.
 - **`src/config/protocols-server.ts`** — server-only loaders (`YIELD_ADAPTERS`,
   `APP_ADAPTERS`) that dynamic-import the heavy adapter modules. The pipeline (spot collector,
-  products sync, heal, sync-history) and wallet features import this.
+  products sync, reconcile, `scripts/backfill-history.ts`) and wallet features import this.
 
 `YIELD_ADAPTERS` is typed `Record<ProtocolName, …>`, so every `PROTOCOLS_META` entry **must**
 have a loader — the compiler enforces registry completeness. Registration is explicit; there
@@ -134,9 +134,9 @@ utilization, asset price) as the protocol can source **for that day**. Rules:
   is how a heal run announced `success: true, errors: []` while neighbour copies
   filled everything in.
 - **`params.includeMarket === false` is the cheap path**, for callers that only want
-  rates (the hourly heal job, `/api/cron/sync-history`, `--skip-market`). An adapter with
-  one combined source can ignore the flag. Never a correctness switch: an adapter with no
-  market source emits NULLs either way.
+  rates (`backfill-history --skip-market`). An adapter with one combined source can ignore
+  the flag. Never a correctness switch: an adapter with no market source emits NULLs
+  either way.
 - **USD conversion from another provider's price is NOT an adapter's job.** That lookup
   reads our own `apy_daily`, so it lives in `src/lib/backfill/enrich-usd.ts`, applied by
   the pipeline after the fetch.
@@ -238,7 +238,14 @@ The harness (`scripts/adapter-test.ts`) runs `getProducts` + `getApySpot` live a
 
 - any strict validation failure,
 - **products/spot productId set drift** (each side must cover the other exactly),
-- an empty result set.
+- an empty result set,
+- **targeting leaks** — it then calls `getApyHistory` with three products taken
+  from your own `getProducts` (both `productIds` and `targets`, the reconcile
+  job's call shape) and fails if a product it did NOT ask for comes back.
+  Requested-but-unanswered products are printed, never failed: a protocol
+  legitimately publishes no history on some chains. But an unanswered product
+  with no matching `failures` entry is flagged `⚠ no reason reported` — that
+  silence is the thing `HistoryResult` exists to prevent.
 
 ```bash
 pnpm adapter:test aave_v3     # needs network; compound_v3 also needs THEGRAPH_API_KEY
@@ -254,7 +261,9 @@ min/median/max, supply TVL — paste it in your PR.
 - [ ] Harness summary table pasted in the PR description
 - [ ] New protocol: `PROTOCOLS_META` + `YIELD_ADAPTERS` entries added together
 - [ ] `getApyHistory` honours `productIds` (fans out over the requested products
-      only, floors dropped) — or the PR says why the upstream cannot filter
+      only, floors dropped) — or the PR says why the upstream cannot filter.
+      `pnpm adapter:test <id>` checks the leak half of this mechanically; the
+      cost half (that the fan-out shrank) is visible in its timing line
 
 ## Disabling a protocol
 

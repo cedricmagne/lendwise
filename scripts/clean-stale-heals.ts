@@ -14,7 +14,7 @@
  * Measured before the fix: 1,457 neighbor-healed rows over 30 days, of which 280
  * (19%) came from more than 6 hours away and 82 from more than three days away.
  *
- * The heal route now enforces MAX_DONOR_DISTANCE_HOURS, so no new ones are
+ * `findNearestDonor` now enforces MAX_DONOR_DISTANCE_HOURS, so no new ones are
  * written. This removes the ones already in the table.
  *
  * Gate: heal_source = 'nearest-neighbor' AND |hour − healed_from| > 6h.
@@ -47,9 +47,7 @@ import { sql } from 'drizzle-orm'
 
 import { db } from '@/lib/db/postgres'
 import { aggregateDaily } from '@/lib/db/repositories/apy'
-
-/** Must match MAX_DONOR_DISTANCE_HOURS in src/app/api/yield/apy/heal/route.ts. */
-const MAX_DONOR_DISTANCE_HOURS = 6
+import { MAX_DONOR_DISTANCE_HOURS } from '@/lib/heal/donors'
 
 /**
  * A neighbor heal copied from too far away.
