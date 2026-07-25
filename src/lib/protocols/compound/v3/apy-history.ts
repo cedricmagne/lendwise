@@ -27,7 +27,10 @@ type AccountingSnapshot = {
     id: string
     configuration: {
       symbol: string
-      baseToken: { lastPriceUsd: string }
+      baseToken: {
+        lastPriceUsd: string
+        token?: { decimals?: number | string | null } | null
+      }
     }
   }
   accounting: {
@@ -74,6 +77,17 @@ function snapshotToPoints(
     snapshot.market.configuration.baseToken.lastPriceUsd
   )
 
+  // Raw base units → whole tokens, the same conversion apy-spot applies. It has
+  // to happen HERE too: without it, the apy_daily migration would re-introduce
+  // raw amounts through its own re-fetch.
+  const decimals = snapshot.market.configuration.baseToken.token?.decimals
+  const whole = (raw: string): number => {
+    const n = Number(raw)
+    if (!Number.isFinite(n)) return 0
+    if (decimals == null) return n
+    return n / 10 ** Number(decimals)
+  }
+
   const supplyPoint: HistoryDataPoint = {
     timestamp: ts,
     productId: supplyProductId,
@@ -86,7 +100,7 @@ function snapshotToPoints(
       rewardItems: [],
     },
     market: {
-      supplyAssets: Number(acc.totalBaseSupply),
+      supplyAssets: whole(acc.totalBaseSupply),
       supplyAssetsUsd,
       utilizationRate: Number(acc.utilization),
       assetPriceUsd,
@@ -105,9 +119,9 @@ function snapshotToPoints(
       rewardItems: [],
     },
     market: {
-      supplyAssets: Number(acc.totalBaseSupply),
+      supplyAssets: whole(acc.totalBaseSupply),
       supplyAssetsUsd,
-      borrowAssets: Number(acc.totalBaseBorrow),
+      borrowAssets: whole(acc.totalBaseBorrow),
       borrowAssetsUsd,
       utilizationRate: Number(acc.utilization),
       assetPriceUsd,

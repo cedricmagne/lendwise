@@ -113,6 +113,12 @@ export const MARKETS_APY = gql`
         symbol
         baseToken {
           lastPriceUsd
+          # Needed to store amounts in WHOLE TOKEN units: the accounting totals
+          # below are raw base units, and the pipeline's invariant is that a
+          # reader never needs the provider to interpret an amount.
+          token {
+            decimals
+          }
         }
       }
       accounting {
@@ -266,6 +272,10 @@ export const MARKET_DAILY_ACCOUNTING = gql`
           symbol
           baseToken {
             lastPriceUsd
+            # Whole-token invariant — see MARKETS_APY.
+            token {
+              decimals
+            }
           }
         }
       }
@@ -309,6 +319,10 @@ export const MARKET_HOURLY_ACCOUNTING = gql`
           symbol
           baseToken {
             lastPriceUsd
+            # Whole-token invariant — see MARKETS_APY.
+            token {
+              decimals
+            }
           }
         }
       }

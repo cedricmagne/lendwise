@@ -60,6 +60,19 @@ export async function fetchCompoundV3ApySpot(
       }
 
       for (const market of data.markets) {
+        // Compound's accounting totals are RAW base units; the pipeline stores
+        // whole tokens so that no reader needs the provider to interpret an
+        // amount. Aave already publishes human units — this is what aligns the
+        // three providers on one convention.
+        const decimals = market.configuration.baseToken.token?.decimals
+        const whole = (raw: unknown): number => {
+          const n = Number(raw ?? 0)
+          if (!Number.isFinite(n)) return 0
+          // Unknown decimals: leave the amount alone rather than guess a scale.
+          if (decimals == null) return n
+          return n / 10 ** Number(decimals)
+        }
+
         // ─── Supply payload ──────────────────────────────────────────────────────
         const supplyProductId = buildProductId(market.id, chain, 'supply')
         const supplyPayload: SpotPayload = {
@@ -76,7 +89,7 @@ export async function fetchCompoundV3ApySpot(
             rewardItems: [],
           },
           market: {
-            supplyAssets: Number(market.accounting.totalBaseSupply),
+            supplyAssets: whole(market.accounting.totalBaseSupply),
             supplyAssetsUsd: Number(market.accounting.totalBaseSupplyUsd),
             utilizationRate: Number(market.accounting.utilization),
             assetPriceUsd: Number(market.configuration.baseToken.lastPriceUsd),
@@ -99,9 +112,9 @@ export async function fetchCompoundV3ApySpot(
             rewardItems: [],
           },
           market: {
-            supplyAssets: Number(market.accounting.totalBaseSupply),
+            supplyAssets: whole(market.accounting.totalBaseSupply),
             supplyAssetsUsd: Number(market.accounting.totalBaseSupplyUsd),
-            borrowAssets: Number(market.accounting.totalBaseBorrow),
+            borrowAssets: whole(market.accounting.totalBaseBorrow),
             borrowAssetsUsd: Number(market.accounting.totalBaseBorrowUsd),
             utilizationRate: Number(market.accounting.utilization),
             assetPriceUsd: Number(market.configuration.baseToken.lastPriceUsd),

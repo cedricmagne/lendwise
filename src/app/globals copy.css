@@ -1,0 +1,283 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* ------------------------------------------------------------------ *
+ * Lendwise design system — "dark ledger" identity
+ * Tokens imported verbatim from the Claude Design kit (maroon brand).
+ * Same shadcn variable names as before, so every page re-skins for free.
+ * ------------------------------------------------------------------ */
+
+:root {
+  --background: oklch(0.9804 0.0093 279.6925);
+  --foreground: oklch(0.2228 0.0205 267.7325);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2228 0.0205 267.7325);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2228 0.0205 267.7325);
+  --primary: oklch(0.5813 0.2408 285.4827);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.9298 0.0351 285.6976);
+  --secondary-foreground: oklch(0.5084 0.1941 287.0978);
+  --muted: oklch(0.9594 0.0094 279.6884);
+  --muted-foreground: oklch(0.5047 0.0666 273.2734);
+  --accent: oklch(0.8905 0.0401 296.6303);
+  --accent-foreground: oklch(0.5263 0.2871 291.0642);
+  --destructive: oklch(0.6375 0.2497 19.0717);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.8905 0.0401 296.6303);
+  --input: oklch(0.9298 0.0351 285.6976);
+  --ring: oklch(0.5813 0.2408 285.4827);
+  --chart-1: oklch(0.5813 0.2408 285.4827);
+  --chart-2: oklch(0.4898 0.2634 272.9159);
+  --chart-3: oklch(0.6279 0.2002 330.3471);
+  --chart-4: oklch(0.8089 0.1117 49.9668);
+  --chart-5: oklch(0.8316 0.0838 260.7567);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.2228 0.0205 267.7325);
+  --sidebar-primary: oklch(0.5813 0.2408 285.4827);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.9594 0.0094 279.6884);
+  --sidebar-accent-foreground: oklch(0.5813 0.2408 285.4827);
+  --sidebar-border: oklch(0.9298 0.0351 285.6976);
+  --sidebar-ring: oklch(0.5813 0.2408 285.4827);
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono: JetBrains Mono, monospace;
+  --radius: 0.75rem;
+  --shadow-x: 0px;
+  --shadow-y: 4px;
+  --shadow-blur: 16px;
+  --shadow-spread: -2px;
+  --shadow-opacity: 0.1;
+  --shadow-color: rgba(23, 27, 37, 0.05);
+  --shadow-2xs: 0px 4px 16px -2px hsl(222.8571 23.3333% 11.7647% / 0.05);
+  --shadow-xs: 0px 4px 16px -2px hsl(222.8571 23.3333% 11.7647% / 0.05);
+  --shadow-sm:
+    0px 4px 16px -2px hsl(222.8571 23.3333% 11.7647% / 0.1),
+    0px 1px 2px -3px hsl(222.8571 23.3333% 11.7647% / 0.1);
+  --shadow:
+    0px 4px 16px -2px hsl(222.8571 23.3333% 11.7647% / 0.1),
+    0px 1px 2px -3px hsl(222.8571 23.3333% 11.7647% / 0.1);
+  --shadow-md:
+    0px 4px 16px -2px hsl(222.8571 23.3333% 11.7647% / 0.1),
+    0px 2px 4px -3px hsl(222.8571 23.3333% 11.7647% / 0.1);
+  --shadow-lg:
+    0px 4px 16px -2px hsl(222.8571 23.3333% 11.7647% / 0.1),
+    0px 4px 6px -3px hsl(222.8571 23.3333% 11.7647% / 0.1);
+  --shadow-xl:
+    0px 4px 16px -2px hsl(222.8571 23.3333% 11.7647% / 0.1),
+    0px 8px 10px -3px hsl(222.8571 23.3333% 11.7647% / 0.1);
+  --shadow-2xl: 0px 4px 16px -2px hsl(222.8571 23.3333% 11.7647% / 0.25);
+  --tracking-normal: -0.01em;
+  --spacing: 0.25rem;
+
+  /* Marketing-site tokens (merged from landing.css) */
+  --brand-bright: oklch(from var(--primary) calc(l + 0.1) c h);
+  --brand-deep: oklch(from var(--primary) calc(l - 0.13) c h);
+  --ink-faint: oklch(from var(--muted-foreground) l c h / 0.72);
+  --rose: oklch(0.72 0.06 25);
+  --cube-top: oklch(0.55 0 0);
+  /* Text colors for content sitting on brand-deep surfaces; derived from the
+   * primary hue so a brand change propagates automatically. */
+  --on-brand: oklch(from var(--primary) 0.88 0.05 h);
+  --on-brand-muted: oklch(from var(--primary) 0.86 0.04 h);
+  --on-brand-faint: oklch(from var(--primary) 0.8 0.05 h);
+}
+
+.dark {
+  /* Marketing-site token overrides */
+  --cube-top: #d9d9d9;
+  --rose: oklch(0.74 0.055 25);
+
+  /* Accent text/hover lift on the dark background; kept modest so button
+   * hovers don't wash out (the accent text it colors is large display type). */
+  --brand-bright: oklch(from var(--primary) calc(l + 0.14) c h);
+
+  --background: oklch(0.202 0.0206 271.5136);
+  --foreground: oklch(0.9298 0.0351 285.6976);
+  --card: oklch(0.2228 0.0205 267.7325);
+  --card-foreground: oklch(0.9298 0.0351 285.6976);
+  --popover: oklch(0.2228 0.0205 267.7325);
+  --popover-foreground: oklch(0.9298 0.0351 285.6976);
+  --primary: oklch(0.5813 0.2408 285.4827);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.2829 0.0286 270.2034);
+  --secondary-foreground: oklch(0.8316 0.0838 260.7567);
+  --muted: oklch(0.2489 0.0259 268.1779);
+  --muted-foreground: oklch(0.833 0.0159 269.9556);
+  --accent: oklch(0.4898 0.2634 272.9159);
+  --accent-foreground: oklch(1 0 0);
+  --destructive: oklch(0.6616 0.1935 21.6767);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.2829 0.0286 270.2034);
+  --input: oklch(0.2829 0.0286 270.2034);
+  --ring: oklch(0.5813 0.2408 285.4827);
+  --chart-1: oklch(0.5813 0.2408 285.4827);
+  --chart-2: oklch(0.7166 0.1824 10.5726);
+  --chart-3: oklch(0.8089 0.1117 49.9668);
+  --chart-4: oklch(0.8316 0.0838 260.7567);
+  --chart-5: oklch(0.6279 0.2002 330.3471);
+  --sidebar: oklch(0.1697 0.015 272.2985);
+  --sidebar-foreground: oklch(0.833 0.0159 269.9556);
+  --sidebar-primary: oklch(0.5813 0.2408 285.4827);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.2228 0.0205 267.7325);
+  --sidebar-accent-foreground: oklch(0.9298 0.0351 285.6976);
+  --sidebar-border: oklch(0.2489 0.0259 268.1779);
+  --sidebar-ring: oklch(0.5813 0.2408 285.4827);
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono: JetBrains Mono, monospace;
+  --radius: 0.75rem;
+  --shadow-x: 0px;
+  --shadow-y: 8px;
+  --shadow-blur: 24px;
+  --shadow-spread: -4px;
+  --shadow-opacity: 0.4;
+  --shadow-color: rgba(0, 0, 0, 0.4);
+  --shadow-2xs: 0px 8px 24px -4px hsl(0 0% 0% / 0.2);
+  --shadow-xs: 0px 8px 24px -4px hsl(0 0% 0% / 0.2);
+  --shadow-sm:
+    0px 8px 24px -4px hsl(0 0% 0% / 0.4), 0px 1px 2px -5px hsl(0 0% 0% / 0.4);
+  --shadow:
+    0px 8px 24px -4px hsl(0 0% 0% / 0.4), 0px 1px 2px -5px hsl(0 0% 0% / 0.4);
+  --shadow-md:
+    0px 8px 24px -4px hsl(0 0% 0% / 0.4), 0px 2px 4px -5px hsl(0 0% 0% / 0.4);
+  --shadow-lg:
+    0px 8px 24px -4px hsl(0 0% 0% / 0.4), 0px 4px 6px -5px hsl(0 0% 0% / 0.4);
+  --shadow-xl:
+    0px 8px 24px -4px hsl(0 0% 0% / 0.4), 0px 8px 10px -5px hsl(0 0% 0% / 0.4);
+  --shadow-2xl: 0px 8px 24px -4px hsl(0 0% 0% / 1);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-serif: var(--font-serif);
+  --font-zalando: var(--font-zalando);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow: var(--shadow);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-2xl: var(--shadow-2xl);
+
+  --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
+  --tracking-tight: calc(var(--tracking-normal) - 0.025em);
+  --tracking-normal: var(--tracking-normal);
+  --tracking-wide: calc(var(--tracking-normal) + 0.025em);
+  --tracking-wider: calc(var(--tracking-normal) + 0.05em);
+  --tracking-widest: calc(var(--tracking-normal) + 0.1em);
+
+  /* Point where side-by-side controls (hero CTAs, inline actions) stack
+   * vertically — gives xs:/max-xs: variants. */
+  --breakpoint-xs: 560px;
+
+  /* Point where the marketing layout collapses to one column and the desktop
+   * nav appears — gives desk:/max-desk: variants. */
+  --breakpoint-desk: 960px;
+
+  --animate-marquee: marquee var(--marquee-dur, 42s) linear infinite;
+  --animate-blink: blink 1.1s steps(1) infinite;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    letter-spacing: var(--tracking-normal);
+  }
+}
+
+@utility text-2xs {
+  font-size: 0.625rem;
+  line-height: 1rem;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(from var(--primary) l c h / 0.5);
+}
+
+/* ------------------------------------------------------------------ *
+ * Marketing-site primitives + keyframes (merged from landing.css)
+ * ------------------------------------------------------------------ */
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Centered max-width container used across the marketing sections */
+.wrap {
+  @apply relative mx-auto w-full max-w-300 px-5 sm:px-8;
+}
+
+/* Monospace eyebrow label */
+.mono-label {
+  @apply text-muted-foreground inline-flex items-center gap-2.5 font-mono text-[11px] font-medium tracking-[0.14em] whitespace-nowrap uppercase;
+}

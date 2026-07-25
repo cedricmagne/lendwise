@@ -21,15 +21,17 @@
  *
  * Run:  npm install && npm start
  */
-
 import { Backstop, PoolV2 } from '@blend-capital/blend-sdk'
 
 // --- Config (mainnet defaults, all overridable via env) ----------------------
 const RPC = process.env.BLEND_RPC ?? 'https://mainnet.sorobanrpc.com'
 const PASSPHRASE =
-  process.env.BLEND_PASSPHRASE ?? 'Public Global Stellar Network ; September 2015'
+  process.env.BLEND_PASSPHRASE ??
+  'Public Global Stellar Network ; September 2015'
 // Blend v2 mainnet Backstop (source: docs.blend.capital/mainnet-deployments)
-const BACKSTOP = process.env.BLEND_BACKSTOP ?? 'CAQQR5SWBXKIGZKPBZDH3KM5GQ5GUTPKB7JAFCINLZBC5WXPJKRG3IM7'
+const BACKSTOP =
+  process.env.BLEND_BACKSTOP ??
+  'CAQQR5SWBXKIGZKPBZDH3KM5GQ5GUTPKB7JAFCINLZBC5WXPJKRG3IM7'
 const MAX_POOLS = Number(process.env.MAX_POOLS ?? 5)
 const TIME_BUDGET_MS = 3 * 60 * 1000
 
@@ -49,7 +51,8 @@ const short = (id) => `${id.slice(0, 4)}…${id.slice(-4)}`
 function toApyRows(poolId, poolName, assetId, reserve) {
   const supplyApy = aprToApy(reserve.supplyApr)
   const borrowApy = aprToApy(reserve.borrowApr)
-  const slug = (kind) => `blend:v2:stellar:${short(poolId)}:${short(assetId)}:${kind}`
+  const slug = (kind) =>
+    `blend:v2:stellar:${short(poolId)}:${short(assetId)}:${kind}`
   return [
     {
       productId: slug('supply'),
@@ -86,7 +89,9 @@ async function main() {
   const backstop = await Backstop.load(network, BACKSTOP)
   const rewardZone = backstop.config?.rewardZone ?? []
   const poolIds = rewardZone.slice(0, MAX_POOLS)
-  console.log(`Discovered ${rewardZone.length} pools in the Backstop reward zone.`)
+  console.log(
+    `Discovered ${rewardZone.length} pools in the Backstop reward zone.`
+  )
   console.log(`Reading ${poolIds.length} pool(s)…\n`)
 
   const upsertRows = []
@@ -97,7 +102,9 @@ async function main() {
     // 3: load pool reserves directly from Soroban
     const pool = await PoolV2.load(network, poolId)
     const name = pool.metadata?.name ?? short(poolId)
-    console.log(`■ Pool "${name}" (${short(poolId)}) — ${pool.reserves.size} reserves`)
+    console.log(
+      `■ Pool "${name}" (${short(poolId)}) — ${pool.reserves.size} reserves`
+    )
 
     for (const [assetId, reserve] of pool.reserves) {
       // 4: normalize + cross-check against the SDK's compounded estimate.
@@ -112,13 +119,13 @@ async function main() {
         maxAprApyDelta = Math.max(
           maxAprApyDelta,
           Math.abs(supplyApy - reserve.estSupplyApy),
-          Math.abs(borrowApy - reserve.estBorrowApy),
+          Math.abs(borrowApy - reserve.estBorrowApy)
         )
       }
       console.log(
         `   ${short(assetId)}  supply ${pct(supplyApy).padStart(9)}  ` +
           `borrow ${pct(borrowApy).padStart(9)}  ` +
-          `util ${pct(reserve.getUtilizationFloat()).padStart(8)}`,
+          `util ${pct(reserve.getUtilizationFloat()).padStart(8)}`
       )
       // 5: collect the normalized upsert payload
       upsertRows.push(...toApyRows(poolId, name, assetId, reserve))
@@ -129,14 +136,18 @@ async function main() {
   // Evidence block
   const elapsed = Date.now() - started
   console.log('─'.repeat(60))
-  console.log(`Normalized rows ready for apy_hourly upsert: ${upsertRows.length}`)
+  console.log(
+    `Normalized rows ready for apy_hourly upsert: ${upsertRows.length}`
+  )
   console.log('Sample upsert row (SupplyProduct shape):')
   console.log(JSON.stringify(upsertRows[0], null, 2))
   console.log(
     `\nMax |LendWise APY − SDK estimate| across ${checkedReserves} healthy reserves: ${pct(maxAprApyDelta)}` +
-      '\n  (near-zero ⇒ the APR→APY normalization matches the SDK\'s on-chain compounded rate)',
+      "\n  (near-zero ⇒ the APR→APY normalization matches the SDK's on-chain compounded rate)"
   )
-  console.log(`\n⏱  Completed in ${(elapsed / 1000).toFixed(1)}s (budget ${TIME_BUDGET_MS / 1000}s)`)
+  console.log(
+    `\n⏱  Completed in ${(elapsed / 1000).toFixed(1)}s (budget ${TIME_BUDGET_MS / 1000}s)`
+  )
 
   if (elapsed > TIME_BUDGET_MS) {
     console.error('✗ Exceeded 3-minute budget')
@@ -146,7 +157,9 @@ async function main() {
     console.error('✗ No rows produced — reward zone empty or RPC unreachable')
     process.exit(1)
   }
-  console.log('✓ PoC passed: live Blend rates read, normalized, and shaped for the LendWise pipeline.')
+  console.log(
+    '✓ PoC passed: live Blend rates read, normalized, and shaped for the LendWise pipeline.'
+  )
 }
 
 main().catch((err) => {

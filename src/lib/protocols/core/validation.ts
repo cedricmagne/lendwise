@@ -53,8 +53,72 @@ export const spotPayloadSoftSchema = z.object({
  */
 const DRAINED_UTILIZATION = 0.999
 
+/**
+ * How far `amount × price` may sit from the reported USD value.
+ *
+ * Deliberately loose. The fault this catches is not a rounding drift, it is a
+ * factor of 10^decimals — Compound and Morpho passed their protocols' RAW base
+ * units straight through while Aave passed human ones, so one column carried
+ * two different units with nothing saying which. Morpho compounded it by
+ * deriving `assetPriceUsd = totalAssetsUsd / totalAssets` from the raw amount,
+ * putting every Morpho price at ~1e-15 and, through the cross-provider price
+ * fallback, halving the USD values the Aave backfill derived.
+ *
+ * A 5% band leaves ample room for a stale price or a mid-slot balance change,
+ * and still fails by six to eighteen orders of magnitude on a unit bug.
+ */
+const AMOUNT_PRICE_TOLERANCE = 0.05
+
+/** A finite, strictly positive number — the only case worth cross-checking. */
+function usable(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0
+}
+
+/**
+ * `amount × price ≈ amountUsd`, when all three are known.
+ *
+ * Returns true whenever the check does not apply: an unpriced asset, an empty
+ * market, or a protocol that publishes no amounts at all. NULL means unknown
+ * here as everywhere — an absent value is never a failure.
+ */
+function amountAgreesWithUsd(
+  amount: unknown,
+  price: unknown,
+  amountUsd: unknown
+): boolean {
+  if (!usable(amount) || !usable(price) || !usable(amountUsd)) return true
+  const expected = amount * price
+  return Math.abs(expected - amountUsd) / amountUsd <= AMOUNT_PRICE_TOLERANCE
+}
+
 export function spotPayloadStrictSchema(chainIds: number[]) {
   return spotPayloadSoftSchema
+    .refine(
+      (p) =>
+        amountAgreesWithUsd(
+          p.market.supplyAssets,
+          p.market.assetPriceUsd,
+          p.market.supplyAssetsUsd
+        ),
+      {
+        message:
+          'supplyAssets × assetPriceUsd disagrees with supplyAssetsUsd — ' +
+          'amounts must be in WHOLE TOKEN units (raw ÷ 10^decimals)',
+      }
+    )
+    .refine(
+      (p) =>
+        amountAgreesWithUsd(
+          p.market.borrowAssets,
+          p.market.assetPriceUsd,
+          p.market.borrowAssetsUsd
+        ),
+      {
+        message:
+          'borrowAssets × assetPriceUsd disagrees with borrowAssetsUsd — ' +
+          'amounts must be in WHOLE TOKEN units (raw ÷ 10^decimals)',
+      }
+    )
     .refine(
       // Drained-market exemption: at ~full utilization a protocol's rate curve
       // quotes its genuine maximum (Morpho borrow ~298,000% APY) — real market
@@ -66,6 +130,33 @@ export function spotPayloadStrictSchema(chainIds: number[]) {
         return typeof util === 'number' && util >= DRAINED_UTILIZATION
       },
       { message: 'net APY magnitude >= 10 (1000%) — probable unit bug' }
+    )
+    .refine(
+      // Absolute price floor — the ONE check that catches the Morpho price bug.
+      //
+      // The coherence checks above are blind to it: Morpho derived its price as
+      // totalAssetsUsd / totalAssets with a RAW denominator, so the price came
+      // out 10^decimals too SMALL while the amount was 10^decimals too LARGE —
+      // the two errors cancel, and `amount × price ≈ amountUsd` holds either
+      // way. Only the absolute scale gives it away: a broken WETH price is
+      // ~1.9e-15, a broken USDC price ~1e-6.
+      //
+      // The broken price is `correct / 10^decimals`, so it ranges from ~1.9e-15
+      // (WETH, 18 dec) up to ~1e-6 (a 6-decimal stablecoin — the shallowest
+      // case, and the one a 1e-9 floor missed). No real asset in a lending
+      // market at scale is priced below a millionth of a dollar, so 1e-6 catches
+      // every broken case and effectively never fires on a genuine price. NULL
+      // is unknown, not a failure.
+      (p) => {
+        const price = p.market.assetPriceUsd
+        if (typeof price !== 'number' || price === 0) return true
+        return price >= 1e-6
+      },
+      {
+        message:
+          'assetPriceUsd < 1e-6 — price derived from a RAW amount ' +
+          '(divide the amount by 10^decimals before deriving)',
+      }
     )
     .refine((p) => chainIds.includes(p.chainId), {
       message: 'chainId not declared in adapter.chains',

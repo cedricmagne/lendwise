@@ -17,6 +17,28 @@ import { morphoMarketWhere, morphoVaultWhere } from './listing'
 import { buildProductId } from './utils'
 
 /**
+ * Raw base units → whole tokens.
+ *
+ * The pipeline's invariant is that `supply_assets`, `borrow_assets` and
+ * `collateral_assets` are ALWAYS whole tokens, so a reader never needs the
+ * provider to interpret them. Morpho publishes raw amounts; Aave publishes
+ * human ones. Storing both in one column with nothing to distinguish them is
+ * what this converts away from — and it also fixed the derived price, which had
+ * the raw amount as its denominator and sat at ~1e-15 for every Morpho asset.
+ */
+function toWholeTokens(
+  raw: string | number | null | undefined,
+  decimals: number | null | undefined
+): number {
+  const n = Number(raw ?? 0)
+  if (!Number.isFinite(n)) return 0
+  // Unknown decimals: return the amount untouched rather than guess a scale.
+  // Wrong by a known factor is recoverable; wrong by a guessed one is not.
+  if (typeof decimals !== 'number' || !Number.isFinite(decimals)) return n
+  return n / 10 ** decimals
+}
+
+/**
  * Fetch current APY snapshots for Morpho.
  * - Supply snapshots → MetaMorpho vaults (VAULTS_APY)
  * - Borrow snapshots → Morpho Blue markets (MARKETS_APY)
@@ -111,9 +133,19 @@ export async function fetchMorphoV1ApySpot(
       const feesApy = baseApy - netExclRewards
 
       // ─── Market state ────────────────────────────────────────────────────────
-      const totalAssets = Number(state.totalAssets ?? 0)
+      // Amounts are stored in WHOLE TOKEN units, always — a reader must never
+      // need the provider to interpret them. Morpho's `totalAssets` is raw base
+      // units, so it is divided here; Aave already publishes human units.
+      const totalAssets = toWholeTokens(state.totalAssets, vault.asset.decimals)
       const totalAssetsUsd = state.totalAssetsUsd ?? 0
-      const assetPriceUsd = totalAssets > 0 ? totalAssetsUsd / totalAssets : 0
+      // Prefer Morpho's own oracle price. Deriving it as totalAssetsUsd /
+      // totalAssets is what put every Morpho price at ~1e-15: the denominator
+      // was the RAW amount, so the price came out divided by 10^decimals. The
+      // derivation is kept as a fallback and is correct now that the
+      // denominator is human, but a published price beats an inferred one.
+      const assetPriceUsd =
+        vault.asset.price?.usd ??
+        (totalAssets > 0 ? totalAssetsUsd / totalAssets : 0)
 
       // Utilization for a MetaMorpho vault = the share of deposits deployed into
       // markets, i.e. NOT withdrawable. Morpho exposes no single field for it, so
@@ -222,10 +254,13 @@ export async function fetchMorphoV1ApySpot(
 
       // ─── Market state ────────────────────────────────────────────────────────
 
+      // Same whole-token rule as the vault side: `state.*Assets` are raw base
+      // units of the LOAN asset, so both are divided by its decimals.
+      const loanDecimals = market.loanAsset.decimals
       const supplyAssetsUsd = state.supplyAssetsUsd ?? 0
-      const supplyAssets = Number(state.supplyAssets ?? 0)
+      const supplyAssets = toWholeTokens(state.supplyAssets, loanDecimals)
       const borrowAssetsUsd = state.borrowAssetsUsd ?? 0
-      const borrowAssets = Number(state.borrowAssets ?? 0)
+      const borrowAssets = toWholeTokens(state.borrowAssets, loanDecimals)
       const utilizationRate = state.utilization ?? 0
       const assetPriceUsd =
         supplyAssets > 0 ? supplyAssetsUsd / supplyAssets : 0
