@@ -38,6 +38,7 @@ export interface ReconcileDeps {
 
   aggregateDaily(start: Date, end: Date, computedAt: Date): Promise<number>
   pruneHourly(): Promise<number>
+  countOrphans(): Promise<{ hourly: number; daily: number }>
 }
 
 export interface ReconcileOpts {
@@ -84,6 +85,13 @@ export interface ReconcileReport {
   }
   aggregated: { perDay: { date: string; rows: number }[] }
   pruned: number
+  /**
+   * Rows whose product is absent from `products`. A health probe, not a step —
+   * reconcile counts and reports, it never deletes. Expected 0·0; anything else
+   * means a listing predicate has drifted and wants investigating before
+   * `scripts/`-level cleanup. See `countOrphans`.
+   */
+  orphans: { hourly: number; daily: number }
   durationMs: number
   errors: string[]
 }

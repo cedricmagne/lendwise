@@ -104,6 +104,10 @@ function makeDeps(over: Partial<ReconcileDeps> = {}): {
       rec.calls.push('prune')
       return 7
     },
+    async countOrphans() {
+      rec.calls.push('orphans')
+      return { hourly: 0, daily: 0 }
+    },
     ...over,
   }
 
@@ -214,5 +218,47 @@ describe('runReconcile', () => {
     expect(report.repaired.noDonor).toBe(2)
     expect(report.repaired.byNeighbor).toBe(0)
     expect(report.repaired.byRefetch).toBe(0)
+  })
+
+  it('reports orphan rows without deleting them', async () => {
+    // The probe is a smoke alarm, not a fire brigade: a listing predicate that
+    // has drifted wants investigating, and purging the evidence first is how
+    // you lose the only trace of which predicate it was.
+    const { deps, rec } = makeDeps({
+      async countOrphans() {
+        rec.calls.push('orphans')
+        return { hourly: 1234, daily: 56 }
+      },
+    })
+
+    const report = await runReconcile(deps, { days: 2, dryRun: false })
+
+    expect(report.orphans).toEqual({ hourly: 1234, daily: 56 })
+    // Reporting orphans is not a failure — the job still did its four steps.
+    expect(report.success).toBe(true)
+  })
+
+  it('probes for orphans even in a dry run', async () => {
+    // Counting writes nothing, and a dry run is exactly when someone is
+    // reading the output.
+    const { deps, rec } = makeDeps()
+
+    const report = await runReconcile(deps, { days: 2, dryRun: true })
+
+    expect(rec.calls).toContain('orphans')
+    expect(report.orphans).toEqual({ hourly: 0, daily: 0 })
+  })
+
+  it('records an orphan-probe failure without failing the repairs', async () => {
+    const { deps } = makeDeps({
+      async countOrphans() {
+        throw new Error('relation does not exist')
+      },
+    })
+
+    const report = await runReconcile(deps, { days: 2, dryRun: false })
+
+    expect(report.errors).toEqual(['orphans: relation does not exist'])
+    expect(report.pruned).toBe(7)
   })
 })

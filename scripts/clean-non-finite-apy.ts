@@ -15,17 +15,22 @@
  * Steps:
  *   1. Delete non-finite apy_hourly rows.
  *   2. Delete non-finite apy_daily rows.
- *   3. Re-aggregate every affected past UTC day from the surviving hourly rows
- *      (today is skipped — the in-progress day is rebuilt by the daily cron).
+ *   3. Re-aggregate affected past UTC days OLDER than reconcile's sliding
+ *      window. Days inside it are left alone: reconcile rebuilds all of them
+ *      tonight from the hourly rows this script just cleaned, so doing it here
+ *      is duplicated work. Today is skipped for the same reason.
+ *
+ * DRY-RUN BY DEFAULT. Pass --write to persist.
  *
  * Usage:
- *   pnpm clean:non-finite-apy -- --dry-run   # report only
- *   pnpm clean:non-finite-apy                # apply
+ *   pnpm clean:non-finite-apy            # report only
+ *   pnpm clean:non-finite-apy -- --write
  */
 import { sql } from 'drizzle-orm'
 
 import { db } from '@/lib/db/postgres'
 import { aggregateDaily } from '@/lib/db/repositories/apy'
+import { RECONCILE_WINDOW_DAYS } from '@/lib/reconcile'
 
 /**
  * Row is unstorable if any APY component is not a real number.
@@ -71,24 +76,43 @@ async function affectedPastDays(): Promise<string[]> {
   return (res.rows as { d: string }[]).map((r) => r.d)
 }
 
-async function main(): Promise<void> {
-  const dryRun = process.argv.includes('--dry-run')
+/** Days reconcile will NOT reach tonight, so this script must rebuild them. */
+function outsideReconcileWindow(days: string[]): string[] {
+  const edge = new Date()
+  edge.setUTCHours(0, 0, 0, 0)
+  edge.setUTCDate(edge.getUTCDate() - RECONCILE_WINDOW_DAYS)
+  const cutoff = edge.toISOString().slice(0, 10)
+  return days.filter((d) => d < cutoff)
+}
 
-  console.log(`\n🧼 Clean non-finite APY${dryRun ? ' (dry-run)' : ''}\n`)
+async function main(): Promise<void> {
+  const write = process.argv.includes('--write')
+
+  console.log(`\n🧼 Clean non-finite APY ${write ? '(WRITE)' : '(dry run)'}\n`)
 
   const [h, d, days] = await Promise.all([
     count('apy_hourly'),
     count('apy_daily'),
     affectedPastDays(),
   ])
+  const toRebuild = outsideReconcileWindow(days)
+  const leftToReconcile = days.length - toRebuild.length
+
   console.log(`  non-finite apy_hourly rows: ${h}`)
   console.log(`  non-finite apy_daily rows:  ${d}`)
   console.log(
-    `  past days to rebuild:   ${days.length}${days.length ? ` (${days.join(', ')})` : ''}`
+    `  days to rebuild here:   ${toRebuild.length}${toRebuild.length ? ` (${toRebuild.join(', ')})` : ''}`
+  )
+  console.log(
+    `  days left to reconcile: ${leftToReconcile} (inside its ${RECONCILE_WINDOW_DAYS}-day window)`
   )
 
-  if (dryRun) {
-    console.log('\n✅ Dry-run complete (no writes)\n')
+  if (h === 0 && d === 0) {
+    console.log('\n✅ Nothing to clean\n')
+    process.exit(0)
+  }
+  if (!write) {
+    console.log('\nDry run — nothing written. Re-run with --write.\n')
     process.exit(0)
   }
 
@@ -97,7 +121,7 @@ async function main(): Promise<void> {
   const dd = await db.execute(sql`DELETE FROM apy_daily WHERE ${nonFinite}`)
   console.log(`  Deleted ${dd.rowCount ?? 0} daily rows`)
 
-  for (const day of days) {
+  for (const day of toRebuild) {
     const start = new Date(`${day}T00:00:00.000Z`)
     const end = new Date(start.getTime() + 24 * 60 * 60 * 1000)
     const n = await aggregateDaily(start, end, new Date())

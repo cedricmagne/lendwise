@@ -111,7 +111,7 @@ function hourlyValueTuple(p: SpotPayload, hour: Date, slotTime: Date) {
  * Guarding here rather than in each adapter: this is the single write path for
  * spot data, so a new protocol cannot forget it.
  */
-async function listedProductIds(): Promise<Set<string>> {
+export async function listedProductIds(): Promise<Set<string>> {
   const rows = await db
     .select({ id: products.id })
     .from(products)

@@ -180,21 +180,65 @@ function dedupeHealRows(rows: HealRow[]): HealRow[] {
 }
 
 /**
+ * Which of these productIds exist in the catalogue at all.
+ *
+ * On EXISTENCE, deliberately — not on `active = true`, the rule
+ * `upsertHourlySlots` uses. The two guards answer different questions: the
+ * collector must not ingest a pool nobody lists ANY MORE, whereas a repair
+ * works on PAST hours, and a product delisted yesterday still deserves its
+ * holes filled for the days it was live. `aggregateDaily` draws the line in the
+ * same place, and these two have to agree or a repaired hour would never reach
+ * its daily row.
+ */
+async function existingProductIds(ids: string[]): Promise<Set<string>> {
+  const out = new Set<string>()
+  for (let i = 0; i < ids.length; i += HEAL_CHUNK) {
+    const rows = await db
+      .select({ id: products.id })
+      .from(products)
+      .where(inArray(products.id, ids.slice(i, i + HEAL_CHUNK)))
+    for (const r of rows) out.add(r.id)
+  }
+  return out
+}
+
+/**
  * Write healed rows in chunked multi-row statements (one round-trip per chunk
  * instead of per row — the per-row loop timed out the Vercel function once gap
  * counts reached the thousands). Split by conflict behavior:
  *   missing    → ON CONFLICT DO NOTHING (never clobber organic data)
  *   incomplete → ON CONFLICT DO UPDATE (overwrite the partial row)
  * Marks healed=true.
+ *
+ * Rows for products absent from the catalogue are dropped before the insert.
+ * Every other write path into `apy_hourly` / `apy_daily` carries that guard;
+ * this one relied on its CALLER passing only ids that came from a `products`
+ * join — safe in practice, structurally unguaranteed, and the one remaining way
+ * to mint an orphan row. 110,388 of those had to be purged on 2026-07-25.
  */
 export async function writeHealed(rows: HealRow[]): Promise<number> {
+  const known = await existingProductIds([
+    ...new Set(rows.map((r) => r.productId)),
+  ])
+  const writable = rows.filter((r) => known.has(r.productId))
+  if (writable.length < rows.length) {
+    // Not routine: the caller derived these ids from the catalogue, so a miss
+    // means detection and the catalogue disagree. The dropped rows are harmless
+    // (unreadable anyway); the divergence upstream is not.
+    const sample = rows.find((r) => !known.has(r.productId))
+    console.error(
+      `[heal:write] ${rows.length - writable.length} row(s) for products absent from the catalogue — dropped. ` +
+        `Sample: ${sample?.productId}`
+    )
+  }
+
   const groups = [
     {
-      rows: dedupeHealRows(rows.filter((r) => r.gapKind === 'missing')),
+      rows: dedupeHealRows(writable.filter((r) => r.gapKind === 'missing')),
       conflict: sql`DO NOTHING`,
     },
     {
-      rows: dedupeHealRows(rows.filter((r) => r.gapKind === 'incomplete')),
+      rows: dedupeHealRows(writable.filter((r) => r.gapKind === 'incomplete')),
       conflict: HEAL_UPDATE_SET,
     },
   ]
@@ -293,4 +337,34 @@ export async function pruneHourly(): Promise<number> {
     sql`DELETE FROM apy_hourly WHERE hour < now() - interval '180 days'`
   )
   return res.rowCount ?? 0
+}
+
+/**
+ * Rows whose product is absent from the catalogue — the observable signature of
+ * a listing predicate having drifted.
+ *
+ * A health probe, not a step: reconcile reports the number and repairs nothing.
+ * Both known causes are closed (`listing.ts` unified the Aave predicate,
+ * `aggregateDaily` and `writeHealed` now join `products`), and the 115,085 rows
+ * they had produced were purged on 2026-07-25 — so the expected reading is 0·0
+ * forever. A non-zero one means a NEW divergence, and the point of measuring it
+ * nightly is that nobody has to remember to look: the last one ran for six
+ * weeks at ~18,500 rows a week before anyone noticed.
+ *
+ * Two cheap anti-joins over an indexed PK; not a meaningful share of the job's
+ * 300 s budget.
+ */
+export async function countOrphans(): Promise<{
+  hourly: number
+  daily: number
+}> {
+  const res = await db.execute(sql`
+    SELECT
+      (SELECT count(*) FROM apy_hourly h
+         WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.id = h.product_id)) AS hourly,
+      (SELECT count(*) FROM apy_daily d
+         WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.id = d.product_id)) AS daily
+  `)
+  const row = res.rows[0] as { hourly: string; daily: string }
+  return { hourly: Number(row.hourly), daily: Number(row.daily) }
 }

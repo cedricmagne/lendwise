@@ -24,6 +24,17 @@ export type {
 /** Extra hours either side of the gap window to search for donors. */
 const DONOR_PADDING_HOURS = 6
 
+/**
+ * The sliding window reconcile converges every night, in days.
+ *
+ * Exported because it is a CONTRACT, not a default: maintenance scripts skip
+ * re-aggregating any day inside it, on the strength of reconcile getting to it
+ * tonight. If the two numbers ever drifted apart, a script would silently leave
+ * days stale. One constant, read by the route and by every script that deletes
+ * rows.
+ */
+export const RECONCILE_WINDOW_DAYS = 7
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function normalizeHour(d: Date): Date {
@@ -118,6 +129,7 @@ export async function runReconcile(
     fetch: { requested: 0, returned: 0, failed: 0, failuresSample: [] },
     aggregated: { perDay: [] },
     pruned: 0,
+    orphans: { hourly: 0, daily: 0 },
     durationMs: 0,
     errors,
   }
@@ -195,6 +207,22 @@ export async function runReconcile(
     report.pruned = opts.dryRun ? 0 : await deps.pruneHourly()
   } catch (err) {
     errors.push(`prune: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  // ── Health probe — orphan rows ────────────────────────────────────────────
+  // Not a step: it reads, reports, and repairs nothing. It runs in dry mode
+  // too, since counting writes nothing and a dry run is exactly when someone is
+  // looking at the output.
+  try {
+    report.orphans = await deps.countOrphans()
+    if (report.orphans.hourly > 0 || report.orphans.daily > 0) {
+      log(
+        `[reconcile] ORPHAN ROWS — ${report.orphans.hourly} hourly, ${report.orphans.daily} daily ` +
+          `with no products row. A listing predicate has drifted; investigate before purging.`
+      )
+    }
+  } catch (err) {
+    errors.push(`orphans: ${err instanceof Error ? err.message : String(err)}`)
   }
 
   report.success = errors.length === 0

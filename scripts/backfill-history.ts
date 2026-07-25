@@ -45,6 +45,7 @@ import {
   backfillDailyRows,
   dailyKey,
   existingDailyKeys,
+  listedProductIds,
   patchDailyMarketState,
 } from '@/lib/db/repositories/apy'
 import type { BorrowMarketState, SupplyMarketState } from '@/lib/db/types'
@@ -208,9 +209,19 @@ async function runAdapter(
 
   // A point either creates a row (INSERT) or repairs one (PATCH) — the table
   // decides which, so both sets come from the same fetch with no extra query.
-  const inserts = opts.patchOnly
+  //
+  // `listedProductIds()` is applied HERE, not only inside `backfillDailyRows`,
+  // because a dry run whose count does not predict the write is a dry run that
+  // failed at its one job. It used to announce 14,978 insertable rows on Aave
+  // chain 1 against ~6,300 actually written, and that gap made a guard doing
+  // its job look like a bug.
+  const listed = await listedProductIds()
+  const insertable = opts.patchOnly
     ? []
     : points.filter((p) => !existing.has(dailyKey(p.productId, p.timestamp)))
+  const inserts = insertable.filter((p) => listed.has(p.productId))
+  const unlisted = insertable.length - inserts.length
+
   const patches = points
     .filter((p) => existing.has(dailyKey(p.productId, p.timestamp)))
     .map(toMarketPatch)
@@ -220,6 +231,17 @@ async function runAdapter(
   console.log(
     `  INSERT: ${inserts.length} new rows (supply=${supply} borrow=${inserts.length - supply})`
   )
+  if (unlisted > 0) {
+    // Not noise. Aave publishes a `borrowAPYHistory` for every reserve, borrow
+    // enabled or not, so most of these are the catalogue correctly declining a
+    // borrow product that does not exist. A SURGE, or points for a provider
+    // that should list everything it emits, means the adapter is emitting
+    // productIds outside the catalogue — worth a look.
+    const sample = insertable.find((p) => !listed.has(p.productId))
+    console.log(
+      `  SKIP  : ${unlisted} points for products absent from the catalogue (sample: ${sample?.productId})`
+    )
+  }
   console.log(`  PATCH : ${patches.length} existing rows carry market state`)
 
   if (!opts.write) return { inserted: 0, patched: 0 }

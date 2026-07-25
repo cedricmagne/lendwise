@@ -10,6 +10,7 @@ import { YIELD_ADAPTERS } from '@/config/protocols-server'
 import { aggregateDaily } from '@/lib/db/repositories/apy'
 import {
   collectedProductCount,
+  countOrphans,
   fetchDonors,
   findGaps,
   findIncomplete,
@@ -20,7 +21,7 @@ import {
   writeHealed,
 } from '@/lib/db/repositories/gaps'
 import { insertReport } from '@/lib/db/repositories/reports'
-import { runReconcile } from '@/lib/reconcile'
+import { RECONCILE_WINDOW_DAYS, runReconcile } from '@/lib/reconcile'
 import type { ReconcileDeps } from '@/lib/reconcile/types'
 
 // Four chained steps, one of which fetches protocol history and writes
@@ -28,7 +29,7 @@ import type { ReconcileDeps } from '@/lib/reconcile/types'
 export const maxDuration = 300
 
 /** Lookback in days. Must cover the window the repair step can reach. */
-const DEFAULT_DAYS = 7
+const DEFAULT_DAYS = RECONCILE_WINDOW_DAYS
 const MAX_DAYS = 14
 
 const deps: ReconcileDeps = {
@@ -44,6 +45,7 @@ const deps: ReconcileDeps = {
   writeHealed,
   aggregateDaily,
   pruneHourly,
+  countOrphans,
 }
 
 /**
