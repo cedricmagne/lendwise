@@ -177,32 +177,59 @@ async function fetchAllSnapshots<T>(
 
 // ─── Fetchers ─────────────────────────────────────────────────────────────────
 
+/** What the listing knew about the requested products, on one chain. */
+interface ListingMatch {
+  /** Market ids whose supply or borrow product was asked for. */
+  marketIds: string[]
+  /** Requested productIds this chain's listing recognised. */
+  listed: Set<string>
+  /** Set when the listing query itself failed — "unknown", not "absent". */
+  error?: string
+}
+
 /**
- * The chain's market ids whose supply or borrow product was asked for.
+ * The chain's market ids whose supply or borrow product was asked for, and the
+ * requested productIds the listing recognised.
  *
  * `MARKETS_ALL` is a single unpaginated query, so this is cheap next to the
  * snapshot pagination it narrows or avoids.
+ *
+ * It returns the recognised productIds too, because a product that is LISTED
+ * but unanswered and a product NO listing knows are different incidents, and
+ * only this function can tell them apart.
  */
 async function marketsMatching(
   client: ReturnType<typeof createGraphQLClient>,
   chainId: number,
   chainName: string,
   wanted: Set<string>
-): Promise<string[]> {
+): Promise<ListingMatch> {
   const { data, error } = await client
     .query<{ markets: { id: string }[] }>(MARKETS_ALL, {})
     .toPromise()
 
-  if (error || !data?.markets) return []
+  if (error || !data?.markets) {
+    return {
+      marketIds: [],
+      listed: new Set(),
+      error: error?.message ?? 'no markets returned',
+    }
+  }
 
   const chain = { id: chainId, name: chainName }
-  return data.markets
-    .filter((m) =>
-      (['supply', 'borrow'] as const).some((kind) =>
-        wanted.has(buildProductId(m.id, chain, kind))
-      )
-    )
-    .map((m) => m.id)
+  const marketIds: string[] = []
+  const listed = new Set<string>()
+
+  for (const m of data.markets) {
+    const sides = (['supply', 'borrow'] as const)
+      .map((kind) => buildProductId(m.id, chain, kind))
+      .filter((id) => wanted.has(id))
+    if (sides.length === 0) continue
+    marketIds.push(m.id)
+    for (const id of sides) listed.add(id)
+  }
+
+  return { marketIds, listed }
 }
 
 /**
@@ -269,7 +296,7 @@ async function fetchCompoundHistory(
     `[history:compound] Fetching ${label} snapshots for ${validChains.length} chains (in parallel batches)`
   )
 
-  const chainPoints = await processBatches(
+  const chainOutcomes = await processBatches(
     validChains,
     async ({ chainId, chainConfig }) => {
       const chainClient = createGraphQLClient(
@@ -278,6 +305,7 @@ async function fetchCompoundHistory(
         60_000
       )
       const chainName = chainConfig.name.toLowerCase()
+      let listedHere = new Set<string>()
 
       try {
         const where: Record<string, unknown> = {}
@@ -291,19 +319,26 @@ async function fetchCompoundHistory(
         // come from the subgraph and go through buildProductId; a productId is
         // never taken apart to get them.
         if (wanted) {
-          const targetMarkets = await marketsMatching(
+          const match = await marketsMatching(
             chainClient,
             chainId,
             chainName,
             wanted
           )
-          if (targetMarkets.length === 0) {
+          if (match.error) {
+            log(
+              `[history:compound] ${chainName}: listing failed — ${match.error}`
+            )
+            return { points: [], listed: match.listed, failedChain: chainName }
+          }
+          if (match.marketIds.length === 0) {
             log(
               `[history:compound] ${chainName}: no requested market — skipped`
             )
-            return []
+            return { points: [], listed: match.listed }
           }
-          where.market_in = targetMarkets
+          listedHere = match.listed
+          where.market_in = match.marketIds
         }
 
         const snapshots = await fetchAllSnapshots<AccountingSnapshot>(
@@ -327,19 +362,32 @@ async function fetchCompoundHistory(
         log(
           `[history:compound] ${chainName}: ${snapshots.length} ${label} snapshots`
         )
-        return points
+        return { points, listed: listedHere }
       } catch (err) {
         log(
           `[history:compound] ${chainName} ${label} failed: ${err instanceof Error ? err.message : String(err)}`
         )
-        return null
+        // NOT null: a chain that blew up must still be able to say so, or its
+        // products come back indistinguishable from products Compound has
+        // never carried.
+        return { points: [], listed: listedHere, failedChain: chainName }
       }
     }
   )
 
   const collected: HistoryDataPoint[] = []
-  for (const pts of chainPoints) {
-    for (const pt of pts) collected.push(pt)
+  const listedAnywhere = new Set<string>()
+  const failedChains: string[] = []
+  for (const outcome of chainOutcomes) {
+    for (const pt of outcome.points) collected.push(pt)
+    if (outcome.failedChain) {
+      // A chain that broke knows nothing reportable about its products: it may
+      // have listed them a moment before failing, and "listed, no snapshot"
+      // would read as a quiet upstream gap rather than the outage it is.
+      failedChains.push(outcome.failedChain)
+      continue
+    }
+    for (const id of outcome.listed) listedAnywhere.add(id)
   }
 
   // One snapshot carries both sides, so a market fetched for its supply side
@@ -349,12 +397,28 @@ async function fetchCompoundHistory(
     ? collected.filter((p) => wanted.has(p.productId))
     : collected
 
+  // Three ways to go unanswered, and they are not the same incident.
+  //
+  // Reporting all of them as a missing market sent a reader after a delisting
+  // that had not happened: on 2026-07-26 the nine markets so reported were
+  // active, catalogued and collected normally — only the HOUR was absent
+  // upstream. Compound's subgraph writes an accounting row when a market saw
+  // activity in the hour, not every hour (measured: 23 rows over a 48-hour
+  // window), so a listed market with no row is the norm and the neighbour
+  // fallback is the correct outcome, not a bug to chase.
   const failures: HistoryFailure[] = []
   if (wanted) {
     const returned = new Set(allPoints.map((p) => p.productId))
     for (const productId of wanted) {
       if (returned.has(productId)) continue
-      failures.push({ productId, reason: 'no Compound market carries it' })
+      failures.push({
+        productId,
+        reason: listedAnywhere.has(productId)
+          ? 'market listed but no accounting snapshot in the window'
+          : failedChains.length > 0
+            ? `Compound could not answer on ${failedChains.join(', ')} — cannot tell whether it carries this product`
+            : 'no Compound market carries it',
+      })
     }
   }
 

@@ -47,7 +47,19 @@ function snapshot(marketId: string) {
   }
 }
 
-function makeClient() {
+/**
+ * @param snapshotMarkets markets the accounting entity actually has rows for.
+ *   Compound's subgraph writes an hourly entry only when a market saw activity
+ *   in the hour — measured 2026-07-26 at 23 entries over a 48-hour window, so
+ *   16-24% of hours. A listed market with no row for the hour is the norm, not
+ *   an anomaly, and the adapter must not report it as a missing market.
+ * @param listingFails makes the markets query error, so the chain answers
+ *   nothing for a reason that is neither of the above.
+ */
+function makeClient(
+  opts: { snapshotMarkets?: string[]; listingFails?: boolean } = {}
+) {
+  const snapshotMarkets = opts.snapshotMarkets ?? [MARKET_A, MARKET_B]
   const calls: { doc: unknown; vars: Record<string, unknown> }[] = []
 
   const client = {
@@ -56,6 +68,9 @@ function makeClient() {
       return {
         toPromise: async () => {
           if (doc === MARKETS_ALL) {
+            if (opts.listingFails) {
+              return { data: undefined, error: { message: 'subgraph down' } }
+            }
             return {
               data: {
                 markets: [MARKET_A, MARKET_B].map((id) => ({
@@ -78,7 +93,9 @@ function makeClient() {
           }
           if (doc === MARKET_HOURLY_ACCOUNTING) {
             const filter = vars.where as { market_in?: string[] } | undefined
-            const ids = filter?.market_in ?? [MARKET_A, MARKET_B]
+            const ids = (filter?.market_in ?? [MARKET_A, MARKET_B]).filter(
+              (id) => snapshotMarkets.includes(id)
+            )
             // Page 2 must come back empty or fetchAllSnapshots keeps paging.
             const first = (vars.skip as number) > 0
             return {
@@ -160,5 +177,73 @@ describe('getCompoundApyHistory — productIds targeting', () => {
     expect(snapshotCalls().length).toBeGreaterThan(0)
     const where = snapshotCalls()[0].vars.where as { market_in?: string[] }
     expect(where.market_in).toBeUndefined()
+  })
+})
+
+/**
+ * Three ways a requested product goes unanswered, and they are not the same
+ * incident. Reporting all three as "no Compound market carries it" sent an
+ * on-call reader after a delisting that had not happened: on the night of
+ * 2026-07-26 the nine markets so reported were active, catalogued and
+ * collected normally, and only the HOUR was missing upstream.
+ */
+describe('getCompoundApyHistory — why a product went unanswered', () => {
+  const reasonFor = (result: unknown, productId: string): string | undefined =>
+    (
+      result as { failures: { productId: string; reason: string }[] }
+    ).failures.find((f) => f.productId === productId)?.reason
+
+  it('says the snapshot is missing when the market itself is listed', async () => {
+    current = makeClient({ snapshotMarkets: [] })
+
+    const result = await run({ productIds: [pid(MARKET_A, 'supply')] })
+
+    expect(reasonFor(result, pid(MARKET_A, 'supply'))).toMatch(/snapshot/i)
+  })
+
+  it('does not blame the market when the market is listed', async () => {
+    current = makeClient({ snapshotMarkets: [] })
+
+    const result = await run({ productIds: [pid(MARKET_A, 'supply')] })
+
+    expect(reasonFor(result, pid(MARKET_A, 'supply'))).not.toMatch(
+      /no Compound market carries it/i
+    )
+  })
+
+  it('still blames the market when no listing knows it', async () => {
+    const result = await run({ productIds: [pid('0xdead', 'supply')] })
+
+    expect(reasonFor(result, pid('0xdead', 'supply'))).toMatch(
+      /no Compound market carries it/i
+    )
+  })
+
+  it('names the upstream failure rather than inventing a missing market', async () => {
+    // The listing query is what failed, so we cannot know whether Compound
+    // carries the product. Claiming it does not would be a guess presented as
+    // a finding.
+    current = makeClient({ listingFails: true })
+
+    const result = await run({ productIds: [pid(MARKET_A, 'supply')] })
+
+    expect(reasonFor(result, pid(MARKET_A, 'supply'))).toMatch(/cannot tell/i)
+  })
+
+  it('does not pass a broken chain off as a missing snapshot', async () => {
+    // The listing answered, so the market IS known — but the fetch that
+    // followed blew up, and "listed, no snapshot" would read as a quiet
+    // upstream gap rather than an outage. A chain that failed knows nothing
+    // reportable about its products.
+    current = makeClient({ snapshotMarkets: [] })
+    const boom = current.client.query
+    current.client.query = (doc: unknown, vars: Record<string, unknown>) => {
+      if (doc === MARKET_HOURLY_ACCOUNTING) throw new Error('gateway timeout')
+      return boom.call(current.client, doc, vars)
+    }
+
+    const result = await run({ productIds: [pid(MARKET_A, 'supply')] })
+
+    expect(reasonFor(result, pid(MARKET_A, 'supply'))).toMatch(/cannot tell/i)
   })
 })
