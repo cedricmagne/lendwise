@@ -317,12 +317,32 @@ export function dailyKey(productId: string, date: Date): string {
  * products within [from, to]. Lets a dry run report how many rows a backfill
  * would actually add vs skip, without writing anything.
  */
+/**
+ * The bounds a daily-row probe must span to cover every day its keys can name.
+ *
+ * `apy_daily.date` is UTC midnight, so a raw timestamp bound silently excludes
+ * the very day it falls in. Exported so the rule is stated once and testable.
+ */
+export function dayAlignedRange(
+  from: Date,
+  to: Date
+): { from: Date; to: Date } {
+  return { from: floorUtcDay(from), to: floorUtcDay(to) }
+}
+
 export async function existingDailyKeys(
   productIds: string[],
   from: Date,
   to: Date
 ): Promise<Set<string>> {
   if (productIds.length === 0) return new Set()
+  // Rows are dated at UTC midnight and the keys below are day-floored, so the
+  // bounds must be too. A caller asking for "the last 3 days" hands over a
+  // mid-afternoon `from`, and the first day's row — dated hours EARLIER — fell
+  // outside this filter: the day looked missing, the backfill announced it as
+  // insertable, and `ON CONFLICT DO NOTHING` then wrote nothing. 72 announced,
+  // 0 written, measured 2026-07-26.
+  const day = dayAlignedRange(from, to)
   const keys = new Set<string>()
   for (let i = 0; i < productIds.length; i += MAX_PRODUCT_IDS) {
     const chunk = productIds.slice(i, i + MAX_PRODUCT_IDS)
@@ -332,8 +352,8 @@ export async function existingDailyKeys(
       .where(
         and(
           inArray(apyDaily.productId, chunk),
-          gte(apyDaily.date, from),
-          lte(apyDaily.date, to)
+          gte(apyDaily.date, day.from),
+          lte(apyDaily.date, day.to)
         )
       )
     for (const r of rows) keys.add(dailyKey(r.productId, r.date))
@@ -357,11 +377,37 @@ function dailyBackfillTuple(r: DailyBackfillInput, computedAt: Date) {
 }
 
 /**
+ * The rows a backfill will actually write: guarded to the catalogue, then
+ * deduped to the last reading per (productId, day) so one statement never
+ * touches the same key twice.
+ *
+ * Exported because a dry run MUST count with this function rather than with a
+ * rule of its own. The backfill announced 1,724 insertions and wrote 72 on
+ * 2026-07-26 — it counted points, the write counted rows — which is task 10's
+ * defect a second time. Two implementations of "what gets written" always
+ * drift; one cannot.
+ *
+ * An EMPTY `listed` set fails open and keeps everything: it means the
+ * catalogue read gave nothing, and dropping a whole backfill is worse than a
+ * few orphan rows (which `clean:orphans` and the reconcile probe now catch).
+ */
+export function selectDailyInserts(
+  inputs: DailyBackfillInput[],
+  listed: Set<string>
+): DailyBackfillInput[] {
+  const byKey = new Map<string, DailyBackfillInput>()
+  for (const p of inputs) {
+    if (listed.size > 0 && !listed.has(p.productId)) continue
+    byKey.set(dailyKey(p.productId, p.date), p)
+  }
+  return [...byKey.values()]
+}
+
+/**
  * Backfill daily rows from provider history. ADD-ONLY: ON CONFLICT
  * (product_id, date) DO NOTHING — never overwrites a row the daily aggregation
- * (or a prior backfill) already wrote. Guarded to the active catalogue, and
- * deduped to the last reading per (productId, day) so one statement never
- * touches the same key twice. Returns the number of rows actually inserted.
+ * (or a prior backfill) already wrote. Selection is `selectDailyInserts`.
+ * Returns the number of rows actually inserted.
  */
 export async function backfillDailyRows(
   inputs: DailyBackfillInput[],
@@ -369,13 +415,7 @@ export async function backfillDailyRows(
 ): Promise<number> {
   if (inputs.length === 0) return 0
 
-  const listed = await listedProductIds()
-  const byKey = new Map<string, DailyBackfillInput>()
-  for (const p of inputs) {
-    if (listed.size > 0 && !listed.has(p.productId)) continue
-    byKey.set(dailyKey(p.productId, p.date), p)
-  }
-  const rows = [...byKey.values()]
+  const rows = selectDailyInserts(inputs, await listedProductIds())
 
   let written = 0
   for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
@@ -452,7 +492,7 @@ function marketPatchTuple(p: DailyMarketPatch) {
  */
 export async function patchDailyMarketState(
   patches: DailyMarketPatch[],
-  opts: { overwrite?: boolean } = {}
+  opts: { overwrite?: boolean; dryRun?: boolean } = {}
 ): Promise<number> {
   if (patches.length === 0) return 0
 
@@ -476,15 +516,32 @@ export async function patchDailyMarketState(
   let changed = 0
   for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
     const chunk = rows.slice(i, i + UPSERT_CHUNK)
+    const values = sql`(VALUES ${sql.join(chunk.map(marketPatchTuple), sql`, `)}) AS v(
+        product_id, date, ${sql.raw(PATCHABLE_MARKET_COLUMNS.join(', '))}
+      )`
+    const matches = sql`d.product_id = v.product_id
+        AND d.date = v.date
+        AND (${sql.join(changes, sql` OR `)})`
+
+    // A dry run asks the database the VERY SAME question, rather than counting
+    // candidate rows in memory. The script used to announce 791 patches for 2
+    // rows changed, because it counted every row carrying market state while
+    // the UPDATE deliberately touches only those with a NULL left to fill.
+    if (opts.dryRun) {
+      const res = await db.execute(sql`
+        SELECT count(*) AS count
+        FROM apy_daily d, ${values}
+        WHERE ${matches}
+      `)
+      changed += Number(res.rows[0]?.count ?? 0)
+      continue
+    }
+
     const res = await db.execute(sql`
       UPDATE apy_daily d
       SET ${sql.join(set, sql`, `)}
-      FROM (VALUES ${sql.join(chunk.map(marketPatchTuple), sql`, `)}) AS v(
-        product_id, date, ${sql.raw(PATCHABLE_MARKET_COLUMNS.join(', '))}
-      )
-      WHERE d.product_id = v.product_id
-        AND d.date = v.date
-        AND (${sql.join(changes, sql` OR `)})
+      FROM ${values}
+      WHERE ${matches}
     `)
     changed += res.rowCount ?? 0
   }

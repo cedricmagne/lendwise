@@ -363,11 +363,63 @@ export function mergeMarketStates(
 }
 
 /**
+ * Reduce a series to one point per (productId, UTC day), keeping the day's
+ * LAST reading and dating it at UTC midnight.
+ *
+ * Aave's API windows do not carry the granularity the caller asked for: a
+ * lookback of 7 days or less maps to `LAST_WEEK`, which answers with 168
+ * HOURLY points. Measured 2026-07-26 — a 3-day request returned 6,904 points
+ * where an 8-day request (`LAST_YEAR`, genuinely daily) returned 1,376, a
+ * longer window bringing back five times less data. `interval: 'DAY'` promises
+ * one point per (product, day), so the collapse is owed here rather than left
+ * for every caller to rediscover: the backfill's dry run announced 1,724
+ * insertions for 72 rows written precisely because it counted these duplicates.
+ *
+ * LAST reading, not an average: the market state merged in afterwards is
+ * day-closing by construction, so the rates it travels with must describe the
+ * same moment. An average would pair a closing balance with a rate nobody ever
+ * observed. On a `LAST_YEAR` series, already one point per day, this is a no-op.
+ */
+export function collapseToDaily(
+  points: HistoryDataPoint[]
+): HistoryDataPoint[] {
+  const byDay = new Map<string, { at: number; point: HistoryDataPoint }>()
+
+  for (const p of points) {
+    const t = p.timestamp.getTime()
+    const day = new Date(
+      Date.UTC(
+        p.timestamp.getUTCFullYear(),
+        p.timestamp.getUTCMonth(),
+        p.timestamp.getUTCDate()
+      )
+    )
+    // Same key the market-state merge uses, so the two can never disagree on
+    // what "a day" is.
+    const key = marketDayKey(p.productId, p.timestamp)
+    const kept = byDay.get(key)
+    if (kept && kept.at >= t) continue
+    byDay.set(key, { at: t, point: { ...p, timestamp: day } })
+  }
+
+  // Upstream pages arrive in no guaranteed order; sort so the output does not
+  // depend on it.
+  return [...byDay.values()]
+    .sort(
+      (a, b) =>
+        a.point.timestamp.getTime() - b.point.timestamp.getTime() ||
+        a.point.productId.localeCompare(b.point.productId)
+    )
+    .map((e) => e.point)
+}
+
+/**
  * YieldAdapter.getApyHistory implementation for Aave v3.
  *
  * Maps the contract's (startTimestamp, endTimestamp) range onto an Aave API
  * window, delegates to `fetchAaveHistory`, trims the (now-anchored) points back
- * down to the requested range, then merges in the subgraphs' market state.
+ * down to the requested range, collapses them to the requested granularity,
+ * then merges in the subgraphs' market state.
  *
  * The merge runs only for `interval: 'DAY'` and only when `includeMarket` is
  * not false: subgraph states are day-closing values by construction, and the
@@ -390,10 +442,12 @@ export async function getAaveApyHistory(
     onProgress: params.onProgress,
   })
   // The API windows are anchored to now — trim to the requested range.
-  const inRange = points.filter((p) => {
+  const trimmed = points.filter((p) => {
     const t = p.timestamp.getTime() / 1000
     return t >= params.startTimestamp && t <= params.endTimestamp
   })
+  // …and they carry their own granularity, which is not the one asked for.
+  const inRange = params.interval === 'DAY' ? collapseToDaily(trimmed) : trimmed
 
   const wantsMarket =
     params.interval === 'DAY' &&

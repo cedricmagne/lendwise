@@ -24,8 +24,11 @@
  * gave amounts but no price, from another provider's same-day observation.
  *
  * DRY-RUN BY DEFAULT: diffs against the table and reports what it WOULD change.
- * Pass --write to persist. Caveat: in a dry run the patch count ignores rows
- * the INSERT would have created — a --write run inserts first, then patches.
+ * Pass --write to persist. Both counts come from the code that does the write —
+ * `selectDailyInserts` for the rows, the patch statement's own predicate for
+ * the patches — so an announced number is a prediction, not an estimate.
+ * Caveat: the patch count still ignores rows the INSERT would have created,
+ * since a --write run inserts first and then patches.
  *
  * Usage:
  *   pnpm backfill:history                                # dry run, morpho, default new chains
@@ -47,6 +50,7 @@ import {
   existingDailyKeys,
   listedProductIds,
   patchDailyMarketState,
+  selectDailyInserts,
 } from '@/lib/db/repositories/apy'
 import type { BorrowMarketState, SupplyMarketState } from '@/lib/db/types'
 import { toHistoryResult } from '@/lib/protocols/core/history-result'
@@ -219,15 +223,26 @@ async function runAdapter(
   const insertable = opts.patchOnly
     ? []
     : points.filter((p) => !existing.has(dailyKey(p.productId, p.timestamp)))
-  const inserts = insertable.filter((p) => listed.has(p.productId))
-  const unlisted = insertable.length - inserts.length
+  const listedPoints = insertable.filter((p) => listed.has(p.productId))
+  const unlisted = insertable.length - listedPoints.length
+
+  // The rows the write will create, decided by the WRITE'S OWN function: many
+  // readings of one day collapse into the single row that will exist. Counting
+  // points here instead announced 1,724 insertions for 72 rows on 2026-07-26,
+  // Aave answering a 3-day DAY request with 24 hourly readings per day.
+  const inserts = selectDailyInserts(listedPoints.map(toDailyInput), listed)
 
   const patches = points
     .filter((p) => existing.has(dailyKey(p.productId, p.timestamp)))
     .map(toMarketPatch)
     .filter((p): p is DailyMarketPatch => p !== null)
 
-  const supply = inserts.filter((p) => p.kind === 'supply').length
+  const kindOf = new Map(
+    listedPoints.map((p) => [dailyKey(p.productId, p.timestamp), p.kind])
+  )
+  const supply = inserts.filter(
+    (r) => kindOf.get(dailyKey(r.productId, r.date)) === 'supply'
+  ).length
   console.log(
     `  INSERT: ${inserts.length} new rows (supply=${supply} borrow=${inserts.length - supply})`
   )
@@ -242,14 +257,19 @@ async function runAdapter(
       `  SKIP  : ${unlisted} points for products absent from the catalogue (sample: ${sample?.productId})`
     )
   }
-  console.log(`  PATCH : ${patches.length} existing rows carry market state`)
+  // Asked of the database with the write's own predicate, not counted in
+  // memory: a candidate row already carrying its market state is not a row the
+  // fill-only UPDATE will touch. Counting candidates announced 791 for 2.
+  const patchable = await patchDailyMarketState(patches, {
+    overwrite: opts.overwrite,
+    dryRun: true,
+  })
+  console.log(`  PATCH : ${patchable} existing rows would gain market state`)
 
   if (!opts.write) return { inserted: 0, patched: 0 }
 
   const inserted =
-    inserts.length > 0
-      ? await backfillDailyRows(inserts.map(toDailyInput), new Date())
-      : 0
+    inserts.length > 0 ? await backfillDailyRows(inserts, new Date()) : 0
   const patched = await patchDailyMarketState(patches, {
     overwrite: opts.overwrite,
   })
