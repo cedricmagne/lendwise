@@ -362,17 +362,7 @@ const createColumns = (
       const apyValue = row.original[HORIZON_CONFIG[horizon].apyKey] as
         | number
         | undefined
-      return (
-        <span className="font-mono">
-          {apyValue !== undefined && !Number.isNaN(apyValue)
-            ? apyValue < 0.0001
-              ? '<0.01%'
-              : apyValue > 10
-                ? '>1000%'
-                : `${(apyValue * 100).toFixed(2)}%`
-            : '-'}
-        </span>
-      )
+      return <span className="font-mono">{formatApy(apyValue)}</span>
     },
     enableHiding: false,
   },
@@ -923,11 +913,7 @@ export function BorrowTableClient() {
                               >
                                 {value === undefined || Number.isNaN(value)
                                   ? '—'
-                                  : value < 0.0001
-                                    ? '<0.01%'
-                                    : value > 10
-                                      ? '>1000%'
-                                      : `${(value * 100).toFixed(2)}%`}
+                                  : formatApy(value)}
                               </span>
                             ))}
                           </div>

@@ -277,15 +277,7 @@ const createColumns = (
       const hasRewards = rewardsValue !== undefined && rewardsValue > 0
       return (
         <div className="flex items-center gap-1.5">
-          <span className="font-mono">
-            {apyValue !== undefined && !Number.isNaN(apyValue)
-              ? apyValue < 0.0001
-                ? '<0.01%'
-                : apyValue > 10
-                  ? '>1000%'
-                  : `${(apyValue * 100).toFixed(2)}%`
-              : '-'}
-          </span>
+          <span className="font-mono">{formatApy(apyValue)}</span>
           <span className="inline-flex w-3.5 shrink-0 items-center">
             {hasRewards && (
               <Tooltip>
@@ -769,11 +761,7 @@ export function SupplyTableClient() {
                               >
                                 {value === undefined || Number.isNaN(value)
                                   ? '—'
-                                  : value < 0.0001
-                                    ? '<0.01%'
-                                    : value > 10
-                                      ? '>1000%'
-                                      : `${(value * 100).toFixed(2)}%`}
+                                  : formatApy(value)}
                               </span>
                             ))}
                           </div>

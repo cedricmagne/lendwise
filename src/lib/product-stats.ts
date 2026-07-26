@@ -127,12 +127,25 @@ export const findOpportunity = <T extends Product>(
 export const pluralize = (count: number, singular: string) =>
   `${count} ${singular}${count === 1 ? '' : 's'}`
 
-/** Same clamping as the APY table cell, so a stat never reads differently from the row it points at. */
+/**
+ * The one place an APY becomes text. Every table cell, stat and modal calls it,
+ * so a stat can never read differently from the row it points at.
+ *
+ * Rates go NEGATIVE and it is not an error: a borrow market whose rewards
+ * outrun its base rate pays the user to borrow. The tables each carried their
+ * own copy of this clamp written as `value < 0.0001`, which is true of every
+ * negative — so a real -1.10% rendered as "<0.01%", a rate that pays you shown
+ * as a rate too small to matter.
+ *
+ * A near-zero negative reads ">-0.01%", not "<-0.01%": it sits BETWEEN -0.01%
+ * and zero, and a clamp must not assert the wrong side of its own bound.
+ */
 export const formatApy = (value: number | null | undefined) => {
   if (value === undefined || value === null || !Number.isFinite(value))
     return '-'
-  if (Math.abs(value) < 0.0001) return '<0.01%'
+  if (Math.abs(value) < 0.0001) return value < 0 ? '>-0.01%' : '<0.01%'
   if (value > 10) return '>1000%'
+  if (value < -10) return '<-1000%'
   return `${(value * 100).toFixed(2)}%`
 }
 
