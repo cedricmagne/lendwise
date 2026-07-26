@@ -8,6 +8,7 @@ import { BorrowProduct } from '@/types'
 
 import { MORPHO_V1_CHAINS } from './config'
 import { ListBorrowProductsQuery } from './generated/graphql'
+import { morphoMarketWhere } from './listing'
 import { client } from './positions'
 import { LIST_BORROW_PRODUCTS } from './queries'
 import { buildProductId } from './utils'
@@ -82,12 +83,14 @@ export async function getBorrowProducts(): Promise<BorrowProduct[]> {
         .query<ListBorrowProductsQuery>(LIST_BORROW_PRODUCTS, {
           first: 100,
           skip,
-          // No TVL floor here — see supply-products.ts. The $100k is now a single
-          // read-side rule in lib/display-eligibility, not a per-query one.
-          where: {
-            listed: true,
-            chainId_in: Object.keys(MORPHO_V1_CHAINS).map((key) => Number(key)),
-          },
+          // The SAME predicate the catalogue uses, minus the ingestion floor —
+          // one named flag apart instead of two hand-rolled objects free to
+          // drift. No TVL floor here: see supply-products.ts, the $100k is a
+          // single read-side rule in lib/display-eligibility.
+          where: morphoMarketWhere(
+            Object.keys(MORPHO_V1_CHAINS).map((key) => Number(key)),
+            { unfloored: true }
+          ),
         })
         .toPromise()
 

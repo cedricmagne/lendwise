@@ -725,7 +725,13 @@ export function ProductDetailDrawer({
   // guards existing zero-filled rows too instead of rendering a false flat line.
   const hasTvlHistory = points.some((p) => ((p[tvlKey] as number) ?? 0) > 0)
 
-  const sizeLabel = kind === 'supply' ? 'Total Deposits' : 'Total Borrowed'
+  // Deposits on BOTH sides: the card below is bound to `assetAmount`, which is
+  // the market's total SUPPLY for a borrow product too (`borrow-products.ts`
+  // sets it from `state.supplyAssets`). Labelling it "Total Borrowed" made the
+  // drawer contradict itself — 209.21K "borrowed" next to 0% utilization — and
+  // contradict the table, which calls the same field "Deposits". The borrowed
+  // figure has its own chart below, fed by `borrowAssetsUsd`.
+  const sizeLabel = 'Total Deposits'
   const assetLabel = kind === 'supply' ? 'Asset' : 'Loan Asset'
   const apyLabel = kind === 'supply' ? 'Supply APY' : 'Borrow APY'
 

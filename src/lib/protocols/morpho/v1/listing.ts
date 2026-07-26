@@ -52,10 +52,36 @@ export interface ListingOpts {
   unfloored?: boolean
 }
 
-/** The markets (Morpho Blue) we list — i.e. the borrow side. */
+/**
+ * The markets (Morpho Blue) we list — i.e. the borrow side.
+ *
+ * `isIdle: false` is NOT an ingestion floor and `unfloored` does not lift it.
+ *
+ * An idle market is Morpho Blue's zero-collateral market: a parking slot where
+ * MetaMorpho vaults leave liquidity they have not allocated. Nobody can post
+ * collateral there, so nobody can ever borrow — it is not a borrow market with
+ * missing data, it is not a borrow market. Left in, it reached the borrow table
+ * as `USDC/none`, counted toward the market total and the median, and stood as
+ * a candidate for "cheapest rate" at a 0.00% nobody can take.
+ *
+ * A floor is a threshold a market drifts across, which is why a targeted
+ * refetch must be able to drop it. This is structural and immutable: a Morpho
+ * Blue market id is the hash of its parameters, collateral included, so a
+ * market can never stop being idle. Nothing crosses this boundary in either
+ * direction, so the exclusion is safe even on a question about a past hour.
+ *
+ * The `false` is load-bearing and must stay EXPLICIT: on this API a null — or
+ * an omitted key — means "do not filter", not "idle is unset". Measured
+ * 2026-07-26 against the live API, listed markets: omitted 566, null 566,
+ * false 531, true 35. Dropping the key is therefore not a simplification, it
+ * is how the idle markets got in. The two branches also sum to the unfiltered
+ * total, on every chain and on Base alone, so no market carries an undetermined
+ * idle state that `false` would silently discard.
+ */
 export function morphoMarketWhere(chainIds: number[], opts?: ListingOpts) {
   return {
     listed: true,
+    isIdle: false,
     chainId_in: chainIds,
     ...(!opts?.unfloored &&
       floors.minBorrowAssetsUsd != null && {

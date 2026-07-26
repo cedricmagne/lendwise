@@ -7,6 +7,7 @@ import { SupplyProduct } from '@/types'
 
 import { MORPHO_V1_CHAINS } from './config'
 import { ListSupplyProductsQuery } from './generated/graphql'
+import { morphoVaultWhere } from './listing'
 import { client } from './positions'
 import { LIST_SUPPLY_PRODUCTS } from './queries'
 import { buildProductId } from './utils'
@@ -22,15 +23,21 @@ export async function getSupplyProducts(): Promise<SupplyProduct[]> {
         .query<ListSupplyProductsQuery>(LIST_SUPPLY_PRODUCTS, {
           first: 100,
           skip,
-          // No TVL floor here. It used to be `totalAssetsUsd_gte: 100000` — a
+          // The SAME predicate the catalogue uses, minus the ingestion floor.
+          // It used to be spelled out here with `totalAssetsUsd_gte: 100000` — a
           // DISPLAY rule buried in a fetch, which meant this page and the public
           // API applied different ones and disagreed about which pools exist. The
           // floor now lives in lib/display-eligibility, applied on the read side,
           // to every surface at once.
-          where: {
-            listed: true,
-            chainId_in: Object.keys(MORPHO_V1_CHAINS).map((key) => Number(key)),
-          },
+          //
+          // Spelling the clause out again would have been identical TODAY, since
+          // no `minTvlUsd` is configured — and identical-by-coincidence is how
+          // the borrow side drifted: setting that floor would have silently put
+          // vaults on this page that the collector never ingests.
+          where: morphoVaultWhere(
+            Object.keys(MORPHO_V1_CHAINS).map((key) => Number(key)),
+            { unfloored: true }
+          ),
         })
         .toPromise()
 
