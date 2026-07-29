@@ -1,10 +1,9 @@
 'use client'
 
-import { useState } from 'react'
-
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { ArrowRight, Lock, Shield, TrendingUp, Wallet, Zap } from 'lucide-react'
 import { motion } from 'motion/react'
+import { useState } from 'react'
 
 import { NetworkFamilySelectorDialog } from '@/components/wallet/NetworkFamilySelectorDialog'
 import { useStellarWallet } from '@/contexts/StellarWalletContext'
@@ -12,21 +11,18 @@ import { useStellarWallet } from '@/contexts/StellarWalletContext'
 const FEATURES = [
   {
     icon: TrendingUp,
-    title: 'Yield optimization',
-    description:
-      'Access AI-powered strategies to maximize your returns across protocols.',
+    title: 'Rate tracking',
+    description: 'Track current and historical APYs across your positions.',
   },
   {
     icon: Shield,
     title: 'Risk management',
-    description:
-      'Monitor health ratios and collateral in real-time across all your positions.',
+    description: 'Monitor health factors and collateral values in real time.',
   },
   {
     icon: Zap,
-    title: 'One-click rebalancing',
-    description:
-      'Rebalance your portfolio instantly with automated liquidity routing.',
+    title: 'Optimization',
+    description: 'Optimize your positions across lending markets.',
   },
 ]
 
@@ -70,12 +66,12 @@ export function WalletNotConnected() {
               Connect your wallet
             </h1>
             <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
-              View your positions, track yields and optimize your DeFi portfolio
-              in one place.
+              Analyze, track and optimize your positions in one place.
             </p>
           </div>
 
           <button
+            type="button"
             onClick={() => setShowNetworkDialog(true)}
             className="group bg-primary text-primary-foreground shadow-primary/20 hover:bg-primary/90 inline-flex cursor-pointer items-center gap-2.5 rounded-xl px-6 py-3 text-sm font-semibold shadow-lg transition-all"
           >
@@ -110,7 +106,7 @@ export function WalletNotConnected() {
         <div className="flex w-full items-center gap-4">
           <div className="bg-border/50 h-px flex-1" />
           <span className="text-muted-foreground text-xs tracking-wider uppercase">
-            What you'll unlock
+            What you will unlock
           </span>
           <div className="bg-border/50 h-px flex-1" />
         </div>

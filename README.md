@@ -5,7 +5,7 @@
 
 <br />
 
-# Unified layer for DeFi lending. One standard.
+# Unified view for lending markets. One standard.
 
 Lendwise compares and monitors 700+ lending markets across **Aave**, **Morpho**, **Compound**, **Blend** and more. It standardizes rates to net APY (base ± fees ± rewards) and optimizes your capital allocation.
 

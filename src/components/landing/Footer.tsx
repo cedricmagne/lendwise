@@ -63,7 +63,7 @@ export function Footer() {
           <div className="max-desk:col-span-2">
             <Logo className="mb-4" />
             <p className="text-ink-faint m-0 max-w-[30ch] text-[13.5px] leading-[1.6]">
-              Unified view for cross-chain lending markets.
+              Unified view for lending markets.
             </p>
           </div>
           {Object.entries(groups).map(([title, items]) => (
