@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 
+import { lastObservation } from '@/lib/db/last-observation'
 import { MAX_PRODUCT_IDS, clampPage } from '@/lib/db/pagination'
 import { db } from '@/lib/db/postgres'
 import {
@@ -11,23 +12,11 @@ import {
 } from '@/lib/db/schema'
 import type {
   BorrowMarketState,
+  CatalogueRow,
+  Kind,
   RewardItem,
   SpotPayload,
-  SupplyMarketState,
 } from '@/lib/db/types'
-
-/**
- * Build a parenthesized `($1, $2, …)` list for `col IN (...)`.
- * neon-http does not bind a JS array as a Postgres array, so `= ANY($1)` fails
- * with "op ANY/ALL (array) requires array on right side". Expanding to IN works.
- * Caller must guard against empty input.
- */
-function inList(values: string[]) {
-  return sql`(${sql.join(
-    values.map((v) => sql`${v}`),
-    sql`, `
-  )})`
-}
 
 // ─── Hourly running-mean upsert ─────────────────────────────────────────────
 
@@ -65,29 +54,56 @@ function meanSetClause() {
 }
 
 /**
+ * Columns carrying the LAST observation of the slot. Written as-is, never
+ * averaged: see lib/db/last-observation. The COALESCE keeps the last known
+ * value when the current observation doesn't know — "don't know now" doesn't
+ * erase "knew ten minutes ago".
+ */
+const LAST_COLUMNS = [
+  'last_supply_assets',
+  'last_supply_assets_usd',
+  'last_borrow_assets',
+  'last_borrow_assets_usd',
+  'last_collateral_assets_usd',
+  'last_utilization_rate',
+  'last_asset_price_usd',
+] as const
+
+function lastSetClause() {
+  const parts = LAST_COLUMNS.map(
+    (c) =>
+      sql`${sql.raw(c)} = COALESCE(excluded.${sql.raw(c)}, apy_hourly.${sql.raw(c)})`
+  )
+  return sql.join(parts, sql`, `)
+}
+
+/**
  * Rows per multi-row upsert. Kept small so a single statement stays well under
  * the neon-http request-payload cap (the backfill hit it at ~2000 rows) and the
- * Postgres 65535-param bind limit (250 × 20 = 5000).
+ * Postgres 65535-param bind limit (250 × 27 = 6750).
  */
 const UPSERT_CHUNK = 250
 
 /** One VALUES tuple for the bulk hourly upsert. */
 function hourlyValueTuple(p: SpotPayload, hour: Date, slotTime: Date) {
   const isSupply = p.kind === 'supply'
-  const sm = p.market as SupplyMarketState
   const bm = p.market as BorrowMarketState
+  // The averaged columns and the `last_*` columns start from the SAME
+  // extraction: they cannot disagree on what an unknown amount is.
+  const last = lastObservation(p)
   return sql`(
     ${p.productId}, ${hour},
     ${p.apy.base}, ${p.apy.rewards}, ${p.apy.fees}, ${p.apy.net},
     ${JSON.stringify(p.apy.rewardItems)}::jsonb,
-    ${isSupply ? sm.supplyAssets : bm.supplyAssets},
-    ${isSupply ? sm.supplyAssetsUsd : bm.supplyAssetsUsd},
-    ${p.market.utilizationRate}, ${p.market.assetPriceUsd},
-    ${isSupply ? null : bm.borrowAssets},
-    ${isSupply ? null : bm.borrowAssetsUsd},
-    ${isSupply ? null : (bm.collateralAssetsUsd ?? null)},
+    ${last.supplyAssets}, ${last.supplyAssetsUsd},
+    ${last.utilizationRate}, ${last.assetPriceUsd},
+    ${last.borrowAssets}, ${last.borrowAssetsUsd},
+    ${last.collateralAssetsUsd},
     ${isSupply ? null : (bm.priceCollateralInLoanAsset ?? null)},
-    1, 6, ${slotTime}, ${slotTime}, 'building'
+    1, 6, ${slotTime}, ${slotTime}, 'building',
+    ${last.supplyAssets}, ${last.supplyAssetsUsd},
+    ${last.borrowAssets}, ${last.borrowAssetsUsd},
+    ${last.collateralAssetsUsd}, ${last.utilizationRate}, ${last.assetPriceUsd}
   )`
 }
 
@@ -170,10 +186,14 @@ export async function upsertHourlySlots(
         apy_base, apy_rewards, apy_fees, apy_net, reward_items,
         supply_assets, supply_assets_usd, utilization_rate, asset_price_usd,
         borrow_assets, borrow_assets_usd, collateral_assets_usd, price_collateral_in_loan_asset,
-        quality_count, quality_expected_count, quality_first_slot, quality_last_slot, quality_status
+        quality_count, quality_expected_count, quality_first_slot, quality_last_slot, quality_status,
+        last_supply_assets, last_supply_assets_usd,
+        last_borrow_assets, last_borrow_assets_usd,
+        last_collateral_assets_usd, last_utilization_rate, last_asset_price_usd
       ) VALUES ${sql.join(rows, sql`, `)}
       ON CONFLICT (product_id, hour) DO UPDATE SET
         ${meanSetClause()},
+        ${lastSetClause()},
         reward_items = excluded.reward_items,
         quality_count = apy_hourly.quality_count + 1,
         quality_last_slot = excluded.quality_last_slot,
@@ -550,37 +570,6 @@ export async function patchDailyMarketState(
 
 // ─── Enrichment reads (used by products.actions) ────────────────────────────
 
-export interface LatestHourly {
-  apyNet: number
-  /** Reward component of that same row — 0 when the market pays no incentives. */
-  apyRewards: number
-}
-
-/** Latest hourly net APY per product (replaces $sort+$group $first). */
-export async function latestHourly(
-  productIds: string[]
-): Promise<Map<string, LatestHourly>> {
-  const map = new Map<string, LatestHourly>()
-  if (productIds.length === 0) return map
-  const res = await db.execute(sql`
-    SELECT DISTINCT ON (product_id) product_id, apy_net, apy_rewards
-    FROM apy_hourly
-    WHERE product_id IN ${inList(productIds)}
-    ORDER BY product_id, hour DESC
-  `)
-  for (const r of res.rows as {
-    product_id: string
-    apy_net: number
-    apy_rewards: number
-  }[]) {
-    map.set(r.product_id, {
-      apyNet: r.apy_net,
-      apyRewards: Number(r.apy_rewards) || 0,
-    })
-  }
-  return map
-}
-
 export interface ApyEnrichment {
   apyDaily?: number
   apyMonthly?: number
@@ -591,62 +580,97 @@ export interface ApyEnrichment {
 }
 
 /**
- * 7d / 30d / 365d net-APY windowed averages, matching the 7D / 1M / 1Y horizon
- * labels exposed in the UI. Each value is the mean of whatever daily rows exist
- * in its window and is returned as soon as ≥1 row is present — partial coverage
- * is surfaced rather than hidden, so freshly-tracked products still show a
- * value instead of a dash.
+ * The horizon boundaries behind the 7D / 1M / 1Y labels, written once.
+ *
+ * Two readers aggregate `apy_daily` — `apyEnrichments` and the `daily` CTE of
+ * `latestForTable` — and a horizon that meant 7 days in one and 14 in the
+ * other would show two different "7D" columns on two pages with no error
+ * anywhere. Sharing the fragments is what makes that unrepresentable.
  */
-export async function apyEnrichments(
-  productIds: string[]
-): Promise<Map<string, ApyEnrichment>> {
-  const map = new Map<string, ApyEnrichment>()
-  if (productIds.length === 0) return map
-  const res = await db.execute(sql`
-    SELECT
-      product_id,
-      avg(apy_net) FILTER (WHERE date >= now() - interval '7 days')   AS avg7,
-      count(*)     FILTER (WHERE date >= now() - interval '7 days')   AS n7,
-      avg(apy_net) FILTER (WHERE date >= now() - interval '30 days')  AS avg30,
-      count(*)     FILTER (WHERE date >= now() - interval '30 days')  AS n30,
-      avg(apy_net)                                                    AS avg365,
-      count(*)                                                        AS n365,
-      avg(apy_rewards) FILTER (WHERE date >= now() - interval '7 days')  AS rew7,
-      avg(apy_rewards) FILTER (WHERE date >= now() - interval '30 days') AS rew30,
-      avg(apy_rewards)                                                   AS rew365
-    FROM apy_daily
-    WHERE product_id IN ${inList(productIds)} AND date >= now() - interval '365 days'
-    GROUP BY product_id
-  `)
-  for (const r of res.rows as {
-    product_id: string
-    avg7: number | null
-    n7: number | string
-    avg30: number | null
-    n30: number | string
-    avg365: number | null
-    n365: number | string
-    rew7: number | null
-    rew30: number | null
-    rew365: number | null
-  }[]) {
-    // Postgres numeric can hold 'NaN' (e.g. a bad upstream APR→APY); avg() over
-    // it yields NaN. Coerce any non-finite value to undefined so the UI shows a
-    // dash instead of "NaN%".
-    const avg = (v: number | null) => {
-      const n = v != null ? Number(v) : NaN
-      return Number.isFinite(n) ? n : undefined
-    }
-    map.set(r.product_id, {
-      apyDaily: Number(r.n7) >= 1 ? avg(r.avg7) : undefined,
-      apyMonthly: Number(r.n30) >= 1 ? avg(r.avg30) : undefined,
-      apyYearly: Number(r.n365) >= 1 ? avg(r.avg365) : undefined,
-      apyRewardsDaily: Number(r.n7) >= 1 ? avg(r.rew7) : undefined,
-      apyRewardsMonthly: Number(r.n30) >= 1 ? avg(r.rew30) : undefined,
-      apyRewardsYearly: Number(r.n365) >= 1 ? avg(r.rew365) : undefined,
-    })
+const WINDOW_7D = sql`now() - interval '7 days'`
+const WINDOW_30D = sql`now() - interval '30 days'`
+const WINDOW_365D = sql`now() - interval '365 days'`
+
+/**
+ * Windowed net-APY / rewards averages, as a Drizzle select-object so that both
+ * readers embed the identical expressions rather than two hand-copied lists.
+ *
+ * The row counts travel alongside the averages because `toEnrichment()` gates
+ * on them: `avg()` over an empty window is null, and null must reach the UI as
+ * a dash rather than as a measured zero.
+ */
+function enrichmentColumns() {
+  return {
+    productId: apyDaily.productId,
+    avg7: sql<
+      number | null
+    >`avg(${apyDaily.apyNet}) FILTER (WHERE ${apyDaily.date} >= ${WINDOW_7D})`.as(
+      'avg7'
+    ),
+    n7: sql<
+      number | string
+    >`count(*) FILTER (WHERE ${apyDaily.date} >= ${WINDOW_7D})`.as('n7'),
+    avg30: sql<
+      number | null
+    >`avg(${apyDaily.apyNet}) FILTER (WHERE ${apyDaily.date} >= ${WINDOW_30D})`.as(
+      'avg30'
+    ),
+    n30: sql<
+      number | string
+    >`count(*) FILTER (WHERE ${apyDaily.date} >= ${WINDOW_30D})`.as('n30'),
+    avg365: sql<number | null>`avg(${apyDaily.apyNet})`.as('avg365'),
+    n365: sql<number | string>`count(*)`.as('n365'),
+    rew7: sql<
+      number | null
+    >`avg(${apyDaily.apyRewards}) FILTER (WHERE ${apyDaily.date} >= ${WINDOW_7D})`.as(
+      'rew7'
+    ),
+    rew30: sql<
+      number | null
+    >`avg(${apyDaily.apyRewards}) FILTER (WHERE ${apyDaily.date} >= ${WINDOW_30D})`.as(
+      'rew30'
+    ),
+    rew365: sql<number | null>`avg(${apyDaily.apyRewards})`.as('rew365'),
   }
-  return map
+}
+
+/** A row of `enrichmentColumns()`, before it becomes an `ApyEnrichment`. */
+type EnrichmentRow = {
+  avg7: number | null
+  n7: number | string
+  avg30: number | null
+  n30: number | string
+  avg365: number | null
+  n365: number | string
+  rew7: number | null
+  rew30: number | null
+  rew365: number | null
+}
+
+/**
+ * One aggregate row → the six optional display fields.
+ *
+ * A value is surfaced as soon as ≥1 daily row exists in its window: partial
+ * coverage is shown rather than hidden, so a freshly-tracked product gets a
+ * number instead of a dash.
+ *
+ * Postgres numeric can hold 'NaN' (e.g. a bad upstream APR→APY) and `avg()`
+ * over it yields NaN, so every value is coerced through a finiteness check —
+ * the UI must show a dash, never the string "NaN%".
+ */
+function toEnrichment(r: EnrichmentRow): ApyEnrichment {
+  const avg = (v: number | null) => {
+    const n = v != null ? Number(v) : NaN
+    return Number.isFinite(n) ? n : undefined
+  }
+  return {
+    apyDaily: Number(r.n7) >= 1 ? avg(r.avg7) : undefined,
+    apyMonthly: Number(r.n30) >= 1 ? avg(r.avg30) : undefined,
+    apyYearly: Number(r.n365) >= 1 ? avg(r.avg365) : undefined,
+    apyRewardsDaily: Number(r.n7) >= 1 ? avg(r.rew7) : undefined,
+    apyRewardsMonthly: Number(r.n30) >= 1 ? avg(r.rew30) : undefined,
+    apyRewardsYearly: Number(r.n365) >= 1 ? avg(r.rew365) : undefined,
+  }
 }
 
 // ─── Filtered read (JOIN products — replaces the regex path) ────────────────
@@ -869,9 +893,9 @@ const LATEST_WINDOW_HOURS = 6
 
 /**
  * The most recent hourly row per product, across the whole catalogue, sorted and
- * paginated by any field. This is what answers "the best markets right now" —
- * `latestHourly` can't, because it takes explicit productIds and so discovers
- * nothing.
+ * paginated by any field. This is what answers "the best markets right now" — it
+ * discovers the product set itself, rather than requiring a caller to already
+ * have an explicit id list.
  *
  * DISTINCT ON must sort by product_id first, which rules out sorting by APY in
  * the same statement — hence the CTE: reduce to one row per product, then order
@@ -919,6 +943,137 @@ export async function queryLatestApy(f: ApyFilters, page: Page) {
     countTotal: countRows[0]?.n ?? 0,
     applied,
   }
+}
+
+// ─── Display read (what /supply and /borrow serve) ──────────────────────────
+
+/**
+ * The last observation of every catalogued product of a `kind`, ready for
+ * the table.
+ *
+ * Three properties are worth stating, because they're what make the defects
+ * this read replaces inexpressible:
+ *
+ *   - The predicate comes from `productConds()`, the very one `queryApy` and
+ *     `queryLatestApy` apply. The tables can no longer be stricter than the
+ *     API: it's one expression, not two that must agree.
+ *   - The JOIN on `products` is what guarantees a displayed row exists in the
+ *     catalogue. It's not a presentation filter, it's the refusal to show
+ *     what we know nothing about.
+ *   - Amounts come from the `last_*` columns, not the averages. The COALESCE
+ *     covers the first hour after the migration, when they're still null, and
+ *     the rows the heal repairs, which don't have one.
+ *
+ * No pagination, deliberately: `queryLatestApy` clamps to MAX_FIRST because
+ * it serves an unauthenticated public endpoint. This one serves a server
+ * action, behind a 60s cache, and the table wants its full set.
+ *
+ * The 7d/30d/365d `apy_daily` averages (the same ones `apyEnrichments`
+ * computes standalone for the borrow path) are joined in here as a second
+ * CTE rather than fetched in a follow-up call keyed by the product ids this
+ * query returns. One round trip to Postgres, not two plus a JS hop to build
+ * the id list in between.
+ */
+export async function latestForTable(kind: Kind): Promise<CatalogueRow[]> {
+  const since = new Date(Date.now() - LATEST_WINDOW_HOURS * 60 * 60 * 1000)
+
+  // The aggregate is narrowed to the products this call will actually return,
+  // by joining `products` and spreading the very same `productConds()` the
+  // outer query spreads. Not a detail that can be dropped: `GROUP BY` is a
+  // materialization barrier, so Postgres cannot push the outer join condition
+  // into the CTE. Unnarrowed, this aggregates every catalogued product
+  // (~1100) to serve the ~340 that survive the join — measured at 402ms
+  // against 190ms on production data.
+  //
+  // A JOIN rather than `IN (SELECT …)`: Postgres plans the two identically
+  // (it rewrites IN into the same hash semi-join, and `products.id` being the
+  // PK means neither can multiply rows), so the flatter form wins — the
+  // predicate lands in the same `and()` here as it does below, instead of
+  // being buried one query-builder deep.
+  const daily = db.$with('daily').as(
+    db
+      .select(enrichmentColumns())
+      .from(apyDaily)
+      .innerJoin(products, eq(products.id, apyDaily.productId))
+      .where(and(gte(apyDaily.date, WINDOW_365D), ...productConds({ kind })))
+      .groupBy(apyDaily.productId)
+  )
+
+  const latest = db.$with('latest').as(
+    db
+      .selectDistinctOn([apyHourly.productId], {
+        productId: apyHourly.productId,
+        hour: apyHourly.hour,
+        apyNet: apyHourly.apyNet,
+        apyRewards: apyHourly.apyRewards,
+        supplyAssets: sql<
+          number | null
+        >`COALESCE(${apyHourly.lastSupplyAssets}, ${apyHourly.supplyAssets})`.as(
+          'supply_assets'
+        ),
+        supplyAssetsUsd: sql<
+          number | null
+        >`COALESCE(${apyHourly.lastSupplyAssetsUsd}, ${apyHourly.supplyAssetsUsd})`.as(
+          'supply_assets_usd'
+        ),
+        borrowAssets: sql<
+          number | null
+        >`COALESCE(${apyHourly.lastBorrowAssets}, ${apyHourly.borrowAssets})`.as(
+          'borrow_assets'
+        ),
+        borrowAssetsUsd: sql<
+          number | null
+        >`COALESCE(${apyHourly.lastBorrowAssetsUsd}, ${apyHourly.borrowAssetsUsd})`.as(
+          'borrow_assets_usd'
+        ),
+        collateralAssetsUsd: sql<
+          number | null
+        >`COALESCE(${apyHourly.lastCollateralAssetsUsd}, ${apyHourly.collateralAssetsUsd})`.as(
+          'collateral_assets_usd'
+        ),
+        utilizationRate: sql<
+          number | null
+        >`COALESCE(${apyHourly.lastUtilizationRate}, ${apyHourly.utilizationRate})`.as(
+          'utilization_rate'
+        ),
+        assetPriceUsd: sql<
+          number | null
+        >`COALESCE(${apyHourly.lastAssetPriceUsd}, ${apyHourly.assetPriceUsd})`.as(
+          'asset_price_usd'
+        ),
+      })
+      .from(apyHourly)
+      .where(and(gte(apyHourly.hour, since), finiteApy(apyHourly)))
+      .orderBy(apyHourly.productId, desc(apyHourly.hour))
+  )
+
+  const rows = await db
+    .with(latest, daily)
+    .select()
+    .from(latest)
+    .innerJoin(products, eq(latest.productId, products.id))
+    .leftJoin(daily, eq(daily.productId, products.id))
+    .where(and(...productConds({ kind })))
+    .orderBy(...orderClause(latest.apyNet, 'desc', products.id))
+
+  // `daily` is LEFT-joined: a product with no row in the 365-day window comes
+  // back null, and its horizon fields stay absent — the UI renders a dash.
+  // Every present row goes through the same `toEnrichment()` as the borrow
+  // path, so the two cannot disagree on what a 7D average is.
+  return rows.map(({ latest: observation, products: product, daily: d }) => ({
+    product,
+    hour: observation.hour,
+    apyNet: observation.apyNet,
+    apyRewards: Number(observation.apyRewards) || 0,
+    supplyAssets: observation.supplyAssets,
+    supplyAssetsUsd: observation.supplyAssetsUsd,
+    borrowAssets: observation.borrowAssets,
+    borrowAssetsUsd: observation.borrowAssetsUsd,
+    collateralAssetsUsd: observation.collateralAssetsUsd,
+    utilizationRate: observation.utilizationRate,
+    assetPriceUsd: observation.assetPriceUsd,
+    ...(d ? toEnrichment(d) : {}),
+  }))
 }
 
 // ─── Single-product time series ──────────────────────────────────────────────

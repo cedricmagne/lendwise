@@ -2,96 +2,53 @@
 
 import { unstable_cache } from 'next/cache'
 
-import { type ProtocolName } from '@/config/protocols-meta'
-import { APP_ADAPTERS } from '@/config/protocols-server'
-import { apyEnrichments, latestHourly } from '@/lib/db/repositories/apy'
-import { listDisplayFlaggedIds } from '@/lib/db/repositories/display-flags'
+import type { ApyEnrichment } from '@/lib/db/repositories/apy'
+import { latestForTable } from '@/lib/db/repositories/apy'
+import type { CatalogueRow, Kind } from '@/lib/db/types'
 import { ineligibilityReason } from '@/lib/display-eligibility'
-import type { AppAdapter } from '@/lib/protocols/core/types'
+import { toBorrowProduct, toSupplyProduct } from '@/lib/products/from-catalogue'
 import { BorrowProduct, SupplyProduct } from '@/types'
 
-/** The minimum a product must carry for the display policy to judge it. */
-type Judgeable = {
-  productId?: string
-  apy: number
-  assetAmountUsd: number
-}
-
 /**
- * Drop pools that must not be ranked, in two layers.
+ * A table product, served straight from our own database — one query, no
+ * adapter call. `latestForTable(kind)` already joins the 7d / 1M / 1y
+ * `apy_daily` averages alongside the hourly observation (no second
+ * `apyEnrichments` round trip keyed off returned ids) and already applies
+ * `productConds()`'s persisted display-flag predicate in SQL. A protocol API
+ * incident no longer touches either page — previously a Morpho timeout
+ * emptied `/supply`, the adapter's `catch` returning an empty array.
  *
- * The persisted flags are the considered verdict, but they lag: a pool needs 3
- * bad hours before the hourly job hides it. So the freshly-enriched values are
- * ALSO judged directly — a market that empties out or starts quoting nonsense
- * disappears at the next 60-second cache refresh instead of topping the table for
- * three hours. The immediate check writes nothing; it cannot un-hide a flagged
- * pool, only hide an extra one.
+ * The one thing SQL does NOT yet cover: `productConds()`'s flag only acts
+ * after `flagHours` (3) consecutive bad hours, so a pool that drains below
+ * `minTvlUsd` or starts quoting an absurd APY mid-hour would otherwise sit
+ * atop the descending-APY sort for up to three hours instead of disappearing
+ * at the next 60s cache refresh. This re-judges the freshly-read values
+ * directly — it writes nothing, so it can only hide a pool earlier than the
+ * persisted flag would, never un-hide one the flag already caught. The plan
+ * `2026-07-27-display-filters-replace-eligibility.md` removes this layer once
+ * it moves the predicate into SQL — don't remove it before that (it closes a
+ * real gap), and don't keep it after (it would become a second truth that can
+ * drift from the first).
  *
- * Runs before the sort, so an ineligible pool cannot distort the ordering it is
- * about to be excluded from.
+ * `toProduct` is called as `(row) => toProduct(row)`, never `rows.map(toProduct)`
+ * directly: `map` passes `(element, index, array)`, and `toSupplyProduct` /
+ * `toBorrowProduct`'s optional second parameter is the enrichment, not an
+ * index — `rows.map(toSupplyProduct)` would silently feed it the row's
+ * position in the array.
  */
-function eligibleForDisplay<T extends Judgeable>(
-  items: T[],
-  flagged: Set<string>
-): T[] {
-  return items.filter((p) => {
-    if (p.productId && flagged.has(p.productId)) return false
-    return (
+async function loadEligibleProducts<
+  T extends { apy: number; assetAmountUsd: number },
+>(kind: Kind, toProduct: (row: CatalogueRow, e?: ApyEnrichment) => T) {
+  const rows = await latestForTable(kind)
+  const items = rows.map((r) => toProduct(r))
+  return items.filter(
+    (p) =>
       ineligibilityReason({ tvlUsd: p.assetAmountUsd, apyNet: p.apy }) === null
-    )
-  })
+  )
 }
 
 async function _loadSupplyProducts(): Promise<SupplyProduct[]> {
-  const entries = Object.entries(APP_ADAPTERS) as [
-    ProtocolName,
-    () => Promise<AppAdapter>,
-  ][]
-
-  const results = await Promise.allSettled(
-    entries.map(async ([, load]) => (await load()).getSupplyProducts())
-  )
-
-  const allSupplyProducts: SupplyProduct[] = []
-
-  results.forEach((result, index) => {
-    const protocolId = entries[index][0]
-    if (result.status === 'fulfilled') {
-      allSupplyProducts.push(...result.value)
-    } else {
-      console.error(`Adapter ${protocolId} failed:`, result.reason)
-    }
-  })
-
-  // Enrich with APY data from Postgres (all horizons)
-  const productIds = allSupplyProducts
-    .map((p) => p.productId)
-    .filter(Boolean) as string[]
-
-  const [enrichments, latest, flagged] = await Promise.all([
-    apyEnrichments(productIds),
-    latestHourly(productIds),
-    listDisplayFlaggedIds(),
-  ])
-
-  const enriched = allSupplyProducts.map((p) => {
-    if (!p.productId) return p
-    const e = enrichments.get(p.productId)
-    const l = latest.get(p.productId)
-    return {
-      ...p,
-      apy: l?.apyNet ?? p.apy,
-      apyDaily: e?.apyDaily,
-      apyMonthly: e?.apyMonthly,
-      apyYearly: e?.apyYearly,
-      apyRewards: l?.apyRewards,
-      apyRewardsDaily: e?.apyRewardsDaily,
-      apyRewardsMonthly: e?.apyRewardsMonthly,
-      apyRewardsYearly: e?.apyRewardsYearly,
-    }
-  })
-
-  return eligibleForDisplay(enriched, flagged).sort((a, b) => b.apy - a.apy)
+  return loadEligibleProducts('supply', toSupplyProduct)
 }
 
 export const loadSupplyProducts = unstable_cache(
@@ -101,50 +58,7 @@ export const loadSupplyProducts = unstable_cache(
 )
 
 async function _loadBorrowProducts(): Promise<BorrowProduct[]> {
-  const entries = Object.entries(APP_ADAPTERS) as [
-    ProtocolName,
-    () => Promise<AppAdapter>,
-  ][]
-
-  const results = await Promise.allSettled(
-    entries.map(async ([, load]) => (await load()).getBorrowProducts())
-  )
-
-  const allBorrowProducts: BorrowProduct[] = []
-
-  results.forEach((result, index) => {
-    const protocolId = entries[index][0]
-    if (result.status === 'fulfilled') {
-      allBorrowProducts.push(...result.value)
-    } else {
-      console.error(`Adapter ${protocolId} failed:`, result.reason)
-    }
-  })
-
-  // Enrich with APY data from Postgres (all horizons)
-  const productIds = allBorrowProducts
-    .map((p) => p.productId)
-    .filter(Boolean) as string[]
-
-  const [enrichments, latest, flagged] = await Promise.all([
-    apyEnrichments(productIds),
-    latestHourly(productIds),
-    listDisplayFlaggedIds(),
-  ])
-
-  const enriched = allBorrowProducts.map((p) => {
-    if (!p.productId) return p
-    const e = enrichments.get(p.productId)
-    return {
-      ...p,
-      apy: latest.get(p.productId)?.apyNet ?? p.apy,
-      apyDaily: e?.apyDaily,
-      apyMonthly: e?.apyMonthly,
-      apyYearly: e?.apyYearly,
-    }
-  })
-
-  return eligibleForDisplay(enriched, flagged).sort((a, b) => b.apy - a.apy)
+  return loadEligibleProducts('borrow', toBorrowProduct)
 }
 
 export const loadBorrowProducts = unstable_cache(

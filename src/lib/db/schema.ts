@@ -65,6 +65,21 @@ export const apyHourly = pgTable(
     priceCollateralInLoanAsset: doublePrecision(
       'price_collateral_in_loan_asset'
     ),
+    // ─── Last observation — amounts NOT averaged ───────────────────────────
+    // The columns above are running means over the hour, which is what we
+    // want for a rate and not for an amount. These carry the last value
+    // observed of the slot: it's what the /supply and /borrow tables
+    // display. Null on the rows the heal INSERTS (a "missing" gap), which
+    // repairs past hours and so has no "last" observation to offer. Not on
+    // the ones it repairs by UPDATE (an "incomplete" gap, HEAL_UPDATE_SET in
+    // gaps.ts): that path leaves `last_*` as-is.
+    lastSupplyAssets: doublePrecision('last_supply_assets'),
+    lastSupplyAssetsUsd: doublePrecision('last_supply_assets_usd'),
+    lastBorrowAssets: doublePrecision('last_borrow_assets'),
+    lastBorrowAssetsUsd: doublePrecision('last_borrow_assets_usd'),
+    lastCollateralAssetsUsd: doublePrecision('last_collateral_assets_usd'),
+    lastUtilizationRate: doublePrecision('last_utilization_rate'),
+    lastAssetPriceUsd: doublePrecision('last_asset_price_usd'),
     qualityCount: integer('quality_count').notNull(),
     qualityExpectedCount: integer('quality_expected_count')
       .notNull()

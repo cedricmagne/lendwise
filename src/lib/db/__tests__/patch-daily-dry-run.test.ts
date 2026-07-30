@@ -1,36 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { issuedSql } from './issued-sql'
+
 // The statement is what is under test, not the database. Stub the client and
 // inspect the SQL it is handed.
 const execute = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/db/postgres', () => ({ db: { execute } }))
 
 const { patchDailyMarketState } = await import('@/lib/db/repositories/apy')
-
-/**
- * The generated statement, reassembled and whitespace-collapsed.
- *
- * Drizzle nests a `sql.raw()` fragment as its own chunk tree, so a predicate
- * built from raw column names is split across objects and no regex reads it
- * off the raw JSON. Walking the chunks puts the statement back together;
- * bound parameters are values rather than chunks and drop out, which is what
- * we want — the shape is under test, not the data.
- */
-function issuedSql(): string {
-  const out: string[] = []
-  const walk = (node: unknown): void => {
-    if (Array.isArray(node)) return node.forEach(walk)
-    if (!node || typeof node !== 'object') return
-    const { value, queryChunks } = node as {
-      value?: unknown
-      queryChunks?: unknown
-    }
-    if (Array.isArray(value)) return void out.push(value.join(''))
-    if (queryChunks) walk(queryChunks)
-  }
-  walk(execute.mock.calls[0][0])
-  return out.join('').replace(/\s+/g, ' ')
-}
 
 const patches = [
   {
@@ -62,7 +39,7 @@ describe('patchDailyMarketState — dry run', () => {
   it('counts instead of writing', async () => {
     await patchDailyMarketState(patches, { dryRun: true })
 
-    const sql = issuedSql()
+    const sql = issuedSql(execute)
     expect(sql).toMatch(/SELECT\s+count\(\*\)/i)
     expect(sql).not.toMatch(/UPDATE\s+apy_daily/i)
     expect(sql).not.toMatch(/\bSET\b/i)
@@ -79,7 +56,7 @@ describe('patchDailyMarketState — dry run', () => {
     // Both runs must carry that clause, or the count is of something else.
     await patchDailyMarketState(patches, { dryRun: true })
 
-    expect(issuedSql()).toMatch(
+    expect(issuedSql(execute)).toMatch(
       /d\.supply_assets IS NULL AND v\.supply_assets IS NOT NULL/
     )
   })
@@ -87,7 +64,7 @@ describe('patchDailyMarketState — dry run', () => {
   it('applies the same overwrite predicate as the write when asked', async () => {
     await patchDailyMarketState(patches, { dryRun: true, overwrite: true })
 
-    expect(issuedSql()).toMatch(
+    expect(issuedSql(execute)).toMatch(
       /v\.supply_assets IS NOT NULL AND d\.supply_assets IS DISTINCT FROM v\.supply_assets/
     )
   })

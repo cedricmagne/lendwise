@@ -253,11 +253,3 @@ export async function listDisplayFlags(): Promise<FlaggedProduct[]> {
     .from(productDisplayFlags)
     .orderBy(productDisplayFlags.reason, productDisplayFlags.productId)
 }
-
-/** Product ids currently hidden — for the page-level guard in server actions. */
-export async function listDisplayFlaggedIds(): Promise<Set<string>> {
-  const rows = await db
-    .select({ productId: productDisplayFlags.productId })
-    .from(productDisplayFlags)
-  return new Set(rows.map((r) => r.productId))
-}

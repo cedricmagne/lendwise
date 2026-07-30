@@ -7,6 +7,7 @@
  * Drizzle schema and re-exported at the bottom of this file. See
  * `src/lib/db/schema.ts` for the Postgres tables.
  */
+import type { ProductRow } from './schema'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared primitives
@@ -314,6 +315,36 @@ export type SpotPayload = {
     rewardItems: RewardItem[]
   }
   market: SupplyMarketState | BorrowMarketState
+}
+
+/**
+ * A catalogued product and its most recent observation — what a table reads.
+ *
+ * The type lives here rather than in the repository or the presentation
+ * module: both depend on it, and neither should import the other.
+ */
+export interface CatalogueRow {
+  product: ProductRow
+  hour: Date
+  apyNet: number
+  apyRewards: number
+  supplyAssets: number | null
+  supplyAssetsUsd: number | null
+  borrowAssets: number | null
+  borrowAssetsUsd: number | null
+  collateralAssetsUsd: number | null
+  utilizationRate: number | null
+  assetPriceUsd: number | null
+  // 7d / 30d / 365d windowed averages from `apy_daily`, joined in the same
+  // query as the hourly observation above — see `latestForTable`. Shaped to
+  // satisfy `ApyEnrichment` structurally so a `CatalogueRow` can be passed
+  // anywhere an enrichment is expected without an extra fetch.
+  apyDaily?: number
+  apyMonthly?: number
+  apyYearly?: number
+  apyRewardsDaily?: number
+  apyRewardsMonthly?: number
+  apyRewardsYearly?: number
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
