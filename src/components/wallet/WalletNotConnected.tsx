@@ -1,9 +1,10 @@
 'use client'
 
+import { useState } from 'react'
+
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { ArrowRight, Lock, Shield, TrendingUp, Wallet, Zap } from 'lucide-react'
 import { motion } from 'motion/react'
-import { useState } from 'react'
 
 import { NetworkFamilySelectorDialog } from '@/components/wallet/NetworkFamilySelectorDialog'
 import { useStellarWallet } from '@/contexts/StellarWalletContext'

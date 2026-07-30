@@ -11,11 +11,7 @@
  * Pure, no DB import: this is also the definition shared between the insert
  * tuple and what the display read expects, so the two cannot diverge.
  */
-import type {
-  BorrowMarketState,
-  SpotPayload,
-  SupplyMarketState,
-} from './types'
+import type { BorrowMarketState, SpotPayload, SupplyMarketState } from './types'
 
 export interface LastObservation {
   supplyAssets: number | null
