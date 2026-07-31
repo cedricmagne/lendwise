@@ -86,7 +86,8 @@ export async function getBorrowProducts(): Promise<BorrowProduct[]> {
           // The SAME predicate the catalogue uses, minus the ingestion floor —
           // one named flag apart instead of two hand-rolled objects free to
           // drift. No TVL floor here: see supply-products.ts, the $100k is a
-          // single read-side rule in lib/display-eligibility.
+          // single read-side rule in the display filters
+          // (src/config/table-filters.ts).
           where: morphoMarketWhere(
             Object.keys(MORPHO_V1_CHAINS).map((key) => Number(key)),
             { unfloored: true }

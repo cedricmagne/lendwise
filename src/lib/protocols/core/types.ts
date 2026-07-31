@@ -150,10 +150,10 @@ export interface HistoryResult {
  * away a future you cannot buy back.
  *
  * Everything else — "is this market big enough to show?", "is this rate absurd?" —
- * is decided on the READ side, in `lib/display-eligibility`, from the data we
- * stored. Change a number THERE and it takes effect everywhere, instantly,
- * retroactively, with the full history intact. That is the whole reason the two
- * layers are separate.
+ * is decided on the READ side, in the display filters (`src/config/table-filters.ts`),
+ * from the data we stored. Change a number THERE and it takes effect everywhere,
+ * instantly, retroactively, with the full history intact, and it stays visible and
+ * movable by the user. That is the whole reason the two layers are separate.
  *
  * Whatever is set here is honoured by every job: the 10-minute collector, the
  * hourly catalogue sync, and the heal job all read the protocol's listing rule from

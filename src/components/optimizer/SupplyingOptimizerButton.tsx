@@ -209,7 +209,7 @@ export function SupplyingOptimizerView({
   const weightedApy = useMemo(() => {
     if (!results) return null
     return results.reduce(
-      (acc, r) => acc + r.vault.apy * (r.allocationPercent / 100),
+      (acc, r) => acc + (r.vault.apy ?? 0) * (r.allocationPercent / 100),
       0
     )
   }, [results])

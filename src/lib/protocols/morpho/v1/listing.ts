@@ -28,9 +28,9 @@ import { MORPHO_V1_INGESTION } from './config'
  *
  * The ONLY filter we allow in a query's `where`, and only because it is about not
  * collecting dust. Whether a collected market is big enough to SHOW is a different
- * question with a different owner: `lib/display-eligibility`, on the read side,
- * where changing your mind is a one-line, retroactive edit rather than a hole in
- * the history you can never fill.
+ * question with a different owner: the display filters (`src/config/table-filters.ts`),
+ * applied on the read side and movable by the user — not here, where a filter
+ * would be irreversible.
  */
 const floors = MORPHO_V1_INGESTION
 

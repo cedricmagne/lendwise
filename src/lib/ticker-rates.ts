@@ -98,8 +98,8 @@ async function fetchKind(
 /**
  * Real rates for the landing marquee — the best current supply APYs and the
  * cheapest borrow rates, one entry per market, interleaved. Reads the same
- * latest-hourly path as the product tables (display-ineligible pools already
- * filtered), so the marquee can never advertise a rate the app itself would
+ * latest-hourly path as the product tables and inherits the same default rate
+ * bounds, so the marquee can never advertise a number the app itself would
  * refuse to show.
  *
  * Null on failure — the caller keeps its static fallback and the landing never

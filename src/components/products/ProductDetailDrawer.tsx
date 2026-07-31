@@ -88,12 +88,14 @@ interface SeriesDef {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const fmtPct = (v: number, digits = 2) =>
-  v < 0.0001 && v > 0
-    ? '<0.01%'
-    : v > 10
-      ? '>1000%'
-      : `${(v * 100).toFixed(digits)}%`
+const fmtPct = (v: number | undefined, digits = 2) =>
+  v === undefined || !Number.isFinite(v)
+    ? '—'
+    : v < 0.0001 && v > 0
+      ? '<0.01%'
+      : v > 10
+        ? '>1000%'
+        : `${(v * 100).toFixed(digits)}%`
 
 const mean = (xs: number[]) =>
   xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0

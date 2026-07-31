@@ -672,7 +672,7 @@ export function BorrowingOptimizerView({
   const weightedRate = useMemo(() => {
     if (!result || !total || total === 0) return null
     return allocations.reduce(
-      (acc, a) => acc + a.market.apy * (a.value / total),
+      (acc, a) => acc + (a.market.apy ?? 0) * (a.value / total),
       0
     )
   }, [result, total, allocations])

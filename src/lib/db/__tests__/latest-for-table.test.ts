@@ -97,16 +97,15 @@ describe('latestForTable', () => {
     }
   })
 
-  it('joins products — a displayed row exists in the catalogue by construction, filtered by the same predicate as queryApy/queryLatestApy', async () => {
+  it('joins products — a displayed row exists in the catalogue by construction, filtered by the same predicate as queryApy/queryLatestApy, WITHOUT the display thresholds', async () => {
     await latestForTable('supply')
     expect(chain.innerJoin).toHaveBeenCalled()
 
     // `latestForTable`'s file docstring claims its predicate comes from
     // `productConds()`, the same one `queryApy` and `queryLatestApy` apply —
-    // in particular `displayEligible()`, the NOT EXISTS on
-    // `product_display_flags`. Verified here rather than settling for the
-    // `innerJoin` call, which would pass even if `.where(...)` had been
-    // emptied of its predicate.
+    // the catalogue filters (here, just `kind`). Verified here rather than
+    // settling for the `innerJoin` call, which would pass even if
+    // `.where(...)` had been emptied of its predicate.
     //
     // `chain.where` receives three calls: the `daily` CTE's (the 365-day
     // window), the `latest` CTE's (the `finiteApy` / time-window filter),
@@ -117,8 +116,15 @@ describe('latestForTable', () => {
       typeof dialect.sqlToQuery
     >[0]
     const { sql } = dialect.sqlToQuery(whereArg)
-    expect(sql).toContain('product_display_flags')
-    expect(sql).toContain('NOT EXISTS')
+    expect(sql).toContain('"kind"')
+
+    // The display-flags table is gone from this predicate on purpose: the
+    // display thresholds are now applied ONLY at the two API entry points
+    // (`queryApy` / `queryLatestApy`) via `displayFilters()`, never here — a
+    // table the user can move to zero has to be able to show everything the
+    // catalogue and the time window allow, without a round trip.
+    expect(sql).not.toContain('product_display_flags')
+    expect(sql).not.toContain('NOT EXISTS')
   })
 
   it('applies no LIMIT — a table is not an API page', async () => {

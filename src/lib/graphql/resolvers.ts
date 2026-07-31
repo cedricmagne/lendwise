@@ -103,7 +103,7 @@ type AnyFilters = {
   asset?: string
   collateral?: string
   minTvlUsd?: number
-  includeIneligible?: boolean
+  maxAbsNetApy?: number
   from?: string
   to?: string
   range?: string
@@ -231,9 +231,10 @@ function toApyFilters(
     asset: filters.asset,
     collateral: filters.collateral,
     minTvlUsd: filters.minTvlUsd,
-    // Absent → undefined → falsy → the repository filters. Only an explicit
-    // `true` opens the raw table; there is no way to get it by omission.
-    includeIneligible: filters.includeIneligible === true,
+    // Both pass through undefined when absent; `displayFilters` in the
+    // repository is the single place that decides what "absent" means, so the
+    // default cannot be forgotten by a caller or duplicated by a resolver.
+    maxAbsNetApy: filters.maxAbsNetApy,
     from: filters.from ? new Date(filters.from) : undefined,
     to: filters.to ? new Date(filters.to) : undefined,
   }

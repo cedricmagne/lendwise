@@ -1,5 +1,5 @@
 import { HORIZON_CONFIG, HorizonKey } from '@/config/horizon'
-import { DISPLAY_POLICY } from '@/lib/display-eligibility'
+import { DEFAULT_MAX_ABS_NET_APY } from '@/config/table-filters'
 import { BorrowProduct, SupplyProduct } from '@/types'
 
 type Product = SupplyProduct | BorrowProduct
@@ -23,15 +23,20 @@ export interface RateStats<T> {
 /**
  * Stats over a set of products at one horizon.
  *
- * `loadSupplyProducts` / `loadBorrowProducts` already drop display-ineligible
- * pools, but they judge the SPOT apy only. A pool can therefore pass ingestion
- * on a sane spot rate and still carry an absurd 7D/1M average, so the horizon
- * rate is re-checked against the same ceiling here — a headline "best rate" must
- * never point at a number no market can sustain.
+ * The caller hands in the rows the user is actually looking at — the table
+ * filters before computing this, so the headline always describes the lines
+ * below it. The ceiling is re-applied here anyway, using the table's own
+ * active ceiling (passed in by the caller, defaulting to
+ * `DEFAULT_MAX_ABS_NET_APY`) rather than the shipped default: a pool can pass
+ * the user's spot-rate filter and still carry an absurd 7D/1M average — the
+ * filter bounds the horizon it was set on, not necessarily the one being
+ * viewed — and a "best rate" must never point at a number no market can
+ * sustain.
  */
 export const computeRateStats = <T extends Product>(
   items: T[],
-  horizon: HorizonKey
+  horizon: HorizonKey,
+  maxAbsNetApy: number = DEFAULT_MAX_ABS_NET_APY
 ): RateStats<T> => {
   const apyKey = HORIZON_CONFIG[horizon].apyKey
   const protocols = new Set<string>()
@@ -53,7 +58,7 @@ export const computeRateStats = <T extends Product>(
 
     const value = item[apyKey] as number | undefined
     if (value === undefined || !Number.isFinite(value)) continue
-    if (Math.abs(value) > DISPLAY_POLICY.maxAbsNetApy) continue
+    if (Math.abs(value) > maxAbsNetApy) continue
     rates.push(value)
     if (!highest || value > highest.value) highest = { value, item }
     if (!lowest || value < lowest.value) lowest = { value, item }

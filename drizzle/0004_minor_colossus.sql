@@ -1,0 +1,1 @@
+DROP TABLE "product_display_flags" CASCADE;

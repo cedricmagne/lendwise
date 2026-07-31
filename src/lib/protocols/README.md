@@ -207,7 +207,8 @@ That's it. No DB migration: productIds, tables, and repositories are protocol-ag
   filter in the pipeline — a skipped market is a permanent hole in history that healing cannot
   fill. Keep floors LOW (Morpho: `minBorrowAssetsUsd: 10_000`, just enough to skip the
   thousands of permissionless markets that never saw a borrow). Display-side curation belongs
-  in `src/lib/display-eligibility.ts`, which is revisable retroactively.
+  in the display filters (`src/config/table-filters.ts`), applied on the read side and
+  movable by the user — not here, where a filter would be irreversible.
 - **Rates are stored as APY.** Convert APR before emitting: `(1 + APR/365)^365 - 1`
   (helpers in `src/lib/utils.ts`: `aprToApyDaily`, `aprToApyPerSecond`, `aprToApyMorpho`).
   Net APY: supply `base - fees + rewards`, borrow `base + fees - rewards`.
@@ -226,7 +227,8 @@ That's it. No DB migration: productIds, tables, and repositories are protocol-ag
   **no magnitude bound**: dropping a finite extreme rate at ingestion manufactures the exact
   gap that the heal job then fills with the same value unguarded (see
   `src/lib/apy-validation.ts` — every `apy_hourly` row above 100 was `healed = true`).
-  Extreme-but-finite rates are handled on the read side by `lib/display-eligibility.ts`.
+  Extreme-but-finite rates are handled on the read side by the display filters
+  (`src/config/table-filters.ts`).
 - **Strict (CI harness)** — `spotPayloadStrictSchema` + `productStrictSchema`. Soft rules
   plus `|net| < 10` (1000%) and `chainId ∈ adapter.chains`. A new adapter quoting >1000% is
   almost always a unit bug (raw percentage vs decimal) — CI is where that dies. One exemption:

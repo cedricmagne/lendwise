@@ -27,8 +27,9 @@ export async function getSupplyProducts(): Promise<SupplyProduct[]> {
           // It used to be spelled out here with `totalAssetsUsd_gte: 100000` — a
           // DISPLAY rule buried in a fetch, which meant this page and the public
           // API applied different ones and disagreed about which pools exist. The
-          // floor now lives in lib/display-eligibility, applied on the read side,
-          // to every surface at once.
+          // floor lives in the display filters (src/config/table-filters.ts),
+          // applied on the read side and movable by the user — not here, where a
+          // filter would be irreversible.
           //
           // Spelling the clause out again would have been identical TODAY, since
           // no `minTvlUsd` is configured — and identical-by-coincidence is how

@@ -1,15 +1,14 @@
 import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 
+import {
+  DEFAULT_MAX_ABS_NET_APY,
+  DEFAULT_MIN_TVL_USD,
+} from '@/config/table-filters'
 import { lastObservation } from '@/lib/db/last-observation'
 import { MAX_PRODUCT_IDS, clampPage } from '@/lib/db/pagination'
 import { db } from '@/lib/db/postgres'
-import {
-  apyDaily,
-  apyHourly,
-  productDisplayFlags,
-  products,
-} from '@/lib/db/schema'
+import { apyDaily, apyHourly, products } from '@/lib/db/schema'
 import type {
   BorrowMarketState,
   CatalogueRow,
@@ -17,6 +16,8 @@ import type {
   RewardItem,
   SpotPayload,
 } from '@/lib/db/types'
+import type { TableFilter } from '@/lib/table-filters'
+import { hourlyFilterColumns, toSqlConds } from '@/lib/table-filters/to-sql'
 
 // ─── Hourly running-mean upsert ─────────────────────────────────────────────
 
@@ -683,13 +684,22 @@ export interface ApyFilters {
   chainId?: number
   asset?: string // asset symbol — NOW actually applied
   collateral?: string // borrow only; matched against collaterals jsonb
-  minTvlUsd?: number // floor on supply_assets_usd — thin markets are APY noise
   /**
-   * Raw-data escape hatch: include pools withheld by display eligibility (empty
-   * markets, absurd rates). Off by default, so every public list is filtered
-   * unless a caller deliberately asks for the unvarnished table.
+   * Floor on supplied TVL, USD. Omitted → `DEFAULT_MIN_TVL_USD`. **`0` removes
+   * the filter** rather than comparing against zero — `>= 0` would still drop
+   * every row whose TVL is NULL, so an explicit "show me everything" has to
+   * take the condition out, not weaken it.
    */
-  includeIneligible?: boolean
+  minTvlUsd?: number
+  /**
+   * Ceiling on |net APY|, as a fraction (10 = 1000 %). Omitted →
+   * `DEFAULT_MAX_ABS_NET_APY`; `0` removes both bounds.
+   *
+   * Replaces `includeIneligible`, and with it the whole persisted-verdict
+   * mechanism: there is no hidden set to opt into any more, only a predicate
+   * with defaults the caller can move.
+   */
+  maxAbsNetApy?: number
   from?: Date
   to?: Date
 }
@@ -808,20 +818,31 @@ function productConds(f: ApyFilters) {
     conds.push(
       sql`${products.collaterals} @> ${JSON.stringify([{ symbol: f.collateral }])}::jsonb`
     )
-  // Display eligibility. Applied here, at the product level, so that BOTH the
-  // count query and the data query inherit it and therefore agree — an ineligible
-  // pool must not distort the sort order, inflate countTotal, or occupy a slot in
-  // a page. Filtering it out client-side would leave all three wrong.
-  if (!f.includeIneligible) conds.push(displayEligible())
   return conds
 }
 
-/** No current entry in the withheld-pools projection. See lib/display-eligibility. */
-function displayEligible() {
-  return sql`NOT EXISTS (
-    SELECT 1 FROM ${productDisplayFlags}
-    WHERE ${productDisplayFlags.productId} = ${products.id}
-  )`
+/**
+ * The filter list this query actually applies — the API's half of the shared
+ * predicate.
+ *
+ * Same data as the browser's `DEFAULT_SUPPLY_FILTERS`, reached from named
+ * scalars because a public GraphQL API is nicer to call with `minTvlUsd: 0`
+ * than with a list of predicate objects. The compilation to SQL is the shared
+ * one, so the two surfaces still cannot drift.
+ */
+export function displayFilters(f: ApyFilters): TableFilter[] {
+  const out: TableFilter[] = []
+
+  const minTvl = f.minTvlUsd ?? DEFAULT_MIN_TVL_USD
+  if (minTvl > 0) out.push({ field: 'deposits', op: 'gte', value: minTvl })
+
+  const maxApy = f.maxAbsNetApy ?? DEFAULT_MAX_ABS_NET_APY
+  if (maxApy > 0) {
+    out.push({ field: 'netApy', op: 'lte', value: maxApy })
+    out.push({ field: 'netApy', op: 'gte', value: -maxApy })
+  }
+
+  return out
 }
 
 /**
@@ -843,6 +864,18 @@ export async function queryApy(
   const timeCol = grain === 'hourly' ? apyHourly.hour : apyDaily.date
   const applied = clampPage(page)
 
+  // `hourlyFilterColumns`'s `last*` fields are optional so it can safely serve
+  // both `apy_hourly` and `apy_daily` — but only from the REAL, uncast table
+  // object for the branch we're in. `table` above is cast to `typeof
+  // apyHourly` so ordering/finiteApy/etc. can share code across both grains;
+  // handing that cast object to `hourlyFilterColumns` would type-check but
+  // compile SQL against `last_supply_assets_usd` on `apy_daily`, which has no
+  // such column.
+  const filterColumns =
+    grain === 'hourly'
+      ? hourlyFilterColumns(apyHourly)
+      : hourlyFilterColumns(apyDaily)
+
   const from =
     f.from ??
     new Date(
@@ -854,7 +887,16 @@ export async function queryApy(
 
   const conds = productConds(f)
   conds.push(finiteApy(table))
-  if (f.minTvlUsd != null) conds.push(gte(table.supplyAssetsUsd, f.minTvlUsd))
+  // Opt-in only, unlike `queryLatestApy`: this query backs a single product's
+  // time series, not a ranking. Applying the display predicate row-by-row by
+  // default would punch undocumented holes in an otherwise-complete history —
+  // a healthy product that dipped under the TVL floor for a few hours would
+  // return a series with exactly those hours missing, indistinguishable from
+  // a real pipeline gap. Only filter when the caller explicitly asked for a
+  // floor or ceiling.
+  if (f.minTvlUsd != null || f.maxAbsNetApy != null) {
+    conds.push(...toSqlConds(displayFilters(f), filterColumns))
+  }
   conds.push(gte(timeCol, from))
   if (f.to) conds.push(lte(timeCol, f.to))
   const where = and(...conds)
@@ -914,7 +956,7 @@ export async function queryLatestApy(f: ApyFilters, page: Page) {
   )
 
   const conds = productConds(f)
-  if (f.minTvlUsd != null) conds.push(gte(latest.supplyAssetsUsd, f.minTvlUsd))
+  conds.push(...toSqlConds(displayFilters(f), hourlyFilterColumns(latest)))
   const where = and(...conds)
 
   const col = orderColumn(latest, latest.hour, page.orderBy)
@@ -955,8 +997,13 @@ export async function queryLatestApy(f: ApyFilters, page: Page) {
  * this read replaces inexpressible:
  *
  *   - The predicate comes from `productConds()`, the very one `queryApy` and
- *     `queryLatestApy` apply. The tables can no longer be stricter than the
- *     API: it's one expression, not two that must agree.
+ *     `queryLatestApy` apply: one shared write of the catalogue filters, not
+ *     two that must agree. The DISPLAY thresholds, though, are NOT applied
+ *     here — they're added to both API entry points and evaluated in the
+ *     browser for the tables. The table is therefore deliberately LESS
+ *     strict than the API: that's what lets a user drag the minimum liquidity
+ *     down to zero and see their pool right away, with no round trip to the
+ *     server. The price is a row set roughly 40% bigger in the server action.
  *   - The JOIN on `products` is what guarantees a displayed row exists in the
  *     catalogue. It's not a presentation filter, it's the refusal to show
  *     what we know nothing about.

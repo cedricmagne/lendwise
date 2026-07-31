@@ -48,7 +48,6 @@ QStash cron (daily 00:30 UTC)
 
 QStash cron (hourly)
   → POST /api/yield/products      (catalogue sync + availability periods)
-  → POST /api/yield/apy/eligibility (display flags, hysteresis 3/12)
 
 graphql-yoga at /api/graphql ← URQL client (React)
 ```
@@ -80,13 +79,12 @@ Drizzle ORM. Schema `src/lib/db/schema.ts`, client `src/lib/db/postgres.ts` (neo
 
 **Rule — filter/group chains by `chain_id`, never `chain_name`.** Names are inconsistent across adapters (`Ethereum` vs `ethereum` vs `op mainnet`); only the numeric id is canonical.
 
-6 tables:
+5 tables:
 
 - **`products`** — static registry. PK `id` = productId slug (e.g. `aave:v3:ethereum:reserve:0x…:supply`). Typed columns (`kind`, `provider`, `chain_id`, `asset_*`, …), `meta`/`collaterals` jsonb. Indexes: `(provider, asset_symbol, kind)`, `(protocol_name, asset_symbol, kind)`, `(active, chain_id)`.
 - **`apy_hourly`** — PK `(product_id, hour)`. Running mean via `ON CONFLICT DO UPDATE` every 10 min. Seven `last_*` columns (`last_supply_assets`, `last_supply_assets_usd`, `last_borrow_assets`, `last_borrow_assets_usd`, `last_collateral_assets_usd`, `last_utilization_rate`, `last_asset_price_usd`) carry the slot's **last** observed value instead of its mean — never for APY rates. This is what the `/supply` and `/borrow` tables read; they no longer call the adapters (ADR 0003). Null on rows inserted by the heal (its `UPDATE` path leaves them untouched). All rates stored as **APY**; net = supply `base − fees + rewards`, borrow `base + fees − rewards`. Pruned >180 days. Two filters on write: duplicate productIds within a slot collapse to one row (Compound emits one per collateral), then rows absent from the catalogue are dropped — but an _empty_ catalogue fails open and collects unfiltered, because dropping a whole slot is worse than a few orphans.
 - **`apy_daily`** — PK `(product_id, date)`. One GROUP BY over the day's hourly rows. `quality_completeness` = hourly rows / 24; `< 0.5` → unreliable. Idempotent — reruns bump `quality_revision`.
 - **`product_availability_periods`** — PK `(product_id, activated_at)`. Half-open intervals `activated_at <= hour < deactivated_at`, `deactivated_at` null = still listed. Written by the product-sync job; this is what makes a delisted pool's gap legitimate rather than missing data.
-- **`product_display_flags`** — PK `product_id`. Pools withheld from public rankings _right now_ (`low_liquidity` | `outlier_apy`), rebuilt hourly by `/api/yield/apy/eligibility`. Clearing a flag deletes the row, so it is a projection, not an audit log. Deliberately separate from `products.active`: a hidden pool is still active and still collected.
 - **`pipeline_reports`** — job run reports (jsonb). Type `reconcile` since 2026-07-24; `gap-detection` / `gap-healing` are legacy rows from the jobs it replaced.
 
 Schema field semantics: `../../agent/docs/lendwise/PRODUCTS_SCHEMA.md`, `../../agent/docs/lendwise/APY_DAILY_SCHEMA.md`.

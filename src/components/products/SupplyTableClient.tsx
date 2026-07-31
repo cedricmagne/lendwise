@@ -26,6 +26,7 @@ import { TableSkeleton } from '@/components/products/TableSkeleton'
 import { StatsBar } from '@/components/stats/StatsBar'
 import {
   FilterBar,
+  FilterBuilder,
   FilterChip,
   HorizonPicker,
   RefreshButton,
@@ -55,7 +56,12 @@ import {
 } from '@/components/ui/tooltip'
 import { HORIZON_CONFIG, HorizonKey } from '@/config/horizon'
 import { protocolVersionName } from '@/config/protocols-meta'
+import {
+  DEFAULT_MAX_ABS_NET_APY,
+  DEFAULT_SUPPLY_FILTERS,
+} from '@/config/table-filters'
 import { useCurrency } from '@/contexts'
+import { useTableFilters } from '@/hooks/useTableFilters'
 import { formatCompactCurrency } from '@/lib/format-currency'
 import {
   computeRateStats,
@@ -65,16 +71,19 @@ import {
   formatRateRange,
   pluralize,
 } from '@/lib/product-stats'
+import {
+  SUPPLY_FILTERS_KEY,
+  fieldValue,
+  matchesFilters,
+} from '@/lib/table-filters'
 import { SupplyProduct } from '@/types'
 
 export type Horizon = HorizonKey
 
-const getUtilizationPct = (row: SupplyProduct) => {
-  if (!row.assetAmountUsd) return 0
-  return (
-    ((row.assetAmountUsd - row.liquidityAmountUsd) / row.assetAmountUsd) * 100
-  )
-}
+// Derived from the filter registry, so the Utilization column and the
+// Utilization filter cannot mean two different things.
+const getUtilizationPct = (row: SupplyProduct) =>
+  (fieldValue(row, 'utilization', 'intraday') ?? 0) * 100
 
 const isOverutilized = (row: SupplyProduct) => getUtilizationPct(row) > 99
 
@@ -325,6 +334,13 @@ export function SupplyTableClient() {
   ])
   const [searchValue, setSearchValue] = useState('')
 
+  const {
+    filters: tableFilters,
+    setFilters: setTableFilters,
+    clear: clearTableFilters,
+    reset: resetTableFilters,
+  } = useTableFilters(SUPPLY_FILTERS_KEY, DEFAULT_SUPPLY_FILTERS)
+
   const getRowId = useCallback(
     (row: SupplyProduct) =>
       `${row.protocol}-${row.poolChainId}-${row.poolId}-${row.assetAddress}`,
@@ -351,7 +367,12 @@ export function SupplyTableClient() {
     if (!data || data.length === 0) return
     if (hasUserInteracted.current) return
 
-    const filtered = data.filter(
+    // Candidates must come from `visibleMarkets`, not the raw `data` fetch:
+    // everything else on the page (the table, StatsBar, faceted counts) reads
+    // `visibleMarkets`, and auto-selecting a row the active filters have
+    // already hidden opens the Optimize button on a selection the user never
+    // sees on screen.
+    const filtered = visibleMarkets.filter(
       (row) => row.assetSymbol === 'USDC' && !isOverutilized(row)
     )
     const sorted = [...filtered].sort((a, b) => (b.apy ?? 0) - (a.apy ?? 0))
@@ -385,7 +406,7 @@ export function SupplyTableClient() {
       for (const id of newTopIds) selection[id] = true
       setRowSelection(selection)
     }
-  }, [data, getRowId])
+  }, [data, getRowId, tableFilters])
 
   // Wrap filter setter: marks user interaction and clears selection
   const handleFiltersChange = useCallback((newFilters: ColumnFiltersState) => {
@@ -438,24 +459,43 @@ export function SupplyTableClient() {
 
   const sortColumn = HORIZON_CONFIG[horizon].apyKey as string
 
+  /**
+   * The rows the user is looking at.
+   *
+   * The numeric predicates are applied HERE rather than through TanStack's
+   * `columnFilters`, for two reasons. A per-column `filterFn` would be a THIRD
+   * writer of a predicate the whole design says there are two of. And
+   * `ColumnFiltersState` holds one entry per column, while Net APY carries two
+   * bounds by default.
+   *
+   * Filtering here also keeps everything downstream honest for free: the
+   * StatsBar, the faceted counts and the top-3 auto-selection all read this
+   * array, so the headline always describes the lines below it.
+   */
   const markets = data || []
 
-  // For non-intraday horizons, hide rows without enough historical data in MongoDB
-  const visibleMarkets =
+  const withHorizonData =
     horizon === 'intraday'
       ? markets
       : markets.filter((m) => m[HORIZON_CONFIG[horizon].apyKey] !== undefined)
+
+  const visibleMarkets = withHorizonData.filter((m) =>
+    matchesFilters(m, tableFilters, horizon)
+  )
 
   const selectedData = visibleMarkets.filter(
     (row) => rowSelection[getRowId(row)]
   )
 
-  const isFiltered = columnFilters.length > 0 || searchValue !== ''
+  const isFiltered =
+    columnFilters.length > 0 || searchValue !== '' || tableFilters.length > 0
   const activeFilterCount =
     columnFilters.reduce(
       (n, f) => n + (Array.isArray(f.value) ? f.value.length : 1),
       0
-    ) + (searchValue !== '' ? 1 : 0)
+    ) +
+    (searchValue !== '' ? 1 : 0) +
+    tableFilters.length
 
   // Filter options
   const protocolOptions = getUniqueColumnValues(visibleMarkets, 'protocol').map(
@@ -541,8 +581,18 @@ export function SupplyTableClient() {
   // filtered figure so the two can never be mistaken for one another, and the
   // best-rate card jumps them to the market it names.
   const filteredMarkets = applyFiltersExcept('')
-  const stats = computeRateStats(visibleMarkets, horizon)
-  const filteredStats = computeRateStats(filteredMarkets, horizon)
+  // The active Net APY ceiling, not the shipped default: a user who raises it
+  // in FilterBuilder has already let those rows into `visibleMarkets`, and
+  // the stats ceiling must not silently exclude them again.
+  const activeMaxAbsNetApy =
+    tableFilters.find((f) => f.field === 'netApy' && f.op === 'lte')?.value ??
+    DEFAULT_MAX_ABS_NET_APY
+  const stats = computeRateStats(visibleMarkets, horizon, activeMaxAbsNetApy)
+  const filteredStats = computeRateStats(
+    filteredMarkets,
+    horizon,
+    activeMaxAbsNetApy
+  )
   const opportunity = isFiltered
     ? findOpportunity(stats, filteredStats, 'highest')
     : null
@@ -771,7 +821,12 @@ export function SupplyTableClient() {
                     <div className="border-border/40 flex justify-end border-t px-7 py-4">
                       <Button
                         onClick={() => {
-                          setSnapshotMarkets(selectedData)
+                          // A market with no measured rate is not a 0% rate —
+                          // exclude it so the optimizer never treats "unknown"
+                          // as "free".
+                          setSnapshotMarkets(
+                            selectedData.filter((m) => m.apy !== undefined)
+                          )
                           setModalStep(2)
                         }}
                       >
@@ -807,6 +862,26 @@ export function SupplyTableClient() {
                 className="h-9 w-36 pl-7 text-xs placeholder:text-xs"
               />
             </div>
+
+            {/* Display filters */}
+            <FilterBuilder
+              filters={tableFilters}
+              onChange={(next) => {
+                hasUserInteracted.current = true
+                setRowSelection({})
+                setTableFilters(next)
+              }}
+              onClear={() => {
+                hasUserInteracted.current = true
+                setRowSelection({})
+                clearTableFilters()
+              }}
+              onReset={() => {
+                hasUserInteracted.current = true
+                setRowSelection({})
+                resetTableFilters()
+              }}
+            />
 
             {/* Horizon */}
             <HorizonPicker value={horizon} onChange={setHorizon} />
@@ -858,8 +933,13 @@ export function SupplyTableClient() {
                 setRowSelection({})
                 setColumnFilters([])
                 setSearchValue('')
+                resetTableFilters()
               }}
-              disabled={isFiltered ? false : true}
+              disabled={
+                !isFiltered &&
+                JSON.stringify(tableFilters) ===
+                  JSON.stringify(DEFAULT_SUPPLY_FILTERS)
+              }
             >
               <X className="h-4 w-4" />
             </Button>

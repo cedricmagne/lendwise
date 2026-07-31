@@ -349,14 +349,22 @@ export const typeDefs = /* GraphQL */ `
     chainId: Int
     "Filter by loan asset symbol — e.g. USDC, WETH."
     asset: String
-    "Minimum supplied TVL in USD. In a thin market a headline APY is mostly noise."
+    """
+    Minimum supplied TVL in USD, applied row-by-row across the returned
+    series. Opt-in — omitted means no floor and a complete history,
+    including hours the TVL happened to dip low or was unknown. Passing a
+    value (0 included) applies it as a per-row filter, which can leave holes
+    in the series that look like pipeline gaps but are not.
+    """
     minTvlUsd: Float
     """
-    Include pools withheld from public rankings — empty markets (TVL below the
-    floor) and absurd rates. Raw-data escape hatch: OFF by default, so every
-    ordinary query is filtered before sorting, counting and pagination.
+    Ceiling on the absolute net APY, as a fraction — 10 is 1000 %, applied
+    row-by-row across the returned series. Opt-in — omitted means no bound
+    and a complete history. Passing a value (0 included) applies it as a
+    per-row filter, which can leave holes in the series that look like
+    pipeline gaps but are not.
     """
-    includeIneligible: Boolean
+    maxAbsNetApy: Float
     "ISO date string — start of range (inclusive). Defaults to last 24h."
     from: String
     "ISO date string — end of range (inclusive)."
@@ -377,14 +385,18 @@ export const typeDefs = /* GraphQL */ `
     market: String
     chainId: Int
     asset: String
-    "Minimum supplied TVL in USD. In a thin market a headline APY is mostly noise."
+    """
+    Minimum supplied TVL in USD. In a thin market a headline APY is mostly
+    noise. Omitted applies the default (100000); pass 0 to remove the floor —
+    which also brings back markets whose TVL is unknown.
+    """
     minTvlUsd: Float
     """
-    Include pools withheld from public rankings — empty markets (TVL below the
-    floor) and absurd rates. Raw-data escape hatch: OFF by default, so every
-    ordinary query is filtered before sorting, counting and pagination.
+    Ceiling on the absolute net APY, as a fraction — 10 is 1000 %. Omitted
+    applies the default (10), which is what keeps a market quoting 297,996 %
+    off the top of every ranking. Pass 0 to remove the bound.
     """
-    includeIneligible: Boolean
+    maxAbsNetApy: Float
   }
 
   "Latest-snapshot filters for borrow products."
@@ -397,13 +409,18 @@ export const typeDefs = /* GraphQL */ `
     asset: String
     "Filter by collateral asset symbol."
     collateral: String
+    """
+    Minimum supplied TVL in USD. In a thin market a headline APY is mostly
+    noise. Omitted applies the default (100000); pass 0 to remove the floor —
+    which also brings back markets whose TVL is unknown.
+    """
     minTvlUsd: Float
     """
-    Include pools withheld from public rankings — empty markets (TVL below the
-    floor) and absurd rates. Raw-data escape hatch: OFF by default, so every
-    ordinary query is filtered before sorting, counting and pagination.
+    Ceiling on the absolute net APY, as a fraction — 10 is 1000 %. Omitted
+    applies the default (10), which is what keeps a market quoting 297,996 %
+    off the top of every ranking. Pass 0 to remove the bound.
     """
-    includeIneligible: Boolean
+    maxAbsNetApy: Float
   }
 
   "Filters for the product registry. Typed columns only — the productId slug is never parsed."
@@ -428,14 +445,22 @@ export const typeDefs = /* GraphQL */ `
     market: String
     chainId: Int
     asset: String
-    "Minimum supplied TVL in USD. In a thin market a headline APY is mostly noise."
+    """
+    Minimum supplied TVL in USD, applied row-by-row across the returned
+    series. Opt-in — omitted means no floor and a complete history,
+    including hours the TVL happened to dip low or was unknown. Passing a
+    value (0 included) applies it as a per-row filter, which can leave holes
+    in the series that look like pipeline gaps but are not.
+    """
     minTvlUsd: Float
     """
-    Include pools withheld from public rankings — empty markets (TVL below the
-    floor) and absurd rates. Raw-data escape hatch: OFF by default, so every
-    ordinary query is filtered before sorting, counting and pagination.
+    Ceiling on the absolute net APY, as a fraction — 10 is 1000 %, applied
+    row-by-row across the returned series. Opt-in — omitted means no bound
+    and a complete history. Passing a value (0 included) applies it as a
+    per-row filter, which can leave holes in the series that look like
+    pipeline gaps but are not.
     """
-    includeIneligible: Boolean
+    maxAbsNetApy: Float
     "ISO date string — start of range (inclusive). Defaults to last 30 days."
     from: String
     "ISO date string — end of range (inclusive)."
@@ -453,14 +478,22 @@ export const typeDefs = /* GraphQL */ `
     asset: String
     "Filter by collateral asset symbol."
     collateral: String
-    "Minimum supplied TVL in USD."
+    """
+    Minimum supplied TVL in USD, applied row-by-row across the returned
+    series. Opt-in — omitted means no floor and a complete history,
+    including hours the TVL happened to dip low or was unknown. Passing a
+    value (0 included) applies it as a per-row filter, which can leave holes
+    in the series that look like pipeline gaps but are not.
+    """
     minTvlUsd: Float
     """
-    Include pools withheld from public rankings — empty markets (TVL below the
-    floor) and absurd rates. Raw-data escape hatch: OFF by default, so every
-    ordinary query is filtered before sorting, counting and pagination.
+    Ceiling on the absolute net APY, as a fraction — 10 is 1000 %, applied
+    row-by-row across the returned series. Opt-in — omitted means no bound
+    and a complete history. Passing a value (0 included) applies it as a
+    per-row filter, which can leave holes in the series that look like
+    pipeline gaps but are not.
     """
-    includeIneligible: Boolean
+    maxAbsNetApy: Float
     "ISO date string — start of range (inclusive). Defaults to last 24h."
     from: String
     to: String
@@ -474,14 +507,22 @@ export const typeDefs = /* GraphQL */ `
     chainId: Int
     asset: String
     collateral: String
-    "Minimum supplied TVL in USD."
+    """
+    Minimum supplied TVL in USD, applied row-by-row across the returned
+    series. Opt-in — omitted means no floor and a complete history,
+    including hours the TVL happened to dip low or was unknown. Passing a
+    value (0 included) applies it as a per-row filter, which can leave holes
+    in the series that look like pipeline gaps but are not.
+    """
     minTvlUsd: Float
     """
-    Include pools withheld from public rankings — empty markets (TVL below the
-    floor) and absurd rates. Raw-data escape hatch: OFF by default, so every
-    ordinary query is filtered before sorting, counting and pagination.
+    Ceiling on the absolute net APY, as a fraction — 10 is 1000 %, applied
+    row-by-row across the returned series. Opt-in — omitted means no bound
+    and a complete history. Passing a value (0 included) applies it as a
+    per-row filter, which can leave holes in the series that look like
+    pipeline gaps but are not.
     """
-    includeIneligible: Boolean
+    maxAbsNetApy: Float
     "ISO date string — start of range (inclusive). Defaults to last 30 days."
     from: String
     to: String

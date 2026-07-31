@@ -103,8 +103,13 @@ type MarketsListQuery = {
  * `supply_assets_usd = 0`, dutifully hid two $27M markets as `low_liquidity`.
  *
  * NULL says what is true: we do not know. Every consumer already handles it —
- * `minTvlUsd` skips the row, ORDER BY pushes it last, and the eligibility policy
- * ignores healed rows outright (see MIN_QUALITY_COUNT in display-flags).
+ * `minTvlUsd` skips the row and ORDER BY pushes it last. There is no dedicated
+ * healed-row exclusion anywhere in the system: a healed row with a NULL TVL is
+ * dropped by the same "unknown TVL fails every operator" rule that applies to
+ * any other row with unknown TVL, on both evaluators. A refetch-healed row
+ * carries the protocol's true rate but a blank market state, and a
+ * nearest-neighbour-healed one copies its neighbour's TVL verbatim. Neither
+ * observed the market it describes.
  *
  * The real fix is for MARKET_BORROW_HISTORY to fetch the liquidity timeseries
  * alongside the rates; until then, an honest blank beats a confident zero.

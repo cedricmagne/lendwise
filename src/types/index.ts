@@ -116,7 +116,17 @@ export interface SupplyProduct {
   assetPriceUsd?: number
   liquidityAmount: string
   liquidityAmountUsd: number
-  apy: number
+  /**
+   * The standardized net APY of the latest hourly row, or **undefined when we
+   * have not measured one**.
+   *
+   * It used to fall back to the adapter's raw value without saying so, and the
+   * two were indistinguishable on screen. That is what produced the 0.00 % on
+   * an idle market on 2026-07-26: no hourly row, so the adapter's figure was
+   * shown as if it had been measured — and it sorted like one. A display says
+   * what it knows; the column renders "—".
+   */
+  apy?: number
   apyDaily?: number
   apyMonthly?: number
   apyYearly?: number
@@ -149,7 +159,17 @@ export interface BorrowProduct {
   liquidityAmount: string
   liquidityAmountUsd: number
   collaterals: Token[]
-  apy: number
+  /**
+   * The standardized net APY of the latest hourly row, or **undefined when we
+   * have not measured one**.
+   *
+   * It used to fall back to the adapter's raw value without saying so, and the
+   * two were indistinguishable on screen. That is what produced the 0.00 % on
+   * an idle market on 2026-07-26: no hourly row, so the adapter's figure was
+   * shown as if it had been measured — and it sorted like one. A display says
+   * what it knows; the column renders "—".
+   */
+  apy?: number
   apyDaily?: number
   apyMonthly?: number
   apyYearly?: number
