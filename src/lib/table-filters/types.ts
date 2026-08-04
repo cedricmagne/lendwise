@@ -19,6 +19,7 @@ export type FilterOp = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte'
 export type FilterFieldId = 'deposits' | 'liquidity' | 'netApy' | 'utilization'
 
 export interface TableFilter {
+  id: string
   field: FilterFieldId
   op: FilterOp
   /** Canonical units: USD for money, fraction for rates (0.05 = 5 %). */

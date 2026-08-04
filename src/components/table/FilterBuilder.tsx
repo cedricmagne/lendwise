@@ -121,7 +121,7 @@ export function FilterBuilder({
 		);
 		onChange([
 			...filters,
-			{ field: unused ?? FILTER_FIELD_IDS[0], op: "gte", value: 0 },
+			{ id: crypto.randomUUID(), field: unused ?? FILTER_FIELD_IDS[0], op: "gte", value: 0 },
 		]);
 	};
 
@@ -176,7 +176,7 @@ export function FilterBuilder({
 						)}
 
 						{filters.map((f, i) => (
-							<div key={`row-${i}`} className="flex items-center gap-1.5">
+							<div key={`row-${f.id}`} className="flex items-center gap-1.5">
 								<span className="text-muted-foreground w-10 shrink-0 text-xs">
 									{i === 0 ? "where" : "and"}
 								</span>
