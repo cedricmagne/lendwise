@@ -113,7 +113,8 @@ Good entry points that don't require understanding the whole pipeline:
 
 - **Token icons** — add an SVG to `public/icons/native/{SYMBOL}.svg` for an asset currently
   falling back to CoinGecko.
-- **Docs** — fix a typo, clarify a setup step, improve an explanation in `docs/`.
+- **Docs** — fix a typo, clarify a setup step, improve an explanation in the README or in
+  [`src/lib/protocols/README.md`](src/lib/protocols/README.md).
 - **Issues labeled** [`good first issue`](https://github.com/lendwise-fi/lendwise/labels/good%20first%20issue).
 
 ## Pull request process

@@ -14,7 +14,7 @@ Lendwise compares and monitors 700+ lending markets across **Aave**, **Morpho**,
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](tsconfig.json)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-[**Live App**](https://lendwise.fi) · [Documentation](docs/) · [X / Twitter](https://x.com/Lendwisefi) · [Farcaster](https://farcaster.xyz/lendwise) · [Discussions](https://github.com/lendwise-fi/lendwise/discussions)
+[**Live App**](https://lendwise.fi) · [Documentation](https://lendwise.fi/docs) · [X / Twitter](https://x.com/Lendwisefi) · [Farcaster](https://farcaster.xyz/lendwise) · [Discussions](https://github.com/lendwise-fi/lendwise/discussions)
 
 <img src=".github/assets/app-demo.gif" alt="Lendwise app — DeFi supply rates compared across protocols and chains" width="900" />
 
@@ -79,7 +79,7 @@ flowchart LR
 Each protocol is an isolated **adapter** that transforms its source (GraphQL API, subgraph,
 RPC) into a shared data model. Aggregation uses `Promise.allSettled` everywhere — one
 protocol having a bad day never blocks the others. The full design is documented in
-[`src/lib/protocols/README.md`](src/lib/protocols/README.md) and [`docs/`](docs/).
+[`src/lib/protocols/README.md`](src/lib/protocols/README.md).
 
 ## Quick start
 
@@ -115,13 +115,10 @@ QStash cron.
 
 ## Documentation
 
-| Doc                                              | What's inside                                                          |
-| ------------------------------------------------ | ---------------------------------------------------------------------- |
-| [Protocol adapters](src/lib/protocols/README.md) | Architecture, adapter contract, how to add a protocol                  |
-| [APY pipeline](docs/apy-pipeline-gap-heal.md)    | Nightly reconcile job — gap detection, repair, aggregation and pruning |
-| [APY daily schema](docs/APY_DAILY_SCHEMA.md)     | How historical aggregates are computed                                 |
-| [Products schema](docs/PRODUCTS_SCHEMA.md)       | The product registry data model                                        |
-| [Contributing guide](CONTRIBUTING.md)            | Setup, quality bar, PR process                                         |
+| Doc                                              | What's inside                                         |
+| ------------------------------------------------ | ----------------------------------------------------- |
+| [Protocol adapters](src/lib/protocols/README.md) | Architecture, adapter contract, how to add a protocol |
+| [Contributing guide](CONTRIBUTING.md)            | Setup, quality bar, PR process                        |
 
 ## Contributing
 
