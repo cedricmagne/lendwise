@@ -35,12 +35,12 @@ export const DEFAULT_MAX_ABS_NET_APY = 10
  * quietly stop catching it.
  */
 const rateBounds = (): TableFilter[] => [
-  { field: 'netApy', op: 'lte', value: DEFAULT_MAX_ABS_NET_APY },
-  { field: 'netApy', op: 'gte', value: -DEFAULT_MAX_ABS_NET_APY },
+  { id: crypto.randomUUID(), field: 'netApy', op: 'lte', value: DEFAULT_MAX_ABS_NET_APY },
+  { id: crypto.randomUUID(), field: 'netApy', op: 'gte', value: -DEFAULT_MAX_ABS_NET_APY },
 ]
 
 export const DEFAULT_SUPPLY_FILTERS: TableFilter[] = [
-  { field: 'deposits', op: 'gte', value: DEFAULT_MIN_TVL_USD },
+  { id: crypto.randomUUID(), field: 'deposits', op: 'gte', value: DEFAULT_MIN_TVL_USD },
   ...rateBounds(),
 ]
 
@@ -49,6 +49,6 @@ export const DEFAULT_SUPPLY_FILTERS: TableFilter[] = [
  * being identical without anyone touching a component.
  */
 export const DEFAULT_BORROW_FILTERS: TableFilter[] = [
-  { field: 'deposits', op: 'gte', value: DEFAULT_MIN_TVL_USD },
+  { id: crypto.randomUUID(), field: 'deposits', op: 'gte', value: DEFAULT_MIN_TVL_USD },
   ...rateBounds(),
 ]
