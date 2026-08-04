@@ -67,7 +67,7 @@ export interface YieldAdapter {
 
   getProducts(opts?: FetchOpts): Promise<(SupplyProduct | BorrowProduct)[]>
   getApySpot(opts?: FetchOpts): Promise<SpotPayload[]>
-  /** OPTIONAL — omit it and the repair job falls back to donor hours. */
+  /** OPTIONAL — omit it and reconcile falls back to donor hours. */
   getApyHistory?(
     params: HistoryParams
   ): Promise<HistoryDataPoint[] | HistoryResult>
@@ -76,10 +76,10 @@ export interface YieldAdapter {
 
 - `getProducts` — full catalogue of listed markets (hourly sync into the `products` table).
 - `getApySpot` — one rate snapshot per product (10-minute collector into `apy_hourly`).
-- `getApyHistory` — backfill source for gap healing and for `scripts/backfill-history.ts`.
-  Optional, but **omitting it is expensive**: without it the heal job has no refetch
-  path and fills every hole for that protocol by copying a neighbouring hour instead.
-  Compound went 1,160 healed rows without a single real observation that way, purely
+- `getApyHistory` — backfill source for reconcile's repair step and for
+  `scripts/backfill-history.ts`. Optional, but **omitting it is expensive**: without it
+  reconcile has no refetch path for that protocol and fills every hole by copying a
+  neighbouring hour instead. Compound went 1,160 healed rows without a single real observation that way, purely
   because its subgraphs' hourly/daily accountings were never declared on the adapter
   (fixed 2026-07-24). Omit only when the protocol genuinely publishes no history.
 
@@ -131,7 +131,7 @@ utilization, asset price) as the protocol can source **for that day**. Rules:
   rather than a bare array when you can attribute a miss to a product. A bare
   array stays valid (`toHistoryResult` normalizes both), but without failures a
   rate-limit storm is indistinguishable from a protocol with no history — which
-  is how a heal run announced `success: true, errors: []` while neighbour copies
+  is how a reconcile run announced `success: true, errors: []` while neighbour copies
   filled everything in.
 - **`params.includeMarket === false` is the cheap path**, for callers that only want
   rates (`backfill-history --skip-market`). An adapter with one combined source can ignore
@@ -204,7 +204,7 @@ That's it. No DB migration: productIds, tables, and repositories are protocol-ag
   `ethereum` vs `op mainnet`); only the numeric id is canonical. The productId slug comes from
   `CHAIN_SLUG_MAP`.
 - **`IngestionFloors` exist to skip noise, not to curate.** Ingestion is the one irreversible
-  filter in the pipeline — a skipped market is a permanent hole in history that healing cannot
+  filter in the pipeline — a skipped market is a permanent hole in history that reconcile cannot
   fill. Keep floors LOW (Morpho: `minBorrowAssetsUsd: 10_000`, just enough to skip the
   thousands of permissionless markets that never saw a borrow). Display-side curation belongs
   in the display filters (`src/config/table-filters.ts`), applied on the read side and
@@ -225,7 +225,7 @@ That's it. No DB migration: productIds, tables, and repositories are protocol-ag
 - **Soft (runtime)** — `spotPayloadSoftSchema`. Shape + finiteness ONLY. The collector and
   products-sync skip-and-warn a failing payload; a slot never crashes. It deliberately has
   **no magnitude bound**: dropping a finite extreme rate at ingestion manufactures the exact
-  gap that the heal job then fills with the same value unguarded (see
+  gap that reconcile then fills with the same value unguarded (see
   `src/lib/apy-validation.ts` — every `apy_hourly` row above 100 was `healed = true`).
   Extreme-but-finite rates are handled on the read side by the display filters
   (`src/config/table-filters.ts`).

@@ -85,7 +85,7 @@ architecture, the `YieldAdapter` contract, conventions, and war stories. The sho
      chains: { 1: { slug: CHAIN_SLUG_MAP[1] } },
      getProducts: fetchAcmeProducts, // full market catalogue
      getApySpot: fetchAcmeApySpot, // one rate snapshot per product
-     // getApyHistory: optional — heal job falls back without it
+     // getApyHistory: optional — reconcile falls back to donor hours without it
    })
    ```
 

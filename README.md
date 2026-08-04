@@ -38,8 +38,9 @@ Here are standardized APYs — now you can actually compare them.
   `base − fees + rewards`, borrow `base + fees − rewards`. Headline numbers that mean
   the same thing on every protocol.
 - **Fresh** — every market re-sampled every 10 minutes.
-- **Historical** — hourly averages and daily aggregates for 180 days, with a
-  gap-detection + self-healing pipeline behind them.
+- **Historical** — hourly averages and daily aggregates for 180 days, kept whole by a
+  nightly reconcile job that detects gaps, repairs them, and re-aggregates the days
+  they belong to.
 - **Complete** — ~700 active markets, ~120 assets, supply _and_ borrow sides,
   collateral parameters included.
 
@@ -69,7 +70,8 @@ Want another protocol? **[Request it](https://github.com/lendwise-fi/lendwise/is
 flowchart LR
     A["Protocol adapters<br/>Aave · Morpho · Compound"] -->|"every 10 min"| B["APY collector"]
     B --> C[("Postgres<br/>apy_hourly · apy_daily")]
-    D["Gap detection<br/>+ self-healing"] --> C
+    C -->|"daily 00:30 UTC"| D["Reconcile<br/>detect → repair → aggregate → prune"]
+    D --> C
     C --> E["GraphQL API<br/>/api/graphql"]
     E --> F["Next.js app<br/>lendwise.fi"]
 ```
@@ -113,13 +115,13 @@ QStash cron.
 
 ## Documentation
 
-| Doc                                              | What's inside                                         |
-| ------------------------------------------------ | ----------------------------------------------------- |
-| [Protocol adapters](src/lib/protocols/README.md) | Architecture, adapter contract, how to add a protocol |
-| [APY pipeline](docs/apy-pipeline-gap-heal.md)    | Gap detection and self-healing for historical data    |
-| [APY daily schema](docs/APY_DAILY_SCHEMA.md)     | How historical aggregates are computed                |
-| [Products schema](docs/PRODUCTS_SCHEMA.md)       | The product registry data model                       |
-| [Contributing guide](CONTRIBUTING.md)            | Setup, quality bar, PR process                        |
+| Doc                                              | What's inside                                                          |
+| ------------------------------------------------ | ---------------------------------------------------------------------- |
+| [Protocol adapters](src/lib/protocols/README.md) | Architecture, adapter contract, how to add a protocol                  |
+| [APY pipeline](docs/apy-pipeline-gap-heal.md)    | Nightly reconcile job — gap detection, repair, aggregation and pruning |
+| [APY daily schema](docs/APY_DAILY_SCHEMA.md)     | How historical aggregates are computed                                 |
+| [Products schema](docs/PRODUCTS_SCHEMA.md)       | The product registry data model                                        |
+| [Contributing guide](CONTRIBUTING.md)            | Setup, quality bar, PR process                                         |
 
 ## Contributing
 
