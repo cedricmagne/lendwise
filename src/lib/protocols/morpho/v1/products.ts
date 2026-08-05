@@ -10,8 +10,10 @@ import {
   MARKETS_APY,
 } from '@/lib/protocols/morpho/v1/queries'
 
+import { MORPHO_PROVIDER } from '../common/config'
 import { MORPHO_V1_API_URL, MORPHO_V1_CHAINS } from './config'
 import { morphoMarketWhere, morphoVaultWhere } from './listing'
+import type { MetaMorphoSupplyMeta, MorphoBlueBorrowMeta } from './types'
 import { buildProductId } from './utils'
 
 /**
@@ -84,11 +86,11 @@ export async function fetchMorphoV1Products(
           ? Number(market.lltv) / 1e18 // lltv is a BigInt scaled by 1e18
           : 0
 
-      const borrowProduct: BorrowProduct = {
+      const borrowProduct: BorrowProduct<MorphoBlueBorrowMeta> = {
         _id: borrowId,
         kind: 'borrow',
         protocol: {
-          provider: 'morpho',
+          provider: MORPHO_PROVIDER,
           type: 'market',
           version: 'v1',
           name: 'morphoblue', // display name — kept stable despite unified `morpho:` id prefix
@@ -174,11 +176,11 @@ export async function fetchMorphoV1Products(
       )
 
       // ─── Supply product ──────────────────────────────────────────────────────────
-      const supplyProduct: SupplyProduct = {
+      const supplyProduct: SupplyProduct<MetaMorphoSupplyMeta> = {
         _id: supplyId,
         kind: 'supply',
         protocol: {
-          provider: 'morpho',
+          provider: MORPHO_PROVIDER,
           version: 'v1',
           type: 'vault',
           name: `MorphoBlueV1${vault.asset.chain.network.replace(' ', '')}`,

@@ -1,6 +1,7 @@
 import { defineYieldAdapter } from '@/lib/protocols/core/define'
 import type { AppAdapter } from '@/lib/protocols/core/types'
 
+import { COMPOUND_PROVIDER } from '../common/config'
 import { getCompoundApyHistory } from './apy-history'
 import { fetchCompoundV3ApySpot } from './apy-spot'
 import { getBorrowProducts } from './borrow-products'
@@ -17,7 +18,7 @@ import { getSupplyProducts } from './supply-products'
 export const adapter = defineYieldAdapter({
   id: 'compound_v3',
   name: 'Compound v3',
-  provider: 'compound',
+  provider: COMPOUND_PROVIDER,
   version: 'v3',
   chains: COMPOUND_V3_CHAINS,
   getProducts: fetchCompoundV3Products,

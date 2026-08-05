@@ -2,6 +2,7 @@
 
 import { sql } from 'drizzle-orm'
 
+import { PROTOCOLS_META } from '@/config/protocols-meta'
 import { db } from '@/lib/db/postgres'
 import { expectedAt } from '@/lib/db/repositories/gaps'
 import { latestReport } from '@/lib/db/repositories/reports'
@@ -132,9 +133,9 @@ export async function getStatusQuality() {
   }
 
   const protocols = [
-    { key: 'morpho', label: 'Morpho' },
-    { key: 'aave', label: 'AAVE' },
-    { key: 'compound', label: 'Compound' },
+    { key: PROTOCOLS_META.morpho_v1.provider, label: 'Morpho' },
+    { key: PROTOCOLS_META.aave_v3.provider, label: 'AAVE' },
+    { key: PROTOCOLS_META.compound_v3.provider, label: 'Compound' },
   ]
 
   const rows = protocols.map(({ key, label }) => {

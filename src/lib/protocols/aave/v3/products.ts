@@ -4,8 +4,10 @@ import { MARKETS_APY } from '@/lib/protocols/aave/v3/queries'
 import { createGraphQLClient } from '@/lib/protocols/core/toolkit'
 import type { FetchOpts } from '@/lib/protocols/core/types'
 
+import { AAVE_PROVIDER } from '../common/config'
 import { AAVE_V3_API_URL, AAVE_V3_CHAINS } from './config'
 import { listsBorrow } from './listing'
+import type { AaveBorrowMeta, AaveSupplyMeta } from './types'
 import { buildProductId } from './utils'
 
 /**
@@ -71,11 +73,11 @@ export async function fetchAaveV3Products(
 
       // ─── Supply product ─────────────────────────────────────────────────────────────────────────
 
-      const supplyProduct: SupplyProduct = {
+      const supplyProduct: SupplyProduct<AaveSupplyMeta> = {
         _id: supplyId,
         kind: 'supply',
         protocol: {
-          provider: 'aave',
+          provider: AAVE_PROVIDER,
           type: 'reserve',
           version: 'v3',
           subgraphUrl: AAVE_V3_API_URL,
@@ -106,11 +108,11 @@ export async function fetchAaveV3Products(
       // The shared listing rule — the APY collector applies the same one, so the
       // two enumerations cannot drift (see ./listing.ts).
       if (listsBorrow(reserve)) {
-        const borrowProduct: BorrowProduct = {
+        const borrowProduct: BorrowProduct<AaveBorrowMeta> = {
           _id: borrowId,
           kind: 'borrow',
           protocol: {
-            provider: 'aave',
+            provider: AAVE_PROVIDER,
             type: 'reserve',
             version: 'v3',
             subgraphUrl: AAVE_V3_API_URL,

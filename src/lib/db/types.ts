@@ -14,9 +14,8 @@ import type { ProductRow } from './schema'
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type Kind = 'supply' | 'borrow'
-export type ProviderId = 'aave' | 'morpho' | 'compound'
 
-export type ProductType = 'reserve' | 'market' | 'vault'
+export type ProductType = 'reserve' | 'market' | 'vault' | 'pool'
 
 export interface Chain {
   id: number // EVM chain ID — 1 = Ethereum, 8453 = Base, 42161 = Arbitrum
@@ -54,78 +53,22 @@ export interface Collateral {
   canBeCollateral: boolean
 }
 
-// ─── Protocol-specific meta — merged into protocol.meta ───────────────────────
-
-/**
- * AAVE supply — a "reserve" in AAVE terminology.
- * Identified by the underlying asset address (underlyingToken).
- */
-export interface ProtocolMetaAaveSupply {
-  underlyingToken: string // underlying asset contract address
-  aTokenSymbol: string // e.g. "aEthLidoUSDC"
-  /** Maximum LTV allowed if this asset is used as collateral — e.g. 0.75 */
-  maxLTV: number
-  /** Liquidation threshold — position becomes liquidatable above this LTV — e.g. 0.80 */
-  liquidationThreshold: number
-}
-
-/**
- * AAVE borrow — same "reserve", borrow side.
- * IRM parameters fixed by governance.
- */
-export interface ProtocolMetaAaveBorrow {
-  underlyingToken: string // underlying asset contract address
-  vTokenSymbol: string // e.g. "variableDebtEthLidoUSDC"
-  variableRateSlope1: number
-  variableRateSlope2: number
-  optimalUsageRate: number
-  baseVariableBorrowRate: number
-}
-
-/**
- * Morpho Blue borrow — same market, borrow side.
- */
-export interface ProtocolMetaMorphoBlueBorrow {
-  id: string // marketId hash
-  lltv: number // liquidation LTV for this market — e.g. 0.915
-}
-
-/**
- * MetaMorpho supply — a "vault" built on top of Morpho Blue markets.
- * Identified by the vault contract address.
- * No borrow side — vaults are supply-only.
- */
-export interface ProtocolMetaMetaMorphoSupply {
-  name: string
-  symbol: string
-  address: string // vault contract address
-  curators: string[] // e.g. ["Steakhouse", "Gauntlet"]
-}
-
-/**
- * Compound supply — a "market" in Compound terminology.
- * Identified by the cToken (v2) or Comet (v3) contract address.
- */
-export interface ProtocolMetaCompoundSupply {
-  cToken: string // e.g. "cUSDCv3" contract address
-  reserveFactor: number // e.g. 0.10
-}
-
-/**
- * Compound borrow — same market, borrow side.
- */
-export interface ProtocolMetaCompoundBorrow {
-  cToken: string
-  reserveFactor: number
-}
-
 // ─── Product base ─────────────────────────────────────────────────────────────
 
-export interface BaseProduct {
+/**
+ * `TMeta` defaults to `unknown` so `SupplyProduct`, `BorrowProduct` and
+ * `Product` stay usable bare (as the pipeline uses them —
+ * `getProducts(): Promise<(SupplyProduct | BorrowProduct)[]>`) and any
+ * concrete meta interface — which, having no index signature, is not
+ * assignable to `Record<string, unknown>` — widens into it without a cast.
+ * Each protocol declares its own meta shape next to its adapter
+ * (`src/lib/protocols/{name}/{version}/types.ts`) and narrows locally, e.g.
+ * `SupplyProduct<AaveSupplyMeta>` — this file never grows a protocol union.
+ */
+export interface BaseProduct<TMeta = unknown> {
   /**
    * Deterministic slug — primary key.
    * Format: {protocol.provider}-{protocol.name}-{asset.symbol}-{kind}
-   * Morpho Blue borrow: …-{collateral.symbol}-borrow
    */
   _id: string
   active: boolean
@@ -133,8 +76,13 @@ export interface BaseProduct {
   updatedAt: Date
   asset: Asset
   protocol: {
-    /** Normalized provider identifier for filtering — "aave" | "morpho" | "compound" */
-    provider: ProviderId
+    /**
+     * Normalized provider identifier for filtering — groups an adapter's
+     * versions, e.g. "aave", "morpho". Deliberately `string`, not a closed
+     * union: nothing narrows on this field, so adding a protocol never
+     * requires touching this file. DB column is plain `text`, no enum.
+     */
+    provider: string
     type: ProductType
     version: string
     /**
@@ -146,43 +94,24 @@ export interface BaseProduct {
     chain: Chain
     /** Protocol contract address — supplying pool / market factory. */
     address: string
-    /**
-     * Protocol-specific metadata — type discriminator + native identifier
-     * + governance parameters.
-     */
-    meta:
-      | ProtocolMetaAaveSupply
-      | ProtocolMetaAaveBorrow
-      | ProtocolMetaMorphoBlueBorrow
-      | ProtocolMetaMetaMorphoSupply
-      | ProtocolMetaCompoundSupply
-      | ProtocolMetaCompoundBorrow
+    /** Protocol-owned metadata — native identifier + governance parameters. */
+    meta: TMeta
   }
 }
 
-export interface SupplyProduct extends BaseProduct {
+export interface SupplyProduct<TMeta = unknown> extends BaseProduct<TMeta> {
   kind: 'supply'
-  protocol: BaseProduct['protocol'] & {
-    meta:
-      | ProtocolMetaAaveSupply
-      | ProtocolMetaMetaMorphoSupply
-      | ProtocolMetaCompoundSupply
-  }
 }
 
-export interface BorrowProduct extends BaseProduct {
+export interface BorrowProduct<TMeta = unknown> extends BaseProduct<TMeta> {
   kind: 'borrow'
   /** Always non-empty on a borrow product. */
   collaterals: Collateral[]
-  protocol: BaseProduct['protocol'] & {
-    meta:
-      | ProtocolMetaAaveBorrow
-      | ProtocolMetaMorphoBlueBorrow
-      | ProtocolMetaCompoundBorrow
-  }
 }
 
-export type Product = SupplyProduct | BorrowProduct
+export type Product<TMeta = unknown> =
+  | SupplyProduct<TMeta>
+  | BorrowProduct<TMeta>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared APY types — used by apy.hourly and apy.daily
@@ -303,7 +232,7 @@ export interface BorrowMarketState {
 export type SpotPayload = {
   productId: string
   kind: Kind
-  protocol: ProviderId
+  protocol: string
   chainId: number
   /** Loan asset symbol — "USDC", "WETH". */
   asset: string

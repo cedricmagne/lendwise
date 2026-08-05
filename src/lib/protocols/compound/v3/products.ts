@@ -4,7 +4,9 @@ import { MARKETS_ALL } from '@/lib/protocols/compound/v3/queries'
 import { createGraphQLClient } from '@/lib/protocols/core/toolkit'
 import type { FetchOpts } from '@/lib/protocols/core/types'
 
+import { COMPOUND_PROVIDER } from '../common/config'
 import { COMPOUND_V3_CHAINS } from './config'
+import type { CompoundMarketMeta } from './types'
 import { buildProductId } from './utils'
 
 /**
@@ -78,11 +80,11 @@ export async function fetchCompoundV3Products(
 
       // ─── Supply product ─────────────────────────────────────────────────────────────────────────
 
-      const supplyProduct: SupplyProduct = {
+      const supplyProduct: SupplyProduct<CompoundMarketMeta> = {
         _id: supplyId,
         kind: 'supply',
         protocol: {
-          provider: 'compound',
+          provider: COMPOUND_PROVIDER,
           type: 'market',
           version: 'v3',
           name,
@@ -103,11 +105,11 @@ export async function fetchCompoundV3Products(
       products.push(supplyProduct)
 
       // ─── Borrow product ─────────────────────────────────────────────────────────────────────────
-      const borrowProduct: BorrowProduct = {
+      const borrowProduct: BorrowProduct<CompoundMarketMeta> = {
         _id: borrowId,
         kind: 'borrow',
         protocol: {
-          provider: 'compound',
+          provider: COMPOUND_PROVIDER,
           type: 'market',
           version: 'v3',
           name,
