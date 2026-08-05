@@ -12,6 +12,7 @@ import type {
 } from '@/lib/protocols/morpho/v1/generated/graphql'
 import { MARKETS_APY, VAULTS_APY } from '@/lib/protocols/morpho/v1/queries'
 
+import { MORPHO_PROVIDER } from '../common/config'
 import { MORPHO_V1_API_URL, MORPHO_V1_CHAINS } from './config'
 import { morphoMarketWhere, morphoVaultWhere } from './listing'
 import { buildProductId } from './utils'
@@ -164,7 +165,7 @@ export async function fetchMorphoV1ApySpot(
       const supplyPayload: SpotPayload = {
         productId,
         kind: 'supply',
-        protocol: 'morpho',
+        protocol: MORPHO_PROVIDER,
         chainId,
         asset: assetSymbol,
         apy: {
@@ -273,7 +274,7 @@ export async function fetchMorphoV1ApySpot(
       const borrowPayload: SpotPayload = {
         productId: borrowProductId,
         kind: 'borrow',
-        protocol: 'morpho',
+        protocol: MORPHO_PROVIDER,
         chainId,
         asset: loanSymbol,
         apy: {

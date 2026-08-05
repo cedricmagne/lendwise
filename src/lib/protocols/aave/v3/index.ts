@@ -5,6 +5,7 @@ import { getAaveApyHistory } from './apy-history'
 import { fetchAaveV3ApySpot } from './apy-spot'
 import { getBorrowProducts } from './borrow-products'
 import { AAVE_V3_CHAINS } from './config'
+import { AAVE_PROVIDER } from '../common/config'
 import {
   getMarketBorrowHistoryRates,
   getMarketSupplyHistoryRates,
@@ -16,7 +17,7 @@ import { getSupplyProducts } from './supply-products'
 export const adapter = defineYieldAdapter({
   id: 'aave_v3',
   name: 'Aave v3',
-  provider: 'aave',
+  provider: AAVE_PROVIDER,
   version: 'v3',
   chains: AAVE_V3_CHAINS,
   getProducts: fetchAaveV3Products,

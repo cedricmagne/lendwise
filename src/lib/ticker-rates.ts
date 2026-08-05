@@ -1,3 +1,4 @@
+import { PROTOCOLS_META } from '@/config/protocols-meta'
 import { queryLatestApy } from '@/lib/db/repositories/apy'
 import { CHAIN_BY_ID } from '@/lib/protocols/core/toolkit'
 
@@ -8,7 +9,9 @@ export interface TickerRate {
   tag: string
 }
 
-const PROVIDERS = ['aave', 'morpho', 'compound'] as const
+const PROVIDERS = [
+  ...new Set(Object.values(PROTOCOLS_META).map((m) => m.provider)),
+]
 
 const PROVIDER_LABEL: Record<string, string> = {
   aave: 'Aave v3',
