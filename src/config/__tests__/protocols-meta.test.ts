@@ -8,9 +8,11 @@ import {
 } from '@/config/protocols-meta'
 
 describe('PROTOCOLS_META', () => {
-  it('exposes the three live protocols with complete metadata', () => {
+  it('exposes every live protocol with complete metadata', () => {
     expect(Object.keys(PROTOCOLS_META).sort()).toEqual([
       'aave_v3',
+      'blend_v1',
+      'blend_v2',
       'compound_v3',
       'morpho_v1',
     ])

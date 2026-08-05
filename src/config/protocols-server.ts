@@ -8,6 +8,8 @@ export const YIELD_ADAPTERS: Record<ProtocolName, () => Promise<YieldAdapter>> =
     morpho_v1: () => import('@/lib/protocols/morpho/v1').then((m) => m.adapter),
     compound_v3: () =>
       import('@/lib/protocols/compound/v3').then((m) => m.adapter),
+    blend_v1: () => import('@/lib/protocols/blend/v1').then((m) => m.adapter),
+    blend_v2: () => import('@/lib/protocols/blend/v2').then((m) => m.adapter),
   }
 
 export const APP_ADAPTERS: Partial<
