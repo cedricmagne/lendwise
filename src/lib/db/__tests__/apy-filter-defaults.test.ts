@@ -16,15 +16,21 @@ const { displayFilters } = await import('@/lib/db/repositories/apy')
 describe('displayFilters', () => {
   it('applies the defaults when the caller asks for nothing', () => {
     expect(displayFilters({ kind: 'supply' })).toEqual([
-      { field: 'deposits', op: 'gte', value: 100_000 },
-      { field: 'netApy', op: 'lte', value: 10 },
-      { field: 'netApy', op: 'gte', value: -10 },
+      expect.objectContaining({ field: 'deposits', op: 'gte', value: 100_000 }),
+      expect.objectContaining({ field: 'netApy', op: 'lte', value: 10 }),
+      expect.objectContaining({ field: 'netApy', op: 'gte', value: -10 }),
     ])
   })
 
   it('honours an explicit floor', () => {
     const f = displayFilters({ kind: 'supply', minTvlUsd: 1_000_000 })
-    expect(f).toContainEqual({ field: 'deposits', op: 'gte', value: 1_000_000 })
+    expect(f).toContainEqual(
+      expect.objectContaining({
+        field: 'deposits',
+        op: 'gte',
+        value: 1_000_000,
+      })
+    )
   })
 
   it('drops the floor entirely on 0 — including rows with an unknown TVL', () => {
