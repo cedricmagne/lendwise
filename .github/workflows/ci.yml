@@ -17,11 +17,11 @@ jobs:
       # Aave and Morpho schemas are public. Without this secret the typecheck step is skipped.
       THEGRAPH_API_KEY: ${{ secrets.THEGRAPH_API_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
