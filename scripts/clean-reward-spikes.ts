@@ -1,5 +1,4 @@
 /**
- * @file scripts/clean-reward-spikes.ts
  * Purge reward-APY spike rows from apy_hourly + apy_daily, then rebuild the
  * affected past days from the surviving hourly rows.
  *

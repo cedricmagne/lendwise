@@ -1,5 +1,4 @@
 /**
- * @file from-catalogue.ts
  * Presentation: a catalogue row + its latest observation → a table product.
  *
  * This replaces the adapter call at render time. Fields the protocol used to

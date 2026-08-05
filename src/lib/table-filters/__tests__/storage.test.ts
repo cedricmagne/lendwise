@@ -5,8 +5,8 @@ import { parseStoredFilters, serializeFilters } from '@/lib/table-filters'
 describe('parseStoredFilters', () => {
   it('round-trips a filter list', () => {
     const filters = [
-      { field: 'deposits', op: 'gte', value: 100_000 },
-      { field: 'netApy', op: 'lte', value: 10 },
+      { id: crypto.randomUUID(), field: 'deposits', op: 'gte', value: 100_000 },
+      { id: crypto.randomUUID(), field: 'netApy', op: 'lte', value: 10 },
     ] as const
     expect(parseStoredFilters(serializeFilters([...filters]))).toEqual([
       ...filters,

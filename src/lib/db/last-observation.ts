@@ -1,5 +1,4 @@
 /**
- * @file last-observation.ts
  * The last observation of a slot, as written into the `last_*` columns.
  *
  * `apy_hourly` averages all its numeric columns over the running hour, which

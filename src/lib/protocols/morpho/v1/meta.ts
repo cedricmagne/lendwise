@@ -1,5 +1,4 @@
 /**
- * @file meta.ts
  * `PROTOCOLS_META` fragment for this adapter — spread into the aggregate at
  * `@/config/protocols-meta.ts`. Kept import-light (no adapter/client code)
  * since that aggregate is also imported client-side.

@@ -1,5 +1,4 @@
 /**
- * @file scripts/backfill-history.ts
  * Backfill `apy_daily` from protocols' own DAY-interval history.
  *
  * PROTOCOL-BLIND. Everything it knows comes from `adapter.getApyHistory` — no

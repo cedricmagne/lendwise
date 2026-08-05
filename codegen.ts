@@ -13,9 +13,7 @@ import type { CodegenConfig } from '@graphql-codegen/cli'
 import { config as loadEnv } from 'dotenv'
 import { mainnet, optimism } from 'viem/chains'
 
-import { AAVE_V3_API_URL } from './src/lib/protocols/aave/v3/config'
 import { COMPOUND_V3_CHAINS } from './src/lib/protocols/compound/v3/config'
-import { MORPHO_V1_API_URL } from './src/lib/protocols/morpho/v1/config'
 
 // Load environment variables from .env file
 loadEnv({ path: ['.env', '.env.local'] })
@@ -43,7 +41,7 @@ const config: CodegenConfig = {
     // AAVE V3 - Offchain (GraphQL API)
     // Schema URL is imported from src/lib/protocols/aave/v3/config.ts
     'src/lib/protocols/aave/v3/generated/': {
-      schema: AAVE_V3_API_URL,
+      schema: 'src/lib/protocols/aave/v3/schema.json',
       documents: 'src/lib/protocols/aave/v3/queries.ts',
       preset: 'client',
       presetConfig: {
@@ -73,7 +71,7 @@ const config: CodegenConfig = {
     // MORPHO V1 - Offchain (GraphQL API)
     // Schema URL is imported from src/lib/protocols/morpho/v1/config.ts
     'src/lib/protocols/morpho/v1/generated/': {
-      schema: MORPHO_V1_API_URL,
+      schema: 'src/lib/protocols/morpho/v1/schema.json',
       documents: 'src/lib/protocols/morpho/v1/queries.ts',
       preset: 'client',
       presetConfig: {

@@ -1,5 +1,4 @@
 /**
- * @file scripts/clean-merkl-market-misattribution.ts
  * Strip Merkl reward_items that were misattributed to the wrong Aave V3 market.
  *
  * Root cause (fixed 2026-07-14 in src/lib/protocols/aave/v3/apy-spot.ts):

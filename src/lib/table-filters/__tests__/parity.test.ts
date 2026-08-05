@@ -239,63 +239,94 @@ const CASES: { name: string; filters: TableFilter[] }[] = [
   {
     name: 'the defaults',
     filters: [
-      { field: 'deposits', op: 'gte', value: 100_000 },
-      { field: 'netApy', op: 'lte', value: 10 },
-      { field: 'netApy', op: 'gte', value: -10 },
+      { id: crypto.randomUUID(), field: 'deposits', op: 'gte', value: 100_000 },
+      { id: crypto.randomUUID(), field: 'netApy', op: 'lte', value: 10 },
+      { id: crypto.randomUUID(), field: 'netApy', op: 'gte', value: -10 },
     ],
   },
   {
     name: 'deposits gte',
-    filters: [{ field: 'deposits', op: 'gte', value: 100_000 }],
+    filters: [
+      { id: crypto.randomUUID(), field: 'deposits', op: 'gte', value: 100_000 },
+    ],
   },
   {
     name: 'deposits gt',
-    filters: [{ field: 'deposits', op: 'gt', value: 100_000 }],
+    filters: [
+      { id: crypto.randomUUID(), field: 'deposits', op: 'gt', value: 100_000 },
+    ],
   },
   {
     name: 'deposits lte',
-    filters: [{ field: 'deposits', op: 'lte', value: 100_000 }],
+    filters: [
+      { id: crypto.randomUUID(), field: 'deposits', op: 'lte', value: 100_000 },
+    ],
   },
   {
     name: 'deposits lt',
-    filters: [{ field: 'deposits', op: 'lt', value: 100_000 }],
+    filters: [
+      { id: crypto.randomUUID(), field: 'deposits', op: 'lt', value: 100_000 },
+    ],
   },
   {
     name: 'deposits eq',
-    filters: [{ field: 'deposits', op: 'eq', value: 100_000 }],
+    filters: [
+      { id: crypto.randomUUID(), field: 'deposits', op: 'eq', value: 100_000 },
+    ],
   },
   {
     name: 'deposits ne',
-    filters: [{ field: 'deposits', op: 'ne', value: 100_000 }],
+    filters: [
+      { id: crypto.randomUUID(), field: 'deposits', op: 'ne', value: 100_000 },
+    ],
   },
   {
     name: 'liquidity gte',
-    filters: [{ field: 'liquidity', op: 'gte', value: 1 }],
+    filters: [
+      { id: crypto.randomUUID(), field: 'liquidity', op: 'gte', value: 1 },
+    ],
   },
   {
     name: 'liquidity eq zero',
-    filters: [{ field: 'liquidity', op: 'eq', value: 0 }],
+    filters: [
+      { id: crypto.randomUUID(), field: 'liquidity', op: 'eq', value: 0 },
+    ],
   },
   {
     name: 'utilization gte 99%',
-    filters: [{ field: 'utilization', op: 'gte', value: 0.99 }],
+    filters: [
+      { id: crypto.randomUUID(), field: 'utilization', op: 'gte', value: 0.99 },
+    ],
   },
   {
     name: 'utilization lt 50%',
-    filters: [{ field: 'utilization', op: 'lt', value: 0.5 }],
+    filters: [
+      { id: crypto.randomUUID(), field: 'utilization', op: 'lt', value: 0.5 },
+    ],
   },
   {
     name: 'utilization ne 0',
-    filters: [{ field: 'utilization', op: 'ne', value: 0 }],
+    filters: [
+      { id: crypto.randomUUID(), field: 'utilization', op: 'ne', value: 0 },
+    ],
   },
-  { name: 'net apy lte', filters: [{ field: 'netApy', op: 'lte', value: 10 }] },
+  {
+    name: 'net apy lte',
+    filters: [
+      { id: crypto.randomUUID(), field: 'netApy', op: 'lte', value: 10 },
+    ],
+  },
   {
     name: 'net apy gte negative bound',
-    filters: [{ field: 'netApy', op: 'gte', value: -10 }],
+    filters: [
+      { id: crypto.randomUUID(), field: 'netApy', op: 'gte', value: -10 },
+    ],
   },
   {
     name: 'deposits gte 0 (floor at zero)',
-    filters: [{ field: 'deposits', op: 'gte', value: 0 }],
+    filters: [
+      { id: crypto.randomUUID(), field: 'deposits', op: 'gte', value: 0 },
+    ],
   },
 ]
 
@@ -332,7 +363,9 @@ describe('one predicate, two evaluators', () => {
     const unknownTvl = FIXTURES.find((f) => f.id === 'unknown-tvl')
     if (!unknownTvl)
       throw new Error('unknown-tvl fixture missing from FIXTURES')
-    const filters: TableFilter[] = [{ field: 'deposits', op: 'gte', value: 0 }]
+    const filters: TableFilter[] = [
+      { id: crypto.randomUUID(), field: 'deposits', op: 'gte', value: 0 },
+    ]
 
     expect(jsSide(filters, [unknownTvl])).toEqual(['unknown-tvl'])
     expect(await sqlSide(filters, [unknownTvl])).toEqual([])

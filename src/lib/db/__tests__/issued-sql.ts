@@ -1,5 +1,4 @@
 /**
- * @file issued-sql.ts
  * Shared test helper: reassemble the Drizzle `sql` statement handed to a
  * stubbed `db.execute`, whitespace-collapsed.
  *

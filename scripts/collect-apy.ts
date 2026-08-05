@@ -1,5 +1,4 @@
 /**
- * @file scripts/collect-apy.ts
  * Verification run of the 10-minute APY spot collector — the exact code path
  * QStash hits via POST /api/yield/apy/spot, minus the signature check.
  *

@@ -1,5 +1,4 @@
 /**
- * @file scripts/adapter-test.ts
  * CI harness for YieldAdapters — the mechanized products/spot invariant
  * (the drift lesson: ~18,500 orphan apy_hourly rows/week from aave listing skew),
  * plus the targeted-history invariant (see `probeTargeting` below).

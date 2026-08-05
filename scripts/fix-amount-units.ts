@@ -1,5 +1,4 @@
 /**
- * @file scripts/fix-amount-units.ts
  * One-shot migration: put every stored amount in WHOLE TOKEN units.
  *
  * Compound and Morpho stored their protocols' RAW base units while Aave stored

@@ -1,5 +1,4 @@
 /**
- * @file types.ts
  * `protocol.meta` shapes for Morpho Blue v1 products — plugged into
  * `SupplyProduct<TMeta>` / `BorrowProduct<TMeta>` from `@/lib/db/types`.
  */

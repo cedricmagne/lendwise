@@ -1,5 +1,4 @@
 /**
- * @file scripts/clean-non-finite-apy.ts
  * Purge UNSTORABLE APY rows (NaN / ±Infinity) from apy_hourly + apy_daily, then
  * rebuild the affected past days from the cleaned hourly rows.
  *

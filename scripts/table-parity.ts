@@ -43,13 +43,14 @@ function drifted(a: number, b: number): boolean {
 async function main() {
   const kind: Kind = process.argv.includes('borrow') ? 'borrow' : 'supply'
   const loaders = Object.values(APP_ADAPTERS) as (() => Promise<AppAdapter>)[]
-  const settled = await Promise.allSettled(
+  const settled = (await Promise.allSettled(
     loaders.map(async (load) =>
       kind === 'supply'
         ? (await load()).getSupplyProducts()
         : (await load()).getBorrowProducts()
     )
-  )
+  )) as PromiseSettledResult<(SupplyProduct | BorrowProduct)[]>[]
+
   const fromAdapters = byProductId<SupplyProduct | BorrowProduct>(
     settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
   )

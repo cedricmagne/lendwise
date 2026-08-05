@@ -1,5 +1,4 @@
 /**
- * @file config.ts
  * Identity shared by every Morpho version — v1, and any v2 that follows.
  */
 

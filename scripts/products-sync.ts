@@ -1,5 +1,4 @@
 /**
- * @file scripts/products-sync.ts
  * Manual trigger for the products sync job.
  *
  * Usage:

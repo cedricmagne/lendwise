@@ -1,5 +1,4 @@
 /**
- * @file types.ts
  * `protocol.meta` shape for Compound v3 products — plugged into
  * `SupplyProduct<TMeta>` / `BorrowProduct<TMeta>` from `@/lib/db/types`.
  */

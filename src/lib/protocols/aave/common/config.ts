@@ -1,5 +1,4 @@
 /**
- * @file config.ts
  * Identity shared by every Aave version — v3, and any v4 that follows.
  */
 

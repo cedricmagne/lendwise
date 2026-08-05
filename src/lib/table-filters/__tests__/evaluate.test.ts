@@ -43,7 +43,7 @@ describe('fieldValue', () => {
 
 describe('matchesFilters', () => {
   const deposits = (op: TableFilter['op'], value: number): TableFilter[] => [
-    { field: 'deposits', op, value },
+    { id: crypto.randomUUID(), field: 'deposits', op, value },
   ]
 
   it('applies every operator on the value the field resolves to', () => {
@@ -69,8 +69,8 @@ describe('matchesFilters', () => {
 
   it('ANDs the rows — two bounds on one field is the default shape', () => {
     const bounded: TableFilter[] = [
-      { field: 'netApy', op: 'lte', value: 10 },
-      { field: 'netApy', op: 'gte', value: -10 },
+      { id: crypto.randomUUID(), field: 'netApy', op: 'lte', value: 10 },
+      { id: crypto.randomUUID(), field: 'netApy', op: 'gte', value: -10 },
     ]
     expect(matchesFilters(row({ apy: 0.05 }), bounded, 'intraday')).toBe(true)
     expect(matchesFilters(row({ apy: 2979.96 }), bounded, 'intraday')).toBe(
@@ -99,7 +99,7 @@ describe('matchesFilters', () => {
     expect(
       matchesFilters(
         row({ apy: NaN }),
-        [{ field: 'netApy', op: 'lte', value: 10 }],
+        [{ id: crypto.randomUUID(), field: 'netApy', op: 'lte', value: 10 }],
         'intraday'
       )
     ).toBe(false)

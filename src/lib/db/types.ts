@@ -1,5 +1,4 @@
 /**
- * @file types.ts
  * Domain types for the APY pipeline — fetcher output (SpotPayload), the products
  * registry, and shared market/reward shapes.
  *
