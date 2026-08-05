@@ -1,11 +1,11 @@
 import { defineYieldAdapter } from '@/lib/protocols/core/define'
 import type { AppAdapter } from '@/lib/protocols/core/types'
 
+import { COMPOUND_PROVIDER } from '../common/config'
 import { getCompoundApyHistory } from './apy-history'
 import { fetchCompoundV3ApySpot } from './apy-spot'
 import { getBorrowProducts } from './borrow-products'
 import { COMPOUND_V3_CHAINS } from './config'
-import { COMPOUND_PROVIDER } from '../common/config'
 import {
   getMarketBorrowHistoryRates,
   getMarketSupplyHistoryRates,

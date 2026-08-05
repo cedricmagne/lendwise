@@ -1,11 +1,11 @@
 import { defineYieldAdapter } from '@/lib/protocols/core/define'
 import type { AppAdapter } from '@/lib/protocols/core/types'
 
+import { AAVE_PROVIDER } from '../common/config'
 import { getAaveApyHistory } from './apy-history'
 import { fetchAaveV3ApySpot } from './apy-spot'
 import { getBorrowProducts } from './borrow-products'
 import { AAVE_V3_CHAINS } from './config'
-import { AAVE_PROVIDER } from '../common/config'
 import {
   getMarketBorrowHistoryRates,
   getMarketSupplyHistoryRates,

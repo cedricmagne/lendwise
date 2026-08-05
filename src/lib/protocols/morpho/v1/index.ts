@@ -1,11 +1,11 @@
 import { defineYieldAdapter } from '@/lib/protocols/core/define'
 import type { AppAdapter } from '@/lib/protocols/core/types'
 
+import { MORPHO_PROVIDER } from '../common/config'
 import { getMorphoApyHistory } from './apy-history'
 import { fetchMorphoV1ApySpot } from './apy-spot'
 import { getBorrowProducts } from './borrow-products'
 import { MORPHO_V1_CHAINS, MORPHO_V1_INGESTION } from './config'
-import { MORPHO_PROVIDER } from '../common/config'
 import {
   getMarketBorrowHistoryRates,
   getMarketSupplyHistoryRates,
