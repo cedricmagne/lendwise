@@ -8,6 +8,7 @@ import { MARKETS_APY } from '@/lib/protocols/compound/v3/queries'
 import { createGraphQLClient } from '@/lib/protocols/core/toolkit'
 import type { FetchOpts } from '@/lib/protocols/core/types'
 
+import { COMPOUND_PROVIDER } from '../common/config'
 import { COMPOUND_V3_CHAINS } from './config'
 import { buildProductId } from './utils'
 
@@ -78,7 +79,7 @@ export async function fetchCompoundV3ApySpot(
         const supplyPayload: SpotPayload = {
           productId: supplyProductId,
           kind: 'supply',
-          protocol: 'compound',
+          protocol: COMPOUND_PROVIDER,
           chainId,
           asset: market.configuration.symbol,
           apy: {
@@ -101,7 +102,7 @@ export async function fetchCompoundV3ApySpot(
         const borrowPayload: SpotPayload = {
           productId: borrowProductId,
           kind: 'borrow',
-          protocol: 'compound',
+          protocol: COMPOUND_PROVIDER,
           chainId,
           asset: market.configuration.symbol,
           apy: {

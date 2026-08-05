@@ -14,6 +14,7 @@ import {
 import type { FetchOpts } from '@/lib/protocols/core/types'
 import { aprToApyDaily, aprToApyPerSecond } from '@/lib/utils'
 
+import { AAVE_PROVIDER } from '../common/config'
 import { AAVE_V3_API_URL, AAVE_V3_CHAINS } from './config'
 import { listsBorrow } from './listing'
 import { buildProductId } from './utils'
@@ -260,7 +261,7 @@ export async function fetchAaveV3ApySpot(
       const supplySpot: SpotPayload = {
         productId: supplyProductId,
         kind: 'supply',
-        protocol: 'aave',
+        protocol: AAVE_PROVIDER,
         chainId: chain.chainId,
         asset: tokenSymbol,
         apy: {
@@ -295,7 +296,7 @@ export async function fetchAaveV3ApySpot(
       const borrowSpot: SpotPayload = {
         productId: borrowProductId,
         kind: 'borrow',
-        protocol: 'aave',
+        protocol: AAVE_PROVIDER,
         chainId: chain.chainId,
         asset: tokenSymbol,
         apy: {

@@ -11,7 +11,7 @@
  */
 import type { Address } from 'viem'
 
-import { type ProtocolName } from '@/config/protocols-meta'
+import { PROTOCOLS_META, type ProtocolName } from '@/config/protocols-meta'
 import type { ApyEnrichment } from '@/lib/db/repositories/apy'
 import type { ProductRow } from '@/lib/db/schema'
 import type { CatalogueRow, Collateral } from '@/lib/db/types'
@@ -63,7 +63,8 @@ function chainIdSlug(p: ProductRow): string {
  * exactly as the adapter does.
  */
 export function networkSlug(p: ProductRow): string {
-  if (p.provider === 'aave') return getNetworkName(p.protocolName)
+  if (p.provider === PROTOCOLS_META.aave_v3.provider)
+    return getNetworkName(p.protocolName)
   return chainIdSlug(p)
 }
 
@@ -73,7 +74,7 @@ export function networkSlug(p: ProductRow): string {
  * after its loan/collateral pair.
  */
 export function poolName(p: ProductRow): string {
-  if (p.provider !== 'morpho') return p.assetName
+  if (p.provider !== PROTOCOLS_META.morpho_v1.provider) return p.assetName
   if (p.kind === 'supply') {
     return (p.meta as { name?: string }).name ?? p.assetName
   }
@@ -90,7 +91,7 @@ export function poolIdentity(p: ProductRow): {
   poolId: string
   poolAddress: Address
 } {
-  if (p.provider === 'morpho' && p.kind === 'borrow') {
+  if (p.provider === PROTOCOLS_META.morpho_v1.provider && p.kind === 'borrow') {
     return {
       poolId: (p.meta as { id: string }).id,
       poolAddress: p.assetAddress as Address,
@@ -127,7 +128,7 @@ export function poolIdentity(p: ProductRow): {
  */
 export function productLink(p: ProductRow): string {
   switch (p.provider) {
-    case 'aave': {
+    case PROTOCOLS_META.aave_v3.provider: {
       // `registeredChainSlug()`, not `chainIdSlug()`: a link is decorative,
       // not a required field of the table. A chainId that drifts from the
       // registry (a new market added to AAVE_V3_CHAINS before it's registered
@@ -138,9 +139,9 @@ export function productLink(p: ProductRow): string {
       if (!slug) return ''
       return `https://app.aave.com/reserve-overview/?underlyingAsset=${p.assetAddress.toLowerCase()}&marketName=proto_${slug}_v3`
     }
-    case 'compound':
+    case PROTOCOLS_META.compound_v3.provider:
       return `https://app.compound.finance/?market=${p.assetSymbol.toLowerCase()}-${SLUG_MAPPING[p.chainId] ?? 'mainnet'}`
-    case 'morpho': {
+    case PROTOCOLS_META.morpho_v1.provider: {
       // Same degradation as the Aave branch above, same reason.
       const slug = registeredChainSlug(p)
       if (!slug) return ''

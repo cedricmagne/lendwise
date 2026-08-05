@@ -1,16 +1,17 @@
-// src/config/protocols-meta.ts — importable from client components, zero server deps
+import { AAVE_V3_META } from '@/lib/protocols/aave/v3/meta'
+import { COMPOUND_V3_META } from '@/lib/protocols/compound/v3/meta'
+import { MORPHO_V1_META } from '@/lib/protocols/morpho/v1/meta'
+
+/**
+ * Each entry is owned by its adapter (`{protocol}/{version}/meta.ts`) and
+ * spread in here — this file stays the one explicit registration point (no
+ * filesystem discovery, see `src/lib/protocols/README.md`), but never
+ * hand-declares a protocol's identity itself.
+ */
 export const PROTOCOLS_META = {
-  aave_v3: { displayName: 'Aave', versionName: 'Aave v3', provider: 'aave' },
-  morpho_v1: {
-    displayName: 'Morpho',
-    versionName: 'Morpho v1',
-    provider: 'morpho',
-  },
-  compound_v3: {
-    displayName: 'Compound',
-    versionName: 'Compound v3',
-    provider: 'compound',
-  },
+  ...AAVE_V3_META,
+  ...MORPHO_V1_META,
+  ...COMPOUND_V3_META,
 } as const
 
 export type ProtocolName = keyof typeof PROTOCOLS_META
