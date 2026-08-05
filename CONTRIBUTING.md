@@ -74,13 +74,16 @@ into the Lendwise data model. No database migration, no pipeline changes.
 architecture, the `YieldAdapter` contract, conventions, and war stories. The short version:
 
 1. **Create `src/lib/protocols/{name}/{version}/`** with an `index.ts` exporting an adapter
-   built with `defineYieldAdapter()`:
+   built with `defineYieldAdapter()`. `provider` comes from `{name}/common/config.ts` (one
+   constant per protocol family, shared across versions) — never a re-typed string literal:
 
    ```ts
+   import { ACME_PROVIDER } from '../common/config'
+
    export const adapter = defineYieldAdapter({
      id: 'acme_v2',
      name: 'Acme v2',
-     provider: 'acme',
+     provider: ACME_PROVIDER,
      version: 'v2',
      chains: { 1: { slug: CHAIN_SLUG_MAP[1] } },
      getProducts: fetchAcmeProducts, // full market catalogue
@@ -90,7 +93,8 @@ architecture, the `YieldAdapter` contract, conventions, and war stories. The sho
    ```
 
 2. **Register it** in both registries (the compiler enforces they move together):
-   - `src/config/protocols-meta.ts` — client-safe display metadata
+   - `src/config/protocols-meta.ts` — spread in your adapter's own `{version}/meta.ts`
+     fragment (client-safe display metadata)
    - `src/config/protocols-server.ts` — server-only dynamic import
 
 3. **Prove it** with the live test harness:

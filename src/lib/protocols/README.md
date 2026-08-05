@@ -23,26 +23,34 @@ src/lib/protocols/
 │       ├── chain-registry.ts  #     createChainRegistry (per-chain module overrides)
 │       ├── chain-slugs.ts     #     CHAIN_SLUG_MAP — canonical chainId → productId slug
 │       └── merkl.ts           #     fetchMerklIncentives / lookupMerklIncentive
-├── aave/v3/                   # one folder per adapter — flat, no offchain/onchain split
-│   ├── index.ts               #   exports `adapter` (YieldAdapter) + `appAdapter` (AppAdapter)
-│   ├── config.ts              #   AAVE_V3_API_URL, AAVE_V3_CHAINS
-│   ├── listing.ts             #   THE listing predicate (see Conventions)
-│   ├── products.ts            #   getProducts impl
-│   ├── apy-spot.ts            #   getApySpot impl
-│   ├── apy-history.ts         #   getApyHistory impl
-│   ├── positions.ts           #   wallet positions (AppAdapter)
-│   ├── queries.ts + generated/  # GraphQL documents + codegen output
-│   └── …
-├── morpho/v1/                 # same shape; config.ts also owns MORPHO_V1_INGESTION
-└── compound/v3/               # same shape; per-chain subgraph overrides live in
+├── aave/
+│   ├── common/
+│   │   └── config.ts          #   AAVE_PROVIDER — one constant, shared by every Aave version
+│   └── v3/                    #   one folder per adapter — flat, no offchain/onchain split
+│       ├── index.ts           #     exports `adapter` (YieldAdapter) + `appAdapter` (AppAdapter)
+│       ├── meta.ts            #     PROTOCOLS_META fragment — spread into the aggregate
+│       ├── types.ts           #     protocol.meta shapes — AaveSupplyMeta, AaveBorrowMeta
+│       ├── config.ts          #     AAVE_V3_API_URL, AAVE_V3_CHAINS
+│       ├── listing.ts         #     THE listing predicate (see Conventions)
+│       ├── products.ts        #     getProducts impl
+│       ├── apy-spot.ts        #     getApySpot impl
+│       ├── apy-history.ts     #     getApyHistory impl
+│       ├── positions.ts       #     wallet positions (AppAdapter)
+│       ├── queries.ts + generated/  # GraphQL documents + codegen output
+│       └── …
+├── morpho/common/ + v1/       # same shape; v1/config.ts also owns MORPHO_V1_INGESTION
+└── compound/common/ + v3/     # same shape; per-chain subgraph overrides live in
     └── {ethereum,polygon,…}/  #   chain dirs consumed via createChainRegistry
 ```
 
 Two registries wire adapters into the app:
 
 - **`src/config/protocols-meta.ts`** — client-safe metadata (`PROTOCOLS_META`,
-  `protocolVersionName()`, `adapterIdsForProvider()`). Zero server deps; UI components import
-  this.
+  `protocolVersionName()`, `adapterIdsForProvider()`). Composed by spreading each adapter's
+  own `{name}/{version}/meta.ts` fragment — the aggregate never hand-declares a protocol's
+  identity, it only wires the fragment in. Keep `meta.ts` import-light (no adapter/client
+  code): it's pulled into a file that's also imported client-side, so a stray server-only
+  import there leaks into the browser bundle. Zero server deps; UI components import this.
 - **`src/config/protocols-server.ts`** — server-only loaders (`YIELD_ADAPTERS`,
   `APP_ADAPTERS`) that dynamic-import the heavy adapter modules. The pipeline (spot collector,
   products sync, reconcile, `scripts/backfill-history.ts`) and wallet features import this.
@@ -60,7 +68,7 @@ others.
 export interface YieldAdapter {
   id: string //  registry key = products.protocol_name  ('aave_v3')
   name: string //  display                                ('Aave v3')
-  provider: string //  products.provider — groups versions    ('aave')
+  provider: string //  products.provider — groups versions    ('aave', from common/config.ts)
   version: string //                                          ('v3')
   chains: Record<number, AdapterChain> // chainId → { slug, …extras }
   ingestion?: IngestionFloors
@@ -151,20 +159,45 @@ yield-only contribution is a valid contribution.
 
 ## How to add a protocol
 
-1. **Create `src/lib/protocols/{name}/{version}/`** with an `index.ts` exporting the adapter:
+1. **`src/lib/protocols/{name}/common/config.ts`** — the provider constant, once per protocol
+   family (skip this file if `{name}/common/` already exists, e.g. you're adding a second
+   version of a protocol already registered):
+
+   ```ts
+   // src/lib/protocols/acme/common/config.ts
+   export const ACME_PROVIDER = 'acme'
+   ```
+
+2. **`src/lib/protocols/{name}/{version}/types.ts`** — the `protocol.meta` shape(s), owned by
+   this adapter:
+
+   ```ts
+   // src/lib/protocols/acme/v2/types.ts
+   export interface AcmeSupplyMeta {
+     poolId: string
+   }
+   export interface AcmeBorrowMeta {
+     poolId: string
+     irmAddress: string
+   }
+   ```
+
+3. **`src/lib/protocols/{name}/{version}/index.ts`** — exports the adapter, `provider` from
+   step 1:
 
    ```ts
    // src/lib/protocols/acme/v2/index.ts
    import { defineYieldAdapter } from '@/lib/protocols/core/define'
    import { CHAIN_SLUG_MAP } from '@/lib/protocols/core/toolkit/chain-slugs'
 
+   import { ACME_PROVIDER } from '../common/config'
    import { fetchAcmeApySpot } from './apy-spot'
    import { fetchAcmeProducts } from './products'
 
    export const adapter = defineYieldAdapter({
      id: 'acme_v2',
      name: 'Acme v2',
-     provider: 'acme',
+     provider: ACME_PROVIDER,
      version: 'v2',
      chains: {
        1: { slug: CHAIN_SLUG_MAP[1] }, // extras allowed: subgraphUrl, marketName, …
@@ -175,11 +208,37 @@ yield-only contribution is a valid contribution.
    })
    ```
 
-2. **Register it** — one entry in each registry:
+   `fetchAcmeProducts` types its literals `SupplyProduct<AcmeSupplyMeta>` /
+   `BorrowProduct<AcmeBorrowMeta>` (from `./types`), and `provider: ACME_PROVIDER` there too
+   — never a re-typed `'acme'` literal.
+
+4. **`src/lib/protocols/{name}/{version}/meta.ts`** — the `PROTOCOLS_META` fragment:
+
+   ```ts
+   // src/lib/protocols/acme/v2/meta.ts
+   import { ACME_PROVIDER } from '../common/config'
+
+   export const ACME_V2_META = {
+     acme_v2: {
+       displayName: 'Acme',
+       versionName: 'Acme v2',
+       provider: ACME_PROVIDER,
+     },
+   } as const
+   ```
+
+5. **Register it** — one entry in each registry:
 
    ```ts
    // src/config/protocols-meta.ts
-   acme_v2: { displayName: 'Acme', versionName: 'Acme v2', provider: 'acme' },
+   import { ACME_V2_META } from '@/lib/protocols/acme/v2/meta'
+
+   export const PROTOCOLS_META = {
+     ...AAVE_V3_META,
+     ...MORPHO_V1_META,
+     ...COMPOUND_V3_META,
+     ...ACME_V2_META,
+   } as const
 
    // src/config/protocols-server.ts
    acme_v2: () => import('@/lib/protocols/acme/v2').then((m) => m.adapter),
@@ -187,12 +246,26 @@ yield-only contribution is a valid contribution.
 
    `APP_ADAPTERS` entry only if you also implement `AppAdapter`.
 
-3. **Prove it** — `pnpm adapter:test acme_v2` (see Validation below).
+6. **Prove it** — `pnpm adapter:test acme_v2` (see Validation below).
 
 That's it. No DB migration: productIds, tables, and repositories are protocol-agnostic.
 
 ## Conventions
 
+- **`protocol.meta` is generic, not centralized.** `SupplyProduct<TMeta>` / `BorrowProduct<TMeta>`
+  (`src/lib/db/types.ts`) default `TMeta` to `unknown` so both stay usable bare
+  (`getProducts(): Promise<(SupplyProduct | BorrowProduct)[]>`). Each protocol declares its own
+  meta shape next to its adapter (`{name}/{version}/types.ts`, or `{name}/common/types.ts` if
+  identical across versions) and narrows locally — `SupplyProduct<AaveSupplyMeta>`. Adding a
+  protocol never touches `db/types.ts`.
+- **`provider` is a protocol-family constant, not a per-version literal.** Declared once in
+  `{name}/common/config.ts` (e.g. `AAVE_PROVIDER = 'aave'`) — v3 and any v4 that follows both
+  import the same constant, so `products.provider` can never drift between versions of one
+  protocol. The adapter's own files (`index.ts`, `products.ts`, `apy-spot.ts`) import it from
+  `common/config.ts` directly; `{version}/meta.ts` imports it too when building the
+  `PROTOCOLS_META` fragment. Code generic to all protocols (table rendering, ticker rates,
+  status dashboards) reads the resolved value off `PROTOCOLS_META.{id}.provider` instead —
+  never a hardcoded string in either direction.
 - **`listing.ts` is the single enumeration predicate.** `getProducts` and `getApySpot` run
   independently on different schedules — they MUST enumerate the exact same productId set.
   When two callers each carried their own "is this market listed?" rule, Aave's drifted three
