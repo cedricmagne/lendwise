@@ -246,7 +246,21 @@ yield-only contribution is a valid contribution.
 
    `APP_ADAPTERS` entry only if you also implement `AppAdapter`.
 
-6. **Prove it** — `pnpm adapter:test acme_v2` (see Validation below).
+6. **Wire the UI** — the pipeline is protocol-agnostic; the tables are not. None of
+   this fails a build or a test, so it is only ever caught by eye:
+
+   | What          | Where                                                                                                                    | If you skip it                                                                                                                                                                         |
+   | ------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | Protocol logo | `public/icons/protocol/{provider}.svg` — filename is `provider`, i.e. `id.split('_')[0]`, so all versions share one file | Protocol chip and badge fall back to two grey initials                                                                                                                                 |
+   | Network logo  | `public/icons/network/{slug}.svg` — only for a chain nothing else covers                                                 | Network chip and badge fall back to initials                                                                                                                                           |
+   | New chain     | `src/lib/protocols/core/toolkit/chain-slugs.ts` — non-EVM gets an assigned NEGATIVE chainId                              | `chainIdSlug()` throws and takes the whole `/supply` load with it                                                                                                                      |
+   | Row name      | `poolName()` in `src/lib/products/from-catalogue.ts`                                                                     | Defaults to `asset_name`. Fine when one asset means one market per chain (Aave, Compound) — **wrong for a protocol with several pools per chain**, which then renders N identical rows |
+   | External link | `productLink()`, same file                                                                                               | `default:` returns `''` and the row simply has no link — decorative, safe to defer                                                                                                     |
+
+   Token icons need nothing: they resolve through CoinGecko and fall back to the
+   symbol's initials (see `../../../agent/docs/lendwise/COINGECKO_TOKEN_ICONS.md`).
+
+7. **Prove it** — `pnpm adapter:test acme_v2` (see Validation below).
 
 That's it. No DB migration: productIds, tables, and repositories are protocol-agnostic.
 

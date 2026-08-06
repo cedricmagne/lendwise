@@ -39,7 +39,18 @@ export const spotPayloadSoftSchema = z.object({
   productId: z.string().min(1),
   kind: z.enum(['supply', 'borrow']),
   protocol: z.string().min(1),
-  chainId: z.number().int().positive(),
+  /**
+   * Non-zero, not positive. A non-EVM chain carries an ASSIGNED negative id by
+   * registry convention (`core/toolkit/chain-slugs.ts`) — Stellar is -1. While
+   * this read `.positive()`, the collector dropped every Blend payload before it
+   * reached the upsert, and said so only in a warn line.
+   */
+  chainId: z
+    .number()
+    .int()
+    .refine((n) => n !== 0, {
+      message: 'chainId must be a non-zero integer',
+    }),
   asset: z.string().min(1),
   apy: apyBlockSchema,
   market: z.record(z.string(), z.unknown()),

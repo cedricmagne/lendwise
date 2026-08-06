@@ -70,9 +70,28 @@ export function networkSlug(p: ProductRow): string {
 /**
  * The displayed name. Aave and Compound name the pool after its asset; Morpho
  * names the vault (its own name, kept in `meta` at sync time) and the market
- * after its loan/collateral pair.
+ * after its loan/collateral pair; Blend names the pool.
+ *
+ * Naming a row after its asset only works where one asset means one market per
+ * chain. Blend breaks that: its five pools all sit on Stellar and largely list
+ * the SAME assets — USDC appears in four of the five, XLM in four — so the
+ * asset name produced four rows reading identically, same protocol badge, same
+ * network badge, nothing to tell them apart.
+ *
+ * The pool's own name is what distinguishes them, and it is read from the typed
+ * `protocol_name` column rather than out of `meta`: that column IS the native
+ * market/deployment name (`AaveV3EthereumLido` on Aave), so a protocol with
+ * several deployments per chain belongs there. Blend used to flatten all five
+ * into the constant `BlendV1Stellar`, which is what made them indistinguishable
+ * on `/status` too — that page renders `protocol_name` directly.
+ *
+ * The asset stays legible: its icon sits next to this label in the Supply
+ * table, and the Borrow table carries a dedicated Loan column.
  */
 export function poolName(p: ProductRow): string {
+  if (p.provider === PROTOCOLS_META.blend_v1.provider) {
+    return p.protocolName || p.assetName
+  }
   if (p.provider !== PROTOCOLS_META.morpho_v1.provider) return p.assetName
   if (p.kind === 'supply') {
     return (p.meta as { name?: string }).name ?? p.assetName

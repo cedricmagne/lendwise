@@ -1,4 +1,6 @@
 import { AAVE_V3_META } from '@/lib/protocols/aave/v3/meta'
+import { BLEND_V1_META } from '@/lib/protocols/blend/v1/meta'
+import { BLEND_V2_META } from '@/lib/protocols/blend/v2/meta'
 import { COMPOUND_V3_META } from '@/lib/protocols/compound/v3/meta'
 import { MORPHO_V1_META } from '@/lib/protocols/morpho/v1/meta'
 
@@ -12,6 +14,8 @@ export const PROTOCOLS_META = {
   ...AAVE_V3_META,
   ...MORPHO_V1_META,
   ...COMPOUND_V3_META,
+  ...BLEND_V1_META,
+  ...BLEND_V2_META,
 } as const
 
 export type ProtocolName = keyof typeof PROTOCOLS_META

@@ -38,6 +38,19 @@ describe('spot payload validation', () => {
     ).toBe(false)
   })
 
+  it('soft: accepts the negative chainId a non-EVM chain carries', () => {
+    // Stellar is -1 by registry convention (core/toolkit/chain-slugs.ts). While
+    // this schema said `.positive()`, the collector dropped every Blend payload
+    // before the upsert and only whispered it in a warn line.
+    const stellar = { ...payload, chainId: -1 }
+    expect(spotPayloadSoftSchema.safeParse(stellar).success).toBe(true)
+    expect(spotPayloadStrictSchema([-1]).safeParse(stellar).success).toBe(true)
+    // 0 is no chain at all, and stays rejected.
+    expect(
+      spotPayloadSoftSchema.safeParse({ ...payload, chainId: 0 }).success
+    ).toBe(false)
+  })
+
   it('strict: additionally bounds |net| < 10 and requires a known chainId', () => {
     const strict = spotPayloadStrictSchema([1, 137])
     expect(strict.safeParse(payload).success).toBe(true)
