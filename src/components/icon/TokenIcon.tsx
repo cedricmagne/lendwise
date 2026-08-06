@@ -19,8 +19,9 @@ type TokenIconProps = {
 const NATIVE_ICONS: Record<string, string> = {
   // Add your native icons here after placing SVG files in /public/icons/native/
   // Example:
-  // eth: '/icons/native/eth.svg',
-  // btc: '/icons/native/btc.svg',
+  eth: '/icons/native/eth.svg',
+  btc: '/icons/native/btc.svg',
+  xlm: '/icons/native/xlm.svg',
 }
 
 export const TokenIcon = ({

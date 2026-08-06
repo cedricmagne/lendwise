@@ -13,32 +13,30 @@ import { buildProductNetworkSlug, getNetworkName } from './utils'
 const _formatSupplyProducts = cache(
   (markets: ListSupplyProductsQuery['markets']): SupplyProduct[] =>
     markets.flatMap((market) =>
-      market.reserves.map(
-        (reserve): SupplyProduct => ({
-          protocol: 'aave_v3',
-          network: getNetworkName(market.name),
-          poolName: reserve.underlyingToken.name,
-          poolId: market.address,
-          poolAddress: market.address,
-          poolChainId: market.chain.chainId,
-          assetAddress: reserve.underlyingToken.address,
-          assetName: reserve.underlyingToken.name,
-          assetSymbol: reserve.underlyingToken.symbol,
-          assetDecimals: reserve.underlyingToken.decimals,
-          assetAmount: String(reserve.supplyInfo.total.raw ?? 0),
-          assetAmountUsd: toNumber(reserve.size.usd),
-          liquidityAmount: String(
-            (reserve.supplyInfo.total.raw ?? 0) -
-              (reserve.borrowInfo?.total?.amount?.raw ?? 0)
-          ),
-          liquidityAmountUsd:
-            toNumber(reserve.size.usd) -
-            toNumber(reserve.borrowInfo?.total?.usd ?? 0),
-          apy: toNumber(reserve.supplyInfo.apy.value),
-          productId: `aave:v3:${buildProductNetworkSlug(market.name)}:reserve:${reserve.underlyingToken.address.toLowerCase()}:supply`,
-          link: `https://app.aave.com/reserve-overview/?underlyingAsset=${reserve.underlyingToken.address.toLowerCase()}&marketName=proto_${market.chain.name.toLowerCase()}_v3`,
-        })
-      )
+      market.reserves.map((reserve): SupplyProduct => ({
+        protocol: 'aave_v3',
+        network: getNetworkName(market.name),
+        poolName: reserve.underlyingToken.name,
+        poolId: market.address,
+        poolAddress: market.address,
+        poolChainId: market.chain.chainId,
+        assetAddress: reserve.underlyingToken.address,
+        assetName: reserve.underlyingToken.name,
+        assetSymbol: reserve.underlyingToken.symbol,
+        assetDecimals: reserve.underlyingToken.decimals,
+        assetAmount: String(reserve.supplyInfo.total.raw ?? 0),
+        assetAmountUsd: toNumber(reserve.size.usd),
+        liquidityAmount: String(
+          (reserve.supplyInfo.total.raw ?? 0) -
+            (reserve.borrowInfo?.total?.amount?.raw ?? 0)
+        ),
+        liquidityAmountUsd:
+          toNumber(reserve.size.usd) -
+          toNumber(reserve.borrowInfo?.total?.usd ?? 0),
+        apy: toNumber(reserve.supplyInfo.apy.value),
+        productId: `aave:v3:${buildProductNetworkSlug(market.name)}:reserve:${reserve.underlyingToken.address.toLowerCase()}:supply`,
+        link: `https://app.aave.com/reserve-overview/?underlyingAsset=${reserve.underlyingToken.address.toLowerCase()}&marketName=proto_${market.chain.name.toLowerCase()}_v3`,
+      }))
     )
 )
 

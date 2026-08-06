@@ -60,8 +60,7 @@ function donorMarket(
     borrowAssetsUsd: d.borrow_assets_usd as number | null,
     collateralAssetsUsd: d.collateral_assets_usd as number | null,
     priceCollateralInLoanAsset: d.price_collateral_in_loan_asset as
-      | number
-      | null,
+      number | null,
   }
 }
 

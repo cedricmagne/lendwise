@@ -31,9 +31,11 @@
     ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
     ["cx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
   ],
+  "biome.enabled": false,
   "editor.codeActionsOnSave": {
-    "source.organizeImports.biome": "never",
-    "source.fixAll.biome": "never"
+    "source.format": "explicit",
+    "source.fixAll.biome": "never",
+    "source.organizeImports.biome": "never"
   },
   "[xml]": {
     "editor.defaultFormatter": "redhat.vscode-xml"

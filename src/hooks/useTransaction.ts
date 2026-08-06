@@ -36,8 +36,7 @@ export const useTransaction = () => {
   const balance = walletInfo.balance.value
 
   const currentNetwork = ALL_CHAINS.find((n) => n.id === chainId) as
-    | NetworkInfo
-    | undefined
+    NetworkInfo | undefined
 
   const networkConfig = currentNetwork
     ? {

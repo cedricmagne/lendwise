@@ -101,27 +101,25 @@ export async function getUserSupplyPositions({
             const balance = BigInt(position.balance.amount.raw)
             return balance > 0n
           })
-          .map(
-            (position): SupplyPosition => ({
-              id: address,
-              protocol: 'aave_v3',
-              network: position.market.chain.name.toLowerCase(),
-              userAddress: address.toLowerCase() as Address,
-              poolName: position.market.name,
-              poolAddress: position.market.address,
-              poolId: position.market.address,
-              poolChainId: position.market.chain.chainId,
-              assetAddress: position.currency.address,
-              assetName: position.currency.name,
-              assetSymbol: position.currency.symbol,
-              assetDecimals: position.currency.decimals,
-              assetAmount: position.balance.amount.raw.toString(),
-              assetAmountUsd: toNumber(position.balance.usd),
-              assetLiveAmountUsd: toNumber(position.balance.usd),
-              apy: toNumber(position.apy.formatted),
-              link: `https://app.aave.com/reserve-overview/?underlyingAsset=${position.currency.address.toLowerCase()}&marketName=proto_${position.market.chain.name.toLowerCase()}_v3`,
-            })
-          )
+          .map((position): SupplyPosition => ({
+            id: address,
+            protocol: 'aave_v3',
+            network: position.market.chain.name.toLowerCase(),
+            userAddress: address.toLowerCase() as Address,
+            poolName: position.market.name,
+            poolAddress: position.market.address,
+            poolId: position.market.address,
+            poolChainId: position.market.chain.chainId,
+            assetAddress: position.currency.address,
+            assetName: position.currency.name,
+            assetSymbol: position.currency.symbol,
+            assetDecimals: position.currency.decimals,
+            assetAmount: position.balance.amount.raw.toString(),
+            assetAmountUsd: toNumber(position.balance.usd),
+            assetLiveAmountUsd: toNumber(position.balance.usd),
+            apy: toNumber(position.apy.formatted),
+            link: `https://app.aave.com/reserve-overview/?underlyingAsset=${position.currency.address.toLowerCase()}&marketName=proto_${position.market.chain.name.toLowerCase()}_v3`,
+          }))
       })
     )
 
@@ -277,36 +275,34 @@ export async function getUserBorrowPositions({
           })
         })
 
-        return data.userBorrows.map(
-          (position): BorrowPosition => ({
-            id: address,
-            protocol: 'aave_v3',
-            network: getNetworkName(position.market.chain.name),
-            healthFactor:
-              healthFactorMapParams.get(
-                `${address}-${position.market.address}-${position.market.chain.chainId}`
-              ) ?? 0,
-            userAddress: address.toLowerCase() as Address,
-            poolId: position.market.address,
-            poolName: position.market.name,
-            poolAddress: position.market.address,
-            poolChainId: position.market.chain.chainId,
-            loanAssetAddress: position.currency.address,
-            loanAssetName: position.currency.name,
-            loanAssetSymbol: position.currency.symbol,
-            loanAssetDecimals: position.currency.decimals,
-            loanAssetAmount: position.debt.amount.value,
-            loanAssetAmountUsd: toNumber(position.debt.usd),
-            loanLiveAssetAmountUsd: toNumber(position.debt.usd),
-            loanTimestamp: 0,
-            collaterals:
-              markets_collaterals[
-                `${position.market.chain.chainId}-${position.market.address}`
-              ],
-            apy: toNumber(position.apy.formatted),
-            link: `https://app.aave.com/reserve-overview/?underlyingAsset=${position.currency.address.toLowerCase()}&marketName=proto_${position.market.chain.name.toLowerCase()}_v3`,
-          })
-        )
+        return data.userBorrows.map((position): BorrowPosition => ({
+          id: address,
+          protocol: 'aave_v3',
+          network: getNetworkName(position.market.chain.name),
+          healthFactor:
+            healthFactorMapParams.get(
+              `${address}-${position.market.address}-${position.market.chain.chainId}`
+            ) ?? 0,
+          userAddress: address.toLowerCase() as Address,
+          poolId: position.market.address,
+          poolName: position.market.name,
+          poolAddress: position.market.address,
+          poolChainId: position.market.chain.chainId,
+          loanAssetAddress: position.currency.address,
+          loanAssetName: position.currency.name,
+          loanAssetSymbol: position.currency.symbol,
+          loanAssetDecimals: position.currency.decimals,
+          loanAssetAmount: position.debt.amount.value,
+          loanAssetAmountUsd: toNumber(position.debt.usd),
+          loanLiveAssetAmountUsd: toNumber(position.debt.usd),
+          loanTimestamp: 0,
+          collaterals:
+            markets_collaterals[
+              `${position.market.chain.chainId}-${position.market.address}`
+            ],
+          apy: toNumber(position.apy.formatted),
+          link: `https://app.aave.com/reserve-overview/?underlyingAsset=${position.currency.address.toLowerCase()}&marketName=proto_${position.market.chain.name.toLowerCase()}_v3`,
+        }))
       })
     )
     return borrowPositionsResults.flat()

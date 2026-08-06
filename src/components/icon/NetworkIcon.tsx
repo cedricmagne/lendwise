@@ -54,7 +54,7 @@ export const NetworkIcon = ({
   // Success state - show chain logo
   return (
     <div
-      className={`relative overflow-hidden rounded-full ${className}`}
+      className={`relative overflow-hidden ${className}`}
       style={{ width: size, height: size }}
       title={networkSlug}
     >

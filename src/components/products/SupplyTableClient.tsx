@@ -282,11 +282,9 @@ const createColumns = (
     sortingFn: 'basic',
     cell: ({ row }) => {
       const apyValue = row.original[HORIZON_CONFIG[horizon].apyKey] as
-        | number
-        | undefined
+        number | undefined
       const rewardsValue = row.original[HORIZON_CONFIG[horizon].rewardsKey] as
-        | number
-        | undefined
+        number | undefined
       const hasRewards = rewardsValue !== undefined && rewardsValue > 0
       return (
         <div className="flex items-center gap-1.5">

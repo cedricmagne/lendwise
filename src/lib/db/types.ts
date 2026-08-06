@@ -109,8 +109,7 @@ export interface BorrowProduct<TMeta = unknown> extends BaseProduct<TMeta> {
 }
 
 export type Product<TMeta = unknown> =
-  | SupplyProduct<TMeta>
-  | BorrowProduct<TMeta>
+  SupplyProduct<TMeta> | BorrowProduct<TMeta>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared APY types — used by apy.hourly and apy.daily

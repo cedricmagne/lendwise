@@ -373,8 +373,7 @@ const createColumns = (
     sortingFn: 'basic',
     cell: ({ row }) => {
       const apyValue = row.original[HORIZON_CONFIG[horizon].apyKey] as
-        | number
-        | undefined
+        number | undefined
       return <span className="font-mono">{formatApy(apyValue)}</span>
     },
     enableHiding: false,
