@@ -190,10 +190,27 @@ export async function primeTokenMetadata(
     tokenMetadataCache.set(assetId, {
       address: assetId,
       symbol: meta.symbol,
-      name: meta.name,
+      name: humanTokenName(meta.name, meta.symbol),
       decimals: meta.decimals,
     })
   }
+}
+
+/**
+ * A Stellar asset contract's `name` is its canonical ledger identifier, not a
+ * label for a human: a classic asset reads `CODE:GISSUER…` and the lumen reads
+ * `native`. The SDK normalizes `symbol` (`native` → `XLM`) but leaves `name`
+ * verbatim, so it reached `products.asset_name` — and the tables — as
+ * `USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN`.
+ *
+ * Stripping the issuer leaves the asset code, which is what every other
+ * protocol's `asset_name` already holds. The issuer is not lost: it is the
+ * contract address, carried in `asset.address`.
+ */
+function humanTokenName(rawName: string, symbol: string): string {
+  if (rawName === 'native') return 'Stellar Lumens'
+  const code = rawName.split(':')[0]
+  return code || symbol
 }
 
 /**
@@ -216,7 +233,7 @@ export async function getTokenMetadata(
   const token: TokenMetadata = {
     address: assetId,
     symbol: meta.symbol,
-    name: meta.name,
+    name: humanTokenName(meta.name, meta.symbol),
     decimals: meta.decimals,
   }
   tokenMetadataCache.set(assetId, token)
