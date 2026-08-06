@@ -29,16 +29,36 @@ const network: Network = {
  * Minimum gap between two Soroban RPC calls, in ms.
  *
  * Pacing, not retrying, is what keeps us under a rate limit: a 429 has already
- * spent the request. Calibrated for the dedicated endpoint this project runs
- * on — 15 req/s — with margin, because the SDK fires several calls inside a
- * single wrapped `load()` and those are not spaced against each other.
- * Measured at 80 ms: peak 10 req/s, well under the ceiling.
+ * spent the request. And the ceiling is a RATE, not a volume — the two entry
+ * points prove it, measured 2026-08-06 with both versions in parallel:
  *
- * Raise it for a stricter endpoint (the free public one needs far more and
- * will 429 regardless), lower it on a faster plan to shorten the run.
+ *   getApySpot    80 requests, peak  9/s — never refused in production
+ *   getProducts   32 requests, peak 11/s — refused every single run
+ *
+ * The heavier path by call count is the one that passes. So the endpoint's real
+ * ceiling sits between 9 and 11 req/s, not the 15 this was first calibrated
+ * for. Blend products were absent from the catalogue for hours because of it,
+ * and every collector slot in between discarded its 78 Blend snapshots.
+ *
+ * This interval does NOT translate into a rate one-for-one: the SDK fires
+ * several requests inside a single wrapped `load()` and those are not spaced
+ * against each other, so the burst survives a small increase. Measured on the
+ * products path, both versions in parallel:
+ *
+ *   80 ms → peak 11/s, 4.1s      150 ms → peak 9/s, 4.3s
+ *  300 ms → peak  7/s, 6.2s      600 ms → peak 5/s, 11.6s
+ *
+ * Hence 300, not the 12.5/s that 80 ms nominally caps at: it is the first value
+ * that buys real margin under the rate the spot path sustains, and it costs the
+ * enumeration two seconds.
+ *
+ * `STELLAR_RPC_MIN_INTERVAL_MS` overrides it — raise it for a stricter endpoint
+ * (the free public one needs far more and will 429 regardless), lower it on a
+ * faster plan to shorten the run. Verify against the measured PEAK rate, never
+ * against the total or the nominal cap.
  */
 const RPC_MIN_INTERVAL_MS = Number(
-  process.env.STELLAR_RPC_MIN_INTERVAL_MS ?? 80
+  process.env.STELLAR_RPC_MIN_INTERVAL_MS ?? 300
 )
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
