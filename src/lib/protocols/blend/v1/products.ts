@@ -80,7 +80,7 @@ export async function fetchBlendV1Products(
           type: 'reserve',
           version: Version.V1.toLowerCase(),
           subgraphUrl: '',
-          name: 'BlendV1Stellar',
+          name,
           chain: {
             id: -1,
             name: BLEND_V1_CHAINS[-1].slug,
@@ -121,7 +121,7 @@ export async function fetchBlendV1Products(
           type: 'reserve',
           version: Version.V1.toLowerCase(),
           subgraphUrl: '',
-          name: 'BlendV1Stellar',
+          name,
           chain: {
             id: -1,
             name: BLEND_V1_CHAINS[-1].slug,

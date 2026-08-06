@@ -85,7 +85,7 @@ export async function fetchBlendV2Products(
           type: 'reserve',
           version: Version.V2.toLowerCase(),
           subgraphUrl: '',
-          name: 'BlendV2Stellar',
+          name,
           chain: {
             id: -1,
             name: BLEND_V2_CHAINS[-1].slug,
@@ -131,7 +131,7 @@ export async function fetchBlendV2Products(
           type: 'reserve',
           version: Version.V2.toLowerCase(),
           subgraphUrl: '',
-          name: 'BlendV2Stellar',
+          name,
           chain: {
             id: -1,
             name: BLEND_V2_CHAINS[-1].slug,
