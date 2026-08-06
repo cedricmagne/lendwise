@@ -35,8 +35,8 @@ CI (`.github/workflows/ci.yml`) runs format + lint, then codegen + test + typech
 
 ```
 QStash cron (every 10 min, signature-verified)
-  → POST /api/yield/apy/spot
-  → adapters (Aave/Morpho/Compound) → Postgres upsert: apy_hourly
+  → POST /api/yield/apy/spot      (no body — every protocol in PROTOCOLS_META)
+  → all adapters in parallel → Postgres upsert: apy_hourly
 
 QStash cron (daily 00:30 UTC)
   → POST /api/yield/apy/reconcile   { days: 7 }

@@ -95,6 +95,19 @@ export const CHAIN_SLUG_MAP = Object.fromEntries(
   CHAIN_REGISTRY.map((c) => [c.chainId, c.slug])
 ) as Record<RegisteredChainId, ChainSlug>
 
+/**
+ * The canonical slug for a chainId, or `undefined` when it isn't registered.
+ *
+ * `CHAIN_SLUG_MAP` is typed on `RegisteredChainId`, but the ids callers hold
+ * come from DB rows and API payloads — nothing statically guarantees
+ * membership. This fails cleanly instead of returning an entry that does not
+ * exist, which is what a DECORATIVE consumer (a link) wants; a required field
+ * should use `defaultNetworkSlug()` in `core/presentation.ts`, which throws.
+ */
+export function chainSlugFor(chainId: number): ChainSlug | undefined {
+  return CHAIN_SLUG_MAP[chainId as RegisteredChainId]
+}
+
 /** Build an adapter coverage map (chainId → { slug }) from registry slugs. */
 export function adapterChains(
   slugs: readonly ChainSlug[]

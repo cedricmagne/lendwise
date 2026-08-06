@@ -2,7 +2,6 @@ packages:
   - .
 
 allowBuilds:
-  '@mongodb-js/zstd': true
   '@reown/appkit': true
   '@stellar/stellar-sdk': true
   blake-hash: true
@@ -18,7 +17,6 @@ allowBuilds:
   utf-8-validate: true
 
 onlyBuiltDependencies:
-  - '@mongodb-js/zstd'
   - '@tailwindcss/oxide'
   - bufferutil
   - esbuild

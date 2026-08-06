@@ -44,10 +44,10 @@ const AAVE_MARKET_TO_MERKL_SLUG: Record<string, string> = {
 
 /**
  * Fetch current APY snapshots for all active AAVE v3 markets.
- * Returns SupplyApySpot and BorrowApySpot documents ready for MongoDB upsert.
+ * Returns SupplyApySpot and BorrowApySpot objects.
  * Enriches base APY with AAVE native incentives and Merkl campaigns.
  *
- * One reserve → two documents (supply + borrow).
+ * One reserve → two objects (supply + borrow).
  */
 export async function fetchAaveV3ApySpot(
   opts?: FetchOpts
@@ -56,7 +56,8 @@ export async function fetchAaveV3ApySpot(
 
   let chainIds = Object.keys(AAVE_V3_CHAINS).map(Number)
   if (opts?.chainIds?.length) {
-    chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
+    const requestedChainIds = opts.chainIds
+    chainIds = chainIds.filter((id) => requestedChainIds.includes(id))
   }
 
   // Fetch AAVE GraphQL and Merkl in parallel

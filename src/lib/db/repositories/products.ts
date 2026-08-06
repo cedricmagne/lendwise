@@ -17,7 +17,7 @@ import type { Product } from '@/lib/db/types'
  */
 const CLOSE_GRACE_MS = 2 * 60 * 60 * 1000
 
-/** Map a fetched Product document (current Mongo-shaped object) → products row. */
+/** Map a fetched Product document → products row. */
 function toRow(p: Product) {
   return {
     id: p._id,

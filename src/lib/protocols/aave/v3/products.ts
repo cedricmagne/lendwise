@@ -12,12 +12,11 @@ import { buildProductId } from './utils'
 
 /**
  * Fetch static pool metadata for all active AAVE v3 markets.
- * Returns SupplyPool and BorrowPool documents ready for MongoDB upsert.
+ * Returns SupplyPool and BorrowPool objects.
  *
- * One reserve → two documents (supply + borrow).
+ * One reserve → two objects (supply + borrow).
  * Borrow pool collaterals are built from all reserves in the same market
  * where canBeCollateral = true.
- *
  * Reuses MARKETS_APY query — aToken/vToken fields must be present.
  */
 export async function fetchAaveV3Products(
@@ -26,8 +25,9 @@ export async function fetchAaveV3Products(
   const client = createGraphQLClient(AAVE_V3_API_URL)
 
   let chainIds = Object.keys(AAVE_V3_CHAINS).map(Number)
-  if (opts?.chainIds?.length) {
-    chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
+  const filterChainIds = opts?.chainIds
+  if (filterChainIds?.length) {
+    chainIds = chainIds.filter((id) => filterChainIds.includes(id))
   }
 
   const { data, error } = await client

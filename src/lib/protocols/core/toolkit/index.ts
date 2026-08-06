@@ -17,6 +17,7 @@ export {
   CHAIN_REGISTRY,
   CHAIN_SLUG_MAP,
   adapterChains,
+  chainSlugFor,
 } from './chain-slugs'
 export type {
   ChainFamily,

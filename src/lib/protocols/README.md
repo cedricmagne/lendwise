@@ -29,6 +29,7 @@ src/lib/protocols/
 │   └── v3/                    #   one folder per adapter — flat, no offchain/onchain split
 │       ├── index.ts           #     exports `adapter` (YieldAdapter) + `appAdapter` (AppAdapter)
 │       ├── meta.ts            #     PROTOCOLS_META fragment — spread into the aggregate
+│       ├── presentation.ts    #     PROTOCOLS_PRESENTATION fragment — how its rows display
 │       ├── types.ts           #     protocol.meta shapes — AaveSupplyMeta, AaveBorrowMeta
 │       ├── config.ts          #     AAVE_V3_API_URL, AAVE_V3_CHAINS
 │       ├── listing.ts         #     THE listing predicate (see Conventions)
@@ -43,7 +44,7 @@ src/lib/protocols/
     └── {ethereum,polygon,…}/  #   chain dirs consumed via createChainRegistry
 ```
 
-Two registries wire adapters into the app:
+Three registries wire adapters into the app:
 
 - **`src/config/protocols-meta.ts`** — client-safe metadata (`PROTOCOLS_META`,
   `protocolVersionName()`, `adapterIdsForProvider()`). Composed by spreading each adapter's
@@ -54,6 +55,13 @@ Two registries wire adapters into the app:
 - **`src/config/protocols-server.ts`** — server-only loaders (`YIELD_ADAPTERS`,
   `APP_ADAPTERS`) that dynamic-import the heavy adapter modules. The pipeline (spot collector,
   products sync, reconcile, `scripts/backfill-history.ts`) and wallet features import this.
+- **`src/config/protocols-presentation.ts`** — how each protocol's rows are DISPLAYED
+  (`PROTOCOLS_PRESENTATION`): pool label, network, identity, app link. Same fragment pattern
+  as `meta.ts`, one `{name}/{version}/presentation.ts` per adapter, and every hook optional —
+  a protocol that overrides nothing registers nothing and gets the defaults in
+  `core/presentation.ts`. Unlike `protocols-meta.ts` this one is **not** client-safe: a hook
+  reaches into its adapter's utils. Its consumer, `src/lib/products/from-catalogue.ts`, runs
+  on the server and names no provider — adding a protocol never edits it.
 
 `YIELD_ADAPTERS` is typed `Record<ProtocolName, …>`, so every `PROTOCOLS_META` entry **must**
 have a loader — the compiler enforces registry completeness. Registration is explicit; there
@@ -227,7 +235,26 @@ yield-only contribution is a valid contribution.
    } as const
    ```
 
-5. **Register it** — one entry in each registry:
+5. **`src/lib/protocols/{name}/{version}/presentation.ts`** — how its rows display, if
+   anything differs from the defaults. Skip the file entirely when nothing does:
+
+   ```ts
+   // src/lib/protocols/acme/v2/presentation.ts
+   export const ACME_V2_PRESENTATION = {
+     acme_v2: {
+       // one asset can mean several pools per chain → name the pool, not the asset
+       poolName: (p: ProductRow) => p.protocolName || p.assetName,
+       productLink: (p: ProductRow) =>
+         `https://app.acme.fi/market/${p.protocolAddress}`,
+     },
+   } satisfies Partial<Record<ProtocolName, ProtocolPresentation>>
+   ```
+
+   Keyed by adapter id, so **every version registers its own** — `acme_v3` inherits nothing
+   from `acme_v2`. Share the rule through `{name}/common/presentation.ts` when versions agree
+   (Blend does).
+
+6. **Register it** — one entry in each registry:
 
    ```ts
    // src/config/protocols-meta.ts
@@ -242,25 +269,29 @@ yield-only contribution is a valid contribution.
 
    // src/config/protocols-server.ts
    acme_v2: () => import('@/lib/protocols/acme/v2').then((m) => m.adapter),
+
+   // src/config/protocols-presentation.ts — only if step 5 produced a fragment
+   ...ACME_V2_PRESENTATION,
    ```
 
    `APP_ADAPTERS` entry only if you also implement `AppAdapter`.
 
-6. **Wire the UI** — the pipeline is protocol-agnostic; the tables are not. None of
-   this fails a build or a test, so it is only ever caught by eye:
+7. **Wire the UI** — the pipeline is protocol-agnostic; the tables are not. Only the
+   presentation fragment is test-covered (`src/config/__tests__/protocols-presentation.test.ts`
+   fails until the new protocol is listed there); the icons are caught by eye alone:
 
    | What          | Where                                                                                                                    | If you skip it                                                                                                                                                                         |
    | ------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
    | Protocol logo | `public/icons/protocol/{provider}.svg` — filename is `provider`, i.e. `id.split('_')[0]`, so all versions share one file | Protocol chip and badge fall back to two grey initials                                                                                                                                 |
    | Network logo  | `public/icons/network/{slug}.svg` — only for a chain nothing else covers                                                 | Network chip and badge fall back to initials                                                                                                                                           |
-   | New chain     | `src/lib/protocols/core/toolkit/chain-slugs.ts` — non-EVM gets an assigned NEGATIVE chainId                              | `chainIdSlug()` throws and takes the whole `/supply` load with it                                                                                                                      |
-   | Row name      | `poolName()` in `src/lib/products/from-catalogue.ts`                                                                     | Defaults to `asset_name`. Fine when one asset means one market per chain (Aave, Compound) — **wrong for a protocol with several pools per chain**, which then renders N identical rows |
-   | External link | `productLink()`, same file                                                                                               | `default:` returns `''` and the row simply has no link — decorative, safe to defer                                                                                                     |
+   | New chain     | `src/lib/protocols/core/toolkit/chain-slugs.ts` — non-EVM gets an assigned NEGATIVE chainId                              | `defaultNetworkSlug()` throws and takes the whole `/supply` load with it                                                                                                               |
+   | Row name      | `poolName` hook in `{name}/{version}/presentation.ts`                                                                    | Defaults to `asset_name`. Fine when one asset means one market per chain (Aave, Compound) — **wrong for a protocol with several pools per chain**, which then renders N identical rows |
+   | External link | `productLink` hook, same file                                                                                            | Defaults to `''` and the row simply has no link — decorative, safe to defer                                                                                                            |
 
    Token icons need nothing: they resolve through CoinGecko and fall back to the
    symbol's initials (see `../../../agent/docs/lendwise/COINGECKO_TOKEN_ICONS.md`).
 
-7. **Prove it** — `pnpm adapter:test acme_v2` (see Validation below).
+8. **Prove it** — `pnpm adapter:test acme_v2` (see Validation below).
 
 That's it. No DB migration: productIds, tables, and repositories are protocol-agnostic.
 

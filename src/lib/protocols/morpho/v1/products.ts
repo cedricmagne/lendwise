@@ -18,9 +18,9 @@ import { buildProductId } from './utils'
 
 /**
  * Fetch static pool metadata for all active Morpho Blue markets.
- * Returns SupplyPool and BorrowPool documents ready for MongoDB upsert.
+ * Returns SupplyPool and BorrowPool objects.
  *
- * One market → two documents (supply + borrow).
+ * One market → two objects (supply + borrow).
  * Called by the daily pools sync job.
  */
 export async function fetchMorphoV1Products(
@@ -29,8 +29,9 @@ export async function fetchMorphoV1Products(
   const client = createGraphQLClient(MORPHO_V1_API_URL)
 
   let chainIds = Object.keys(MORPHO_V1_CHAINS).map(Number)
-  if (opts?.chainIds?.length) {
-    chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
+  const filterChainIds = opts?.chainIds
+  if (filterChainIds?.length) {
+    chainIds = chainIds.filter((id) => filterChainIds.includes(id))
   }
 
   const products: (SupplyProduct | BorrowProduct)[] = []

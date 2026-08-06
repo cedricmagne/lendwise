@@ -31,23 +31,10 @@
     ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
     ["cx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
   ],
-  "postman.settings.dotenv-detection-notification-visibility": false,
-  "cSpell.words": [
-    "intraday"
-  ],
-  "biome.enabled": false,
-  "biome.lint.enable": false,
   "editor.codeActionsOnSave": {
     "source.organizeImports.biome": "never",
     "source.fixAll.biome": "never"
   },
-  "typescript.tsdk.path": "node_modules/typescript/lib",
-  "mdb.presetConnections": [
-    {
-      "name": "Preset Connection",
-      "connectionString": "mongodb://localhost:27017"
-    }
-  ],
   "[xml]": {
     "editor.defaultFormatter": "redhat.vscode-xml"
   }

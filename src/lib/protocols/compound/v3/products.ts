@@ -11,9 +11,9 @@ import { buildProductId } from './utils'
 
 /**
  * Fetch static pool metadata for all active Compound v3 markets.
- * Returns SupplyPool and BorrowPool documents ready for MongoDB upsert.
+ * Returns SupplyPool and BorrowPool objects.
  *
- * One market → two documents (supply + borrow).
+ * One market → two objects (supply + borrow).
  * Borrow pool collaterals are built from the market itself (Compound V3 is single-collateral).
  *
  * Uses Compound V3 subgraph to fetch market data.
@@ -22,8 +22,9 @@ export async function fetchCompoundV3Products(
   opts?: FetchOpts
 ): Promise<(SupplyProduct | BorrowProduct)[]> {
   let chainIds = Object.keys(COMPOUND_V3_CHAINS).map(Number)
-  if (opts?.chainIds?.length) {
-    chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
+  const filterChainIds = opts?.chainIds
+  if (filterChainIds?.length) {
+    chainIds = chainIds.filter((id) => filterChainIds.includes(id))
   }
 
   const products: (SupplyProduct | BorrowProduct)[] = []
@@ -88,7 +89,7 @@ export async function fetchCompoundV3Products(
           type: 'market',
           version: 'v3',
           name,
-          subgraphUrl: chainConfig.custom.subgraphUrl!,
+          subgraphUrl: chainConfig.custom.subgraphUrl ?? '',
           chain,
           address: market.id,
           meta: {
@@ -113,7 +114,7 @@ export async function fetchCompoundV3Products(
           type: 'market',
           version: 'v3',
           name,
-          subgraphUrl: chainConfig.custom.subgraphUrl!,
+          subgraphUrl: chainConfig.custom.subgraphUrl ?? '',
           chain,
           address: market.id,
           meta: {

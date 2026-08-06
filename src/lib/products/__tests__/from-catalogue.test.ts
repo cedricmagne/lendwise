@@ -4,6 +4,7 @@ import type { CatalogueRow } from '@/lib/db/types'
 import {
   liquidity,
   networkSlug,
+  poolIdentity,
   poolName,
   productLink,
   toBorrowProduct,
@@ -13,6 +14,12 @@ import {
 
 const now = new Date('2026-07-27T14:00:00Z')
 
+/**
+ * A catalogue row. `provider` AND `version` both matter: presentation is looked
+ * up by adapter id (`${provider}_${version}`), so a Morpho fixture must say
+ * `version: 'v1'` — `morpho_v3` registers nothing and would silently render
+ * with the defaults.
+ */
 function row(
   product: Partial<CatalogueRow['product']>,
   observation: Partial<CatalogueRow> = {}
@@ -57,7 +64,9 @@ function row(
 describe('networkSlug', () => {
   it('derives the slug from chainId for Morpho and Compound', () => {
     expect(
-      networkSlug(row({ provider: 'morpho', chainId: 8453 }).product)
+      networkSlug(
+        row({ provider: 'morpho', version: 'v1', chainId: 8453 }).product
+      )
     ).toBe('base')
   })
 
@@ -77,6 +86,7 @@ describe('poolName', () => {
       poolName(
         row({
           provider: 'morpho',
+          version: 'v1',
           productType: 'vault',
           meta: { name: 'Steakhouse USDC' },
         }).product
@@ -89,6 +99,7 @@ describe('poolName', () => {
       poolName(
         row({
           provider: 'morpho',
+          version: 'v1',
           kind: 'borrow',
           collaterals: [{ symbol: 'wstETH' }],
         }).product
@@ -120,6 +131,7 @@ describe('productLink', () => {
       productLink(
         row({
           provider: 'morpho',
+          version: 'v1',
           productType: 'vault',
           chainId: 8453,
           chainName: 'Base',
@@ -156,6 +168,7 @@ describe('productLink', () => {
       productLink(
         row({
           provider: 'morpho',
+          version: 'v1',
           productType: 'vault',
           chainId: 10,
           chainName: 'op mainnet',
@@ -173,6 +186,7 @@ describe('productLink', () => {
       productLink(
         row({
           provider: 'morpho',
+          version: 'v1',
           productType: 'vault',
           chainId: 42161,
           chainName: 'arbitrum one',
@@ -206,6 +220,7 @@ describe('productLink', () => {
       productLink(
         row({
           provider: 'morpho',
+          version: 'v1',
           productType: 'vault',
           chainId: 999_999_999,
           chainName: 'Unregistered Chain',
@@ -214,6 +229,47 @@ describe('productLink', () => {
         }).product
       )
     ).toBe('')
+  })
+})
+
+/**
+ * A protocol that registers no presentation fragment — an adapter id absent
+ * from `PROTOCOLS_PRESENTATION`, which is also what a FORGOTTEN registration
+ * looks like. It must render, not crash: default label, default identity, no
+ * link. The one exception is `network`, a required field of the table, where an
+ * unregistered chain is a configuration bug and must surface loudly.
+ */
+describe('a protocol with no presentation fragment', () => {
+  const unknown = () =>
+    row({ provider: 'newproto', version: 'v9', protocolAddress: '0xPool' })
+      .product
+
+  it('names the pool after its asset', () => {
+    expect(poolName(unknown())).toBe('USD Coin')
+  })
+
+  it('identifies the pool by its protocol address, twice', () => {
+    expect(poolIdentity(unknown())).toEqual({
+      poolId: '0xPool',
+      poolAddress: '0xPool',
+    })
+  })
+
+  it('renders no link', () => {
+    expect(productLink(unknown())).toBe('')
+  })
+
+  it('still derives the network from chainId', () => {
+    expect(networkSlug(unknown())).toBe('ethereum')
+  })
+
+  it('throws on an unregistered chainId — network is a required field', () => {
+    expect(() =>
+      networkSlug(
+        row({ provider: 'newproto', version: 'v9', chainId: 999_999_999 })
+          .product
+      )
+    ).toThrow(/No slug registered for chainId 999999999/)
   })
 })
 
@@ -350,6 +406,7 @@ describe('toBorrowProduct', () => {
       row({
         kind: 'borrow',
         provider: 'morpho',
+        version: 'v1',
         assetSymbol: 'USDC',
         collaterals,
       })
