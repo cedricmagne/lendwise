@@ -55,7 +55,11 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { HORIZON_CONFIG, HorizonKey } from '@/config/horizon'
-import { protocolVersionName } from '@/config/protocols-meta'
+import {
+  PROTOCOLS_META,
+  type ProtocolName,
+  protocolVersionName,
+} from '@/config/protocols-meta'
 import {
   DEFAULT_BORROW_FILTERS,
   DEFAULT_MAX_ABS_NET_APY,
@@ -597,12 +601,14 @@ export function BorrowTableClient() {
     tableFilters.length
 
   // Filter options
-  const protocolOptions = getUniqueColumnValues(visibleMarkets, 'protocol').map(
+  // Every REGISTERED protocol, at 0 when nothing survives the active filters —
+  // same reasoning as the supply table, see the comment there.
+  const protocolOptions = (Object.keys(PROTOCOLS_META) as ProtocolName[]).map(
     (v) => ({
-      value: v as string,
+      value: v,
       label: (
         <div className="flex items-center gap-2">
-          <ProtocolIcon protocol={v as string} /> {protocolVersionName(v)}
+          <ProtocolIcon protocol={v} /> {protocolVersionName(v)}
         </div>
       ),
     })

@@ -55,7 +55,11 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { HORIZON_CONFIG, HorizonKey } from '@/config/horizon'
-import { protocolVersionName } from '@/config/protocols-meta'
+import {
+  PROTOCOLS_META,
+  type ProtocolName,
+  protocolVersionName,
+} from '@/config/protocols-meta'
 import {
   DEFAULT_MAX_ABS_NET_APY,
   DEFAULT_SUPPLY_FILTERS,
@@ -498,12 +502,22 @@ export function SupplyTableClient() {
     tableFilters.length
 
   // Filter options
-  const protocolOptions = getUniqueColumnValues(visibleMarkets, 'protocol').map(
+  // Every REGISTERED protocol, not only those with rows in view — unlike the
+  // network and token lists below, which stay data-derived because their
+  // universe is 27 chains and ~130 assets.
+  //
+  // A protocol whose pools are all excluded by the active filters keeps its
+  // row, at 0. The list then reads as what LendWise covers rather than as what
+  // survives the current filters, and "0" is an answer where a missing row is
+  // just a question. It also surfaces a protocol serving nothing at all: Blend
+  // spent hours absent from the catalogue on 2026-08-06 without the UI ever
+  // saying so.
+  const protocolOptions = (Object.keys(PROTOCOLS_META) as ProtocolName[]).map(
     (v) => ({
-      value: v as string,
+      value: v,
       label: (
         <div className="flex items-center gap-2">
-          <ProtocolIcon protocol={v as string} />
+          <ProtocolIcon protocol={v} />
           {protocolVersionName(v)}
         </div>
       ),
