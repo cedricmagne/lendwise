@@ -13,7 +13,7 @@ import { Address, Networks, rpc as stellarRpc } from '@stellar/stellar-sdk'
 
 import type { TokenMetadata } from './types'
 
-const RPC = process.env.BLEND_RPC ?? 'https://mainnet.sorobanrpc.com'
+const RPC = process.env.STELLAR_RPC ?? 'https://mainnet.sorobanrpc.com'
 const BACKSTOP_ADDRESS = {
   [Version.V1]: process.env.NEXT_PUBLIC_BACKSTOP_V1 || '',
   [Version.V2]: process.env.NEXT_PUBLIC_BACKSTOP_V2 || '',
@@ -37,7 +37,9 @@ const network: Network = {
  * Raise it for a stricter endpoint (the free public one needs far more and
  * will 429 regardless), lower it on a faster plan to shorten the run.
  */
-const RPC_MIN_INTERVAL_MS = Number(process.env.BLEND_RPC_MIN_INTERVAL_MS ?? 80)
+const RPC_MIN_INTERVAL_MS = Number(
+  process.env.STELLAR_RPC_MIN_INTERVAL_MS ?? 80
+)
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
