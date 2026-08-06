@@ -27,6 +27,15 @@ import { PROTOCOLS_META, type ProtocolName } from '@/config/protocols-meta'
  * periods: an empty list from a broken fetch must never be read as "they delisted
  * everything".
  */
+/**
+ * Measured in production: 6.9–9.6s for the three EVM providers. A provider
+ * whose enumeration fails is retried once after 5s (see `enumerate` in
+ * products-sync.actions.ts), so the worst case is roughly 25s — this leaves an
+ * order of magnitude of headroom, and replaces a platform default counted in
+ * tens of seconds that the retry would otherwise have run into.
+ */
+export const maxDuration = 60
+
 export const POST = verifySignatureAppRouter(async (req: NextRequest) => {
   const body = await req.json().catch(() => ({}))
   const protocol = body.protocol as string | undefined

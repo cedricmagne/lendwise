@@ -44,6 +44,50 @@ export type SyncProductsResult = {
   durationMs: number
 }
 
+// ─── Enumeration, with one retry ──────────────────────────────────────────────
+
+/**
+ * How long to wait before the single retry below.
+ *
+ * Long enough to outlast a per-second rate-limit window, short enough that the
+ * job stays well inside its budget: the sync measures 6.9–9.6s, so a worst case
+ * of two full attempts plus this pause is ~25s against a `maxDuration` of 60.
+ */
+const ENUMERATION_RETRY_DELAY_MS = 5_000
+
+/**
+ * One adapter's catalogue, retried ONCE if the first attempt throws.
+ *
+ * This sync is a poll, and a provider that fails is simply absent until the
+ * next hourly run. That absence is not neutral: the 10-minute collector keeps
+ * emitting snapshots for products the catalogue no longer lists, and the
+ * `apy_hourly` write drops every one of them. Measured on 2026-08-06 — the
+ * Stellar RPC answered 429 to `blend_v1` and `blend_v2` enumeration at 01:05
+ * UTC, and the six collector slots that followed each threw away 78 Blend rows
+ * while reporting success. A transient upstream refusal must not cost a
+ * protocol an hour of data.
+ *
+ * One retry, deliberately not a ladder: if the upstream's limit window outlasts
+ * a few seconds, no backoff affordable inside a cron invocation outlasts it
+ * either — the next hourly run is the real fallback, and reconcile repairs the
+ * hourly rows once the products exist.
+ */
+async function enumerate(
+  id: ProtocolName
+): Promise<(SupplyProduct | BorrowProduct)[]> {
+  try {
+    return await (await YIELD_ADAPTERS[id]()).getProducts()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.warn(
+      `[sync:${id}] enumeration failed (${msg}) —` +
+        ` retrying once in ${ENUMERATION_RETRY_DELAY_MS}ms`
+    )
+    await new Promise((r) => setTimeout(r, ENUMERATION_RETRY_DELAY_MS))
+    return (await YIELD_ADAPTERS[id]()).getProducts()
+  }
+}
+
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
 /**
@@ -74,9 +118,7 @@ export async function syncProducts(
     }
   }
 
-  const results = await Promise.allSettled(
-    ids.map(async (id) => (await YIELD_ADAPTERS[id]()).getProducts())
-  )
+  const results = await Promise.allSettled(ids.map(enumerate))
 
   const allProducts: Product[] = []
   const protoCounts: Partial<Record<ProtocolName, number>> = {}

@@ -172,9 +172,18 @@ export async function upsertHourlySlots(
     // that quietly wrote ~18,500 orphan rows a week. It is not routine, so it is
     // logged as the error it is: the drop itself is harmless (the rows are
     // unreadable anyway), but the divergence upstream is not.
+    //
+    // The message names the likelier cause FIRST, because the drift of
+    // 2026-08-06 was not a listing bug and the old wording sent the reader
+    // straight past it: Blend's enumeration had taken a 429 from the Stellar RPC
+    // at the hourly sync, so the catalogue simply never learned about its 78
+    // products while the collector kept emitting them, six slots an hour. A
+    // whole protocol missing from `products` looks exactly like drift here, and
+    // the two are told apart in the products-sync logs, not in listing.ts.
     console.error(
       `[apy:upsert] ENUMERATION DRIFT — ${all.length - deduped.length} snapshots for products the catalogue does not list. ` +
-        `The collector and the catalogue sync disagree; check lib/protocols/*/listing.ts.`
+        `First check the last /api/yield/products run for a provider whose enumeration failed ` +
+        `(its products are then absent, not drifted); only then lib/protocols/*/listing.ts.`
     )
   }
 
