@@ -16,6 +16,30 @@ import type { BorrowProduct, Product, SupplyProduct } from '@/lib/db/types'
 // CI harness, only a runtime guard against a malformed row poisoning the batch.
 const productShapeSchema = z.object({ _id: z.string().min(1) }).loose()
 
+/**
+ * Whether this product can survive the jsonb write.
+ *
+ * `meta` and `collaterals` are protocol-owned jsonb, and Drizzle serializes
+ * them with `JSON.stringify` — which THROWS on a BigInt rather than skipping
+ * it. Blend put its pool's `minCollateral` in `meta` as a bigint on 2026-08-06,
+ * and the blast radius was the whole job: one un-serializable field in one
+ * protocol's products killed the single batched write that carries every
+ * provider, so Aave, Morpho and Compound would have stopped syncing too. It
+ * only stayed invisible because Blend's enumeration was failing earlier, on a
+ * rate limit.
+ *
+ * Checked per product so the damage stays with the protocol that caused it —
+ * the same reason a missing `_id` is dropped rather than thrown on.
+ */
+function isSerializable(product: unknown): boolean {
+  try {
+    JSON.stringify(product)
+    return true
+  } catch {
+    return false
+  }
+}
+
 // ─── Upsert ───────────────────────────────────────────────────────────────────
 
 /**
@@ -133,11 +157,16 @@ export async function syncProducts(
     if (result.status === 'fulfilled') {
       const valid: (SupplyProduct | BorrowProduct)[] = []
       for (const product of result.value) {
-        if (productShapeSchema.safeParse(product).success) valid.push(product)
-        else
+        const id = (product as { _id?: string })._id ?? '<no id>'
+        if (!productShapeSchema.safeParse(product).success)
           console.warn(
-            `[sync:${protoId}] Skipping malformed product ${(product as { _id?: string })._id ?? '<no id>'}: missing or empty _id`
+            `[sync:${protoId}] Skipping malformed product ${id}: missing or empty _id`
           )
+        else if (!isSerializable(product))
+          console.warn(
+            `[sync:${protoId}] Skipping product ${id}: meta or collaterals hold a value jsonb cannot serialize (a BigInt?)`
+          )
+        else valid.push(product)
       }
       validByIndex[i] = valid
       protoCounts[protoId] = valid.length

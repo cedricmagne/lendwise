@@ -90,4 +90,23 @@ describe('syncProducts — enumeration retry', () => {
     expect(mocks.getProducts).toHaveBeenCalledTimes(1)
     expect(result.counts.total).toBe(1)
   })
+
+  /**
+   * Drizzle serializes jsonb with `JSON.stringify`, which throws on a BigInt,
+   * and one batched statement carries EVERY provider's products — so without
+   * this guard a single bigint in one protocol's `meta` stops the whole
+   * catalogue from syncing. Blend shipped exactly that on 2026-08-06.
+   */
+  it('drops a product jsonb cannot serialize, and writes the rest', async () => {
+    const poisoned = { ...product('poisoned'), meta: { minCollateral: 1n } }
+    mocks.getProducts.mockResolvedValueOnce([product('ok'), poisoned])
+
+    const result = await runPastRetryDelay()
+
+    expect(result.counts.total).toBe(1)
+    expect(mocks.upsertProducts).toHaveBeenCalledOnce()
+    expect(mocks.upsertProducts.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ _id: 'ok' }),
+    ])
+  })
 })

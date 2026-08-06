@@ -5,7 +5,8 @@ export interface BlendSupplyMeta {
   backstop: string
   backstopRate: number
   maxPositions: number
-  minCollateral: bigint
+  /** Stroops-scale integer, kept as a string: jsonb goes through JSON.stringify, which throws on a BigInt. */
+  minCollateral: string
   oracle: string
   status: number
   reserveList: string[]
@@ -19,7 +20,8 @@ export interface BlendBorrowMeta {
   backstop: string
   backstopRate: number
   maxPositions: number
-  minCollateral: bigint
+  /** Stroops-scale integer, kept as a string: jsonb goes through JSON.stringify, which throws on a BigInt. */
+  minCollateral: string
   oracle: string
   status: number
   reserveList: string[]
