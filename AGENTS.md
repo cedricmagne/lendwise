@@ -4,7 +4,7 @@ This file provides guidance to coding agents (Claude Code, Codex, …) when work
 
 ## Overview
 
-DeFi yield aggregator: supply/borrow markets on Aave V3 (21 chains), Morpho Blue + MetaMorpho (12 chains), and Compound V3 (5 chains) — 27 standardized chains total, 16 of them wallet-transactable. ~940 active products / ~130 assets (July 2026). Chain identity lives in the registry `src/lib/protocols/core/toolkit/chain-slugs.ts` (slug/chainId/caip2; non-EVM = negative chainId), adapter configs pick coverage from it, `src/config/chains.ts` holds the execution (RPC/wagmi) subset. Counts are derived — `STANDARDIZED_CHAIN_COUNT` (`src/config/chains-coverage.ts`), `TX_CHAIN_COUNT` (`src/config/chains.ts`), live market/asset counts from `/api/stats` — never hardcode them in copy. Production: https://lendwise.fi.
+DeFi yield aggregator: supply/borrow markets on Aave V3 (21 chains), Morpho Blue + MetaMorpho (12 chains), Compound V3 (5 chains), and Blend V1+V2 (Stellar) — 27 standardized chains total, 16 of them wallet-transactable. ~940 active products / ~130 assets (July 2026). Chain identity lives in the registry `src/lib/protocols/core/toolkit/chain-slugs.ts` (slug/chainId/caip2; non-EVM = negative chainId), adapter configs pick coverage from it, `src/config/chains.ts` holds the execution (RPC/wagmi) subset. Counts are derived — `STANDARDIZED_CHAIN_COUNT` (`src/config/chains-coverage.ts`), `TX_CHAIN_COUNT` (`src/config/chains.ts`), live market/asset counts from `/api/stats` — never hardcode them in copy. Production: https://lendwise.fi.
 
 **Stack:** Next.js 16 (App Router) · TypeScript strict · Tailwind 4 + Radix UI · viem/wagmi · PostgreSQL (Neon) + Drizzle ORM · The Graph (GraphQL) · graphql-yoga · URQL · Zustand · QStash (cron)
 

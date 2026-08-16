@@ -55,11 +55,12 @@ Here is how to allocate your capital — matched to your risk profile and invest
 
 ## Supported protocols & chains
 
-| Protocol                       | Ethereum | Optimism | Polygon | Base | Arbitrum | Avalanche | Linea | BSC |
-| ------------------------------ | :------: | :------: | :-----: | :--: | :------: | :-------: | :---: | :-: |
-| **Aave V3**                    |    ✅    |    ✅    |   ✅    |  ✅  |    ✅    |    ✅     |  ✅   | ✅  |
-| **Morpho** (Blue + MetaMorpho) |    ✅    |    ✅    |   ✅    |  ✅  |    ✅    |     —     |   —   |  —  |
-| **Compound V3**                |    ✅    |    ✅    |   ✅    |  ✅  |    ✅    |     —     |   —   |  —  |
+| Protocol                       | Ethereum | Optimism | Polygon | Base | Arbitrum | Avalanche | Linea | BSC | Stellar |
+| ------------------------------ | :------: | :------: | :-----: | :--: | :------: | :-------: | :---: | :-: | :-----: |
+| **Aave V3**                    |    ✅    |    ✅    |   ✅    |  ✅  |    ✅    |    ✅     |  ✅   | ✅  |    —    |
+| **Morpho** (Blue + MetaMorpho) |    ✅    |    ✅    |   ✅    |  ✅  |    ✅    |     —     |   —   |  —  |    —    |
+| **Compound V3**                |    ✅    |    ✅    |   ✅    |  ✅  |    ✅    |     —     |   —   |  —  |    —    |
+| **Blend** (V1 + V2)            |    —     |    —     |    —    |  —   |    —     |     —     |   —   |  —  |   ✅    |
 
 Want another protocol? **[Request it](https://github.com/lendwise-fi/lendwise/issues/new?template=protocol_request.yml)** — or
 [build the adapter yourself](#contributing): it's ~5 files with a test harness to validate it.
@@ -68,7 +69,7 @@ Want another protocol? **[Request it](https://github.com/lendwise-fi/lendwise/is
 
 ```mermaid
 flowchart LR
-    A["Protocol adapters<br/>Aave · Morpho · Compound"] -->|"every 10 min"| B["APY collector"]
+    A["Protocol adapters<br/>Aave · Morpho · Compound · Blend"] -->|"every 10 min"| B["APY collector"]
     B --> C[("Postgres<br/>apy_hourly · apy_daily")]
     C -->|"daily 00:30 UTC"| D["Reconcile<br/>detect → repair → aggregate → prune"]
     D --> C
