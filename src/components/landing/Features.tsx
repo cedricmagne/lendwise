@@ -2,6 +2,8 @@
 
 import type { CSSProperties, ReactNode } from 'react'
 
+import Image from 'next/image'
+
 import { ArrowUpRight } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import { useTheme } from 'next-themes'
@@ -307,7 +309,7 @@ function ApiPanel() {
 
 const folio = [
   {
-    ic: 'US',
+    ic: 'usdc.webp',
     name: 'USDC',
     src: 'Aave V3 · Ethereum',
     val: '$12,450',
@@ -315,7 +317,7 @@ const folio = [
     neg: false,
   },
   {
-    ic: 'ET',
+    ic: 'eth.svg',
     name: 'ETH',
     src: 'Lido · Ethereum',
     val: '$8,200',
@@ -323,7 +325,7 @@ const folio = [
     neg: false,
   },
   {
-    ic: 'DA',
+    ic: 'dai.webp',
     name: 'DAI',
     src: 'Morpho · Base',
     val: '$5,100',
@@ -350,7 +352,12 @@ function PortfolioPanel() {
             className="border-border/60 flex items-center gap-3.5 border-t py-3"
           >
             <span className="bg-border/60 border-border text-muted-foreground grid h-8 w-8 place-items-center rounded border font-mono text-[10px] font-semibold">
-              {f.ic}
+              <Image
+                src={`/icons/native/${f.ic}`}
+                alt={f.name}
+                width={32}
+                height={32}
+              />
             </span>
             <span>
               <b className="text-foreground block text-[13.5px] font-semibold">
