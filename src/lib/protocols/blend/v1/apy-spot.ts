@@ -2,6 +2,7 @@ import { Version } from '@blend-capital/blend-sdk'
 
 import type {
   BorrowMarketState,
+  RewardItem,
   SpotPayload,
   SupplyMarketState,
 } from '@/lib/db/types'
@@ -16,7 +17,11 @@ import {
   primeTokenMetadata,
 } from '../common/api'
 import { BLEND_PROVIDER } from '../common/config'
-import { buildProductId } from '../common/utils'
+import {
+  buildProductId,
+  computeEmissionsApr,
+  getBlndPriceUsd,
+} from '../common/utils'
 import { BLEND_V1_CHAINS } from './config'
 
 /**
@@ -28,9 +33,6 @@ import { BLEND_V1_CHAINS } from './config'
  * canonical daily-compounding formula rather than the SDK's own APY estimate
  * — the SDK compounds supply weekly and borrow daily (two different periods),
  * which would be inconsistent with every other protocol's stored APY here.
- *
- * Reward emissions (`reserve.supplyEmissions`/`borrowEmissions`) are not
- * wired yet — `rewardItems` is empty until that lands.
  */
 export async function fetchBlendV1ApySpot(
   opts?: FetchOpts
@@ -46,6 +48,14 @@ export async function fetchBlendV1ApySpot(
 
   const backstop = await getBackstop({ version: Version.V1 })
   const poolIds = backstop.config?.rewardZone ?? []
+
+  // Shared by every reserve below: BLND has no oracle feed of its own (see
+  // getBlndPriceUsd), and the reward token itself is one BLND contract for
+  // the whole backstop, not per-pool.
+  const blndPriceUsd = getBlndPriceUsd(backstop)
+  const blndToken = backstop.config?.blndTkn
+    ? await getTokenMetadata(backstop.config.blndTkn)
+    : undefined
 
   const snapshots: SpotPayload[] = []
 
@@ -98,6 +108,59 @@ export async function fetchBlendV1ApySpot(
       const netSupplyApy = aprToApyDaily(reserve.supplyApr)
       const supplyFeesApy = Math.max(0, baseSupplyApy - netSupplyApy)
 
+      // ─── Reward emissions (BLND) ────────────────────────────────────────
+      const supplyRewardApr = computeEmissionsApr({
+        emissions: reserve.supplyEmissions,
+        supply: reserve.data.bSupply,
+        decimals: reserve.config.decimals,
+        rate: reserve.data.bRate,
+        rateDecimals: reserve.rateDecimals,
+        blndPriceUsd,
+        assetPriceUsd: priceUsd,
+      })
+      const supplyRewardItems: RewardItem[] =
+        supplyRewardApr > 0 && blndToken
+          ? [
+              {
+                token: { symbol: blndToken.symbol, address: blndToken.address },
+                apr: supplyRewardApr,
+                apy: aprToApyDaily(supplyRewardApr),
+                source: 'protocol',
+                program: null,
+              },
+            ]
+          : []
+      const totalSupplyRewardsApy = supplyRewardItems.reduce(
+        (s, r) => s + r.apy,
+        0
+      )
+
+      const borrowRewardApr = computeEmissionsApr({
+        emissions: reserve.borrowEmissions,
+        supply: reserve.data.dSupply,
+        decimals: reserve.config.decimals,
+        rate: reserve.data.dRate,
+        rateDecimals: reserve.rateDecimals,
+        blndPriceUsd,
+        assetPriceUsd: priceUsd,
+      })
+      const borrowRewardItems: RewardItem[] =
+        borrowRewardApr > 0 && blndToken
+          ? [
+              {
+                token: { symbol: blndToken.symbol, address: blndToken.address },
+                apr: borrowRewardApr,
+                apy: aprToApyDaily(borrowRewardApr),
+                source: 'protocol',
+                program: null,
+              },
+            ]
+          : []
+      const totalBorrowRewardsApy = borrowRewardItems.reduce(
+        (s, r) => s + r.apy,
+        0
+      )
+
       snapshots.push({
         productId: buildProductId({ poolId, assetId, kind: 'supply' }),
         kind: 'supply',
@@ -106,10 +169,10 @@ export async function fetchBlendV1ApySpot(
         asset: token.symbol,
         apy: {
           base: baseSupplyApy,
-          rewards: 0,
+          rewards: totalSupplyRewardsApy,
           fees: supplyFeesApy,
-          net: netSupplyApy,
-          rewardItems: [],
+          net: netSupplyApy + totalSupplyRewardsApy,
+          rewardItems: supplyRewardItems,
         },
         market: {
           supplyAssets,
@@ -130,10 +193,10 @@ export async function fetchBlendV1ApySpot(
         asset: token.symbol,
         apy: {
           base: borrowApy,
-          rewards: 0,
+          rewards: totalBorrowRewardsApy,
           fees: 0,
-          net: borrowApy,
-          rewardItems: [],
+          net: Math.max(0, borrowApy - totalBorrowRewardsApy),
+          rewardItems: borrowRewardItems,
         },
         market: {
           supplyAssets,
