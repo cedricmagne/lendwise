@@ -356,30 +356,30 @@ via CCTP — with no DEX swap, third-party bridge, or fiat on-ramp step in the p
 
 ## 7. New vs existing — at a glance
 
-| Brick                                  | Status         | Library / path                                                          |
-| :-------------------------------------- | :------------- | :---------------------------------------------------------------------- |
-| Adapter registry                        | existing       | `YIELD_ADAPTERS` — `src/config/protocols-server.ts`                     |
-| Spot collection                         | existing       | `collectApySpot()` — `app/actions/apy-snapshots.actions.ts`             |
-| EVM lending data                        | existing       | The Graph subgraphs via `createGraphQLClient()` (URQL)                  |
-| `apy_hourly` / `apy_daily`              | existing       | `repositories/apy.ts` + Drizzle schema                                  |
-| Nightly reconcile (aggregate/heal)      | existing       | `/api/yield/apy/reconcile` — `runReconcile()`, 7-day sliding window     |
-| GraphQL serving                         | existing       | `graphql-yoga` `/api/graphql`                                           |
-| Existing EVM position fetch             | existing       | portfolio data-fetch layer                                              |
-| Existing optimizer ranking engine       | existing       | optimizer module, unchanged                                             |
-| Blend V1 spot adapter                   | **shipped**    | `src/lib/protocols/blend/v1/apy-spot.ts`                                |
-| Blend V2 spot adapter                   | **shipped**    | `src/lib/protocols/blend/v2/apy-spot.ts`                                |
-| Blend data source                       | **shipped**    | `@blend-capital/blend-sdk` + `@stellar/stellar-sdk` over Soroban RPC    |
-| Stellar wallet connection               | **shipped**    | `StellarWalletContext.tsx` — Freighter / xBull / Lobstr / Albedo        |
-| `chainFamily` store field               | **shipped**    | `src/stores/walletStore.ts`                                             |
-| **Blend rate-parameter fields**         | **NEW (1.1a)** | `ir_mod` / `util` / `r_base` / `r_one` / `r_two` / `r_three` / `reactivity` + failure-path tests |
-| **Blend historical adapter**            | **NEW (1.1b)** | `blend/v1/apy-history.ts` + `blend/v2/apy-history.ts` — `getApyHistory()` |
-| **Stellar Hubble backfill**             | **NEW (1.1b)** | historical reserve-state reconstruction, consumed by existing `scripts/backfill-history.ts` and reconcile |
-| **SEP-10 authentication**               | **NEW (1.2)**  | backend challenge endpoint + client-side signing flow + session persistence |
-| **Blend position reads**                | **NEW (2.1a)** | `PoolUser.load` + bToken/dToken conversion                              |
-| **Health factor calculation**           | **NEW (2.1b)** | per-reserve collateral/liability factors, reused oracle price map       |
-| **Portfolio merge**                     | **NEW (2.2b)** | `Promise.allSettled` + partial-data indicator                          |
-| **CCTP trustline check & ChangeTrust**  | **NEW (3.1b)** | `src/lib/execution/cctp/trustline.ts`                                  |
-| **CCTP burn (EVM) + forwarder mint**    | **NEW (3.1a)** | `src/lib/execution/cctp/` — Circle CCTP V2 + Stellar Soroban contracts  |
-| **CCTP attestation → Blend deposit**    | **NEW (3.1c)** | Circle Iris polling client + chained Blend Supply call                 |
-| **Optimizer ranking surfacing**         | **NEW (3.2a)** | Blend added as ranked venue + deep link into CCTP flow                 |
-| **Monitoring / gap-heal extension**     | **NEW (3.2b)** | Blend registered into existing reconcile + `pipeline_reports`          |
+| Brick                                  | Status         | Library / path                                                                                            |
+| :------------------------------------- | :------------- | :-------------------------------------------------------------------------------------------------------- |
+| Adapter registry                       | existing       | `YIELD_ADAPTERS` — `src/config/protocols-server.ts`                                                       |
+| Spot collection                        | existing       | `collectApySpot()` — `app/actions/apy-snapshots.actions.ts`                                               |
+| EVM lending data                       | existing       | The Graph subgraphs via `createGraphQLClient()` (URQL)                                                    |
+| `apy_hourly` / `apy_daily`             | existing       | `repositories/apy.ts` + Drizzle schema                                                                    |
+| Nightly reconcile (aggregate/heal)     | existing       | `/api/yield/apy/reconcile` — `runReconcile()`, 7-day sliding window                                       |
+| GraphQL serving                        | existing       | `graphql-yoga` `/api/graphql`                                                                             |
+| Existing EVM position fetch            | existing       | portfolio data-fetch layer                                                                                |
+| Existing optimizer ranking engine      | existing       | optimizer module, unchanged                                                                               |
+| Blend V1 spot adapter                  | **shipped**    | `src/lib/protocols/blend/v1/apy-spot.ts`                                                                  |
+| Blend V2 spot adapter                  | **shipped**    | `src/lib/protocols/blend/v2/apy-spot.ts`                                                                  |
+| Blend data source                      | **shipped**    | `@blend-capital/blend-sdk` + `@stellar/stellar-sdk` over Soroban RPC                                      |
+| Stellar wallet connection              | **shipped**    | `StellarWalletContext.tsx` — Freighter / xBull / Lobstr / Albedo                                          |
+| `chainFamily` store field              | **shipped**    | `src/stores/walletStore.ts`                                                                               |
+| **Blend rate-parameter fields**        | **NEW (1.1a)** | `ir_mod` / `util` / `r_base` / `r_one` / `r_two` / `r_three` / `reactivity` + failure-path tests          |
+| **Blend historical adapter**           | **NEW (1.1b)** | `blend/v1/apy-history.ts` + `blend/v2/apy-history.ts` — `getApyHistory()`                                 |
+| **Stellar Hubble backfill**            | **NEW (1.1b)** | historical reserve-state reconstruction, consumed by existing `scripts/backfill-history.ts` and reconcile |
+| **SEP-10 authentication**              | **NEW (1.2)**  | backend challenge endpoint + client-side signing flow + session persistence                               |
+| **Blend position reads**               | **NEW (2.1a)** | `PoolUser.load` + bToken/dToken conversion                                                                |
+| **Health factor calculation**          | **NEW (2.1b)** | per-reserve collateral/liability factors, reused oracle price map                                         |
+| **Portfolio merge**                    | **NEW (2.2b)** | `Promise.allSettled` + partial-data indicator                                                             |
+| **CCTP trustline check & ChangeTrust** | **NEW (3.1b)** | `src/lib/execution/cctp/trustline.ts`                                                                     |
+| **CCTP burn (EVM) + forwarder mint**   | **NEW (3.1a)** | `src/lib/execution/cctp/` — Circle CCTP V2 + Stellar Soroban contracts                                    |
+| **CCTP attestation → Blend deposit**   | **NEW (3.1c)** | Circle Iris polling client + chained Blend Supply call                                                    |
+| **Optimizer ranking surfacing**        | **NEW (3.2a)** | Blend added as ranked venue + deep link into CCTP flow                                                    |
+| **Monitoring / gap-heal extension**    | **NEW (3.2b)** | Blend registered into existing reconcile + `pipeline_reports`                                             |
