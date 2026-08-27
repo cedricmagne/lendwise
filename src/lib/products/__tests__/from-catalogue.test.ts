@@ -396,17 +396,14 @@ describe('toBorrowProduct', () => {
     // BLND emissions and Aave's Merit both do this. `row()` defaults
     // apyRewards to 0.002; toBorrowProduct must not drop it the way it used
     // to.
-    const p = toBorrowProduct(
-      row({ kind: 'borrow' }),
-      {
-        apyDaily: 0.041,
-        apyMonthly: 0.039,
-        apyYearly: 0.037,
-        apyRewardsDaily: 0.003,
-        apyRewardsMonthly: 0.002,
-        apyRewardsYearly: 0.001,
-      }
-    )
+    const p = toBorrowProduct(row({ kind: 'borrow' }), {
+      apyDaily: 0.041,
+      apyMonthly: 0.039,
+      apyYearly: 0.037,
+      apyRewardsDaily: 0.003,
+      apyRewardsMonthly: 0.002,
+      apyRewardsYearly: 0.001,
+    })
 
     expect(p.apyRewards).toBe(0.002)
     expect(p.apyRewardsDaily).toBe(0.003)
