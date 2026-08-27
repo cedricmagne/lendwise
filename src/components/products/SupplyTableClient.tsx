@@ -9,7 +9,6 @@ import {
   ArrowUpRightFromSquare,
   CheckCircle2,
   ChevronRight,
-  Gift,
   Search,
   X,
   Zap,
@@ -22,6 +21,7 @@ import { ProtocolBadge } from '@/components/badge/ProtocolBadge'
 import { NetworkIcon, ProtocolIcon, TokenIcon } from '@/components/icon'
 import { SupplyingOptimizerView } from '@/components/optimizer/SupplyingOptimizerButton'
 import { ProductDetailDrawer } from '@/components/products/ProductDetailDrawer'
+import { RewardApyCell } from '@/components/products/RewardApyCell'
 import { TableSkeleton } from '@/components/products/TableSkeleton'
 import { StatsBar } from '@/components/stats/StatsBar'
 import {
@@ -285,23 +285,12 @@ const createColumns = (
         number | undefined
       const rewardsValue = row.original[HORIZON_CONFIG[horizon].rewardsKey] as
         number | undefined
-      const hasRewards = rewardsValue !== undefined && rewardsValue > 0
       return (
-        <div className="flex items-center gap-1.5">
-          <span className="font-mono">{formatApy(apyValue)}</span>
-          <span className="inline-flex w-3.5 shrink-0 items-center">
-            {hasRewards && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Gift className="h-3.5 w-3.5 text-emerald-400" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  Includes {(rewardsValue * 100).toFixed(2)}% of token rewards
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </span>
-        </div>
+        <RewardApyCell
+          apy={apyValue}
+          rewards={rewardsValue}
+          rewardsLabel={(pct) => `Includes ${pct}% of token rewards`}
+        />
       )
     },
     enableHiding: false,

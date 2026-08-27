@@ -173,6 +173,19 @@ export interface BorrowProduct {
   apyDaily?: number
   apyMonthly?: number
   apyYearly?: number
+  /**
+   * Reward component of the matching APY horizon, in the same unit (APY, not
+   * points). Only used to tell "this rate includes incentives" apart from a pure
+   * base rate — `undefined` means unknown, `0` means no rewards.
+   *
+   * A borrow rate is usually a pure cost, but not always: Blend emits BLND
+   * to borrowers (see blend/common/utils.ts:computeEmissionsApr) and Aave's
+   * Merit program does the same. Same contract as SupplyProduct.apyRewards.
+   */
+  apyRewards?: number
+  apyRewardsDaily?: number
+  apyRewardsMonthly?: number
+  apyRewardsYearly?: number
   productId?: string
   link?: string
 }

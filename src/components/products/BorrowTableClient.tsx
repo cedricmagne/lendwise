@@ -22,6 +22,7 @@ import { ProtocolBadge } from '@/components/badge/ProtocolBadge'
 import { NetworkIcon, ProtocolIcon, TokenIcon } from '@/components/icon'
 import { BorrowingOptimizerView } from '@/components/optimizer/BorrowingOptimizerButton'
 import { ProductDetailDrawer } from '@/components/products/ProductDetailDrawer'
+import { RewardApyCell } from '@/components/products/RewardApyCell'
 import { TableSkeleton } from '@/components/products/TableSkeleton'
 import { StatsBar } from '@/components/stats/StatsBar'
 import {
@@ -374,7 +375,17 @@ const createColumns = (
     cell: ({ row }) => {
       const apyValue = row.original[HORIZON_CONFIG[horizon].apyKey] as
         number | undefined
-      return <span className="font-mono">{formatApy(apyValue)}</span>
+      const rewardsValue = row.original[HORIZON_CONFIG[horizon].rewardsKey] as
+        number | undefined
+      return (
+        <RewardApyCell
+          apy={apyValue}
+          rewards={rewardsValue}
+          // Opposite framing from /supply on purpose: a borrow reward
+          // reduces what the borrower pays, it doesn't add to a yield.
+          rewardsLabel={(pct) => `Reduced by ${pct}% of token rewards`}
+        />
+      )
     },
     enableHiding: false,
   },

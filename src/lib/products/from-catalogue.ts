@@ -196,7 +196,7 @@ function collateralTokens(p: ProductRow): Token[] {
 
 /**
  * The borrow table row. Mirrors `toSupplyProduct` field for field — same
- * presentation helpers, same catalogue row — with two differences that come
+ * presentation helpers, same catalogue row — with one difference that comes
  * from what a borrow product actually is:
  *
  *   - `assetAmount(Usd)` and `liquidityAmount(Usd)` read `row.supplyAssets` /
@@ -204,9 +204,11 @@ function collateralTokens(p: ProductRow): Token[] {
  *     borrow-products.ts does the same (verified in aave/v3, morpho/v1,
  *     compound/v3): the "amount" column on `/borrow` is the market's total
  *     deposits, i.e. how deep the pool is — apy is what's borrow-specific.
- *   - No `apyRewards*` fields: `BorrowProduct` carries no reward columns
- *     (unlike `SupplyProduct`), because a borrow rate is a cost, not a yield
- *     rewards can offset.
+ *
+ * `apyRewards*` IS carried, unlike an earlier version of this function: a
+ * borrow rate is usually a pure cost, but Blend (BLND) and Aave (Merit) both
+ * emit rewards on the debt side too. See
+ * ../../../agent/specs/2026-08-26-borrow-side-reward-emissions-design.md.
  */
 export function toBorrowProduct(
   row: CatalogueRow,
@@ -238,6 +240,10 @@ export function toBorrowProduct(
     apyDaily: e?.apyDaily,
     apyMonthly: e?.apyMonthly,
     apyYearly: e?.apyYearly,
+    apyRewards: row.apyRewards,
+    apyRewardsDaily: e?.apyRewardsDaily,
+    apyRewardsMonthly: e?.apyRewardsMonthly,
+    apyRewardsYearly: e?.apyRewardsYearly,
     productId: p.id,
     link: productLink(p),
   }
