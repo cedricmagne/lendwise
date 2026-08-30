@@ -353,7 +353,7 @@ function PortfolioPanel() {
           >
             <span className="bg-border/60 border-border text-muted-foreground grid h-8 w-8 place-items-center rounded border font-mono text-[10px] font-semibold">
               <Image
-                src={`/icons/native/${f.ic}`}
+                src={`/icons/tokens/${f.ic}`}
                 alt={f.name}
                 width={32}
                 height={32}

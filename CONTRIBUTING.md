@@ -115,7 +115,7 @@ reference implementation.
 
 Good entry points that don't require understanding the whole pipeline:
 
-- **Token icons** — add an SVG to `public/icons/native/{SYMBOL}.svg` for an asset currently
+- **Token icons** — add an SVG to `public/icons/tokens/{SYMBOL}.svg` for an asset currently
   falling back to CoinGecko.
 - **Docs** — fix a typo, clarify a setup step, improve an explanation in the README or in
   [`src/lib/protocols/README.md`](src/lib/protocols/README.md).

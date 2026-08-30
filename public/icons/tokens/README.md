@@ -1,4 +1,4 @@
-# Native Token Icons
+# Token Icons
 
 This directory contains SVG icons for high-priority tokens that should load instantly without API calls.
 
@@ -52,7 +52,7 @@ SVG files should be optimized:
 You can use [SVGO](https://github.com/svg/svgo) to optimize:
 
 ```bash
-npx svgo -f public/icons/native
+npx svgo -f public/icons/tokens
 ```
 
 ## Usage

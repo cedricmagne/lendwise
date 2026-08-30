@@ -33,8 +33,8 @@ export const CurrencyIcon = ({
     )
   }
 
-  // Construct the path to the native currency icon
-  const iconPath = `/icons/native/${symbol.toLowerCase()}.svg`
+  // Construct the path to the fiat currency icon
+  const iconPath = `/icons/fiat/${symbol.toLowerCase()}.svg`
 
   // Error state - show fallback with symbol initials
   if (error) {

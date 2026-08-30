@@ -4,17 +4,17 @@ import { getStaticTokenIcon } from '@/lib/token-icons'
 
 describe('getStaticTokenIcon', () => {
   it('resolves a symbol to its group icon', () => {
-    expect(getStaticTokenIcon('eth')).toBe('/icons/native/eth.svg')
+    expect(getStaticTokenIcon('eth')).toBe('/icons/tokens/eth.svg')
   })
 
   it('is case-insensitive', () => {
-    expect(getStaticTokenIcon('ETH')).toBe('/icons/native/eth.svg')
-    expect(getStaticTokenIcon('Btc')).toBe('/icons/native/btc.svg')
+    expect(getStaticTokenIcon('ETH')).toBe('/icons/tokens/eth.svg')
+    expect(getStaticTokenIcon('Btc')).toBe('/icons/tokens/btc.svg')
   })
 
   it('resolves every symbol in a shared group to the same icon', () => {
     // eth and weth are a wrapped-token family sharing one logo, per
-    // public/icons/native/README.md's "wrapped tokens can reuse the
+    // public/icons/tokens/README.md's "wrapped tokens can reuse the
     // underlying asset's icon" convention.
     expect(getStaticTokenIcon('weth')).toBe(getStaticTokenIcon('eth'))
   })
