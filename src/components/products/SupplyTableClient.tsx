@@ -774,7 +774,7 @@ export function SupplyTableClient() {
                       ))}
                     </div>
                     {/* Scrollable rows */}
-                    <div className="max-h-[30rem] space-y-2 overflow-y-auto px-7 py-4">
+                    <div className="max-h-120 space-y-2 overflow-y-auto px-7 py-4">
                       {selectedData.map((pool) => {
                         const apyCols = [
                           { key: '1d', value: pool.apy },
@@ -787,7 +787,7 @@ export function SupplyTableClient() {
                             key={`${pool.protocol}-${pool.poolChainId}-${pool.poolId}-${pool.assetAddress}`}
                             className="border-border/50 hover:border-border bg-secondary/30 flex items-center gap-4 rounded-xl border p-3.5 transition-colors"
                           >
-                            <div className="from-primary to-primary/30 h-10 w-1 shrink-0 rounded-full bg-gradient-to-b" />
+                            <div className="from-primary to-primary/30 h-10 w-1 shrink-0 rounded-full bg-linear-to-b" />
                             <div className="w-32 shrink-0">
                               <ProtocolBadge protocol={pool.protocol} />
                             </div>
