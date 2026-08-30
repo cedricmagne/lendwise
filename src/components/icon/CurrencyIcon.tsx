@@ -6,6 +6,8 @@ import Image from 'next/image'
 
 import { Coins } from 'lucide-react'
 
+import { getStaticTokenIcon } from '@/lib/token-icons'
+
 type CurrencyIconProps = {
   symbol?: string
   size?: number
@@ -33,8 +35,10 @@ export const CurrencyIcon = ({
     )
   }
 
-  // Construct the path to the fiat currency icon
-  const iconPath = `/icons/fiat/${symbol.toLowerCase()}.svg`
+  // Crypto codes (BTC, ETH, ...) live under /icons/tokens/, fiat under
+  // /icons/fiat/ — check the token table first since it's the smaller set.
+  const iconPath =
+    getStaticTokenIcon(symbol) ?? `/icons/fiat/${symbol.toLowerCase()}.svg`
 
   // Error state - show fallback with symbol initials
   if (error) {
