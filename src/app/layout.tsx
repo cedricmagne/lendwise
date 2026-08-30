@@ -39,8 +39,9 @@ const zalando = Zalando_Sans_SemiExpanded({
 })
 
 export const metadata: Metadata = {
-  title: 'Yield Optimizer - DeFi Portfolio Optimization',
-  description: 'Maximize yields and minimize costs across DeFi protocols',
+  title: 'One standard for lending markets.',
+  description:
+    'Track, compare and analyze DeFi lending markets across protocols and chains. Compare APYs, rates and yields to discover opportunities and make smarter decisions.',
 }
 
 export default function RootLayout({
