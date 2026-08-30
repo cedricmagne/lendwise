@@ -236,9 +236,15 @@ const createColumns = (
       if (collaterals.length === 0) return null
       if (collaterals.length === 1) {
         return (
-          <div className="flex w-full items-center gap-2">
-            <TokenIcon symbol={collaterals[0].symbol} />
-            <span>{collaterals[0].symbol}</span>
+          <div className="flex w-full items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="shrink-0">
+                  <TokenIcon symbol={collaterals[0].symbol} />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{collaterals[0].symbol}</TooltipContent>
+            </Tooltip>
           </div>
         )
       }
