@@ -18,24 +18,24 @@
  */
 import { Version } from '@blend-capital/blend-sdk'
 
+import { getBigQueryClient } from '@/lib/bigquery/client'
 import {
   syncProviderProducts,
   upsertProducts,
 } from '@/lib/db/repositories/products'
-import { fetchBlendPoolDeploys } from '@/lib/hubble/blend-deploys'
-import { getHubbleClient } from '@/lib/hubble/client'
 import { getBackstop } from '@/lib/protocols/blend/common/api'
 import { BLEND_PROVIDER } from '@/lib/protocols/blend/common/config'
+import { fetchBlendPoolDeploys } from '@/lib/protocols/blend/common/hubble'
 import { fetchBlendV1Products } from '@/lib/protocols/blend/v1/products'
 import { fetchBlendV2Products } from '@/lib/protocols/blend/v2/products'
 
 async function main(): Promise<void> {
   console.log('\n🔄 Blend catalogue bootstrap (Hubble)\n')
 
-  const client = getHubbleClient()
+  const client = getBigQueryClient()
   if (!client) {
     console.error(
-      '❌ Hubble client unavailable — set GCP_PROJECT and ' +
+      '❌ BigQuery client unavailable — set GCP_PROJECT and ' +
         'GCP_SERVICE_ACCOUNT_BASE64 (base64-encoded service-account JSON) in ' +
         'the environment.'
     )
