@@ -4,6 +4,7 @@ import { type ProtocolName } from '@/config/protocols-meta'
 import { YIELD_ADAPTERS } from '@/config/protocols-server'
 import { upsertHourlySlots } from '@/lib/db/repositories/apy'
 import type { SpotPayload } from '@/lib/db/types'
+import { catalogueFetchOpts } from '@/lib/protocols/core/catalogue-opts'
 import { spotPayloadSoftSchema } from '@/lib/protocols/core/validation'
 
 // ─── Hour standardization ───────────────────────────────────────────────────────
@@ -96,8 +97,16 @@ export async function collectApySpot(
     }
   }
 
+  // Catalogue-seeded adapters (Blend — no on-chain market list) get their pool
+  // set from `products` here; see src/lib/protocols/core/catalogue-opts.ts. This
+  // file stays adapter-agnostic. `activeOnly: true` — the 10-minute collector
+  // only probes what is currently listed.
+  const fetchOpts = await catalogueFetchOpts(ids, { activeOnly: true })
+
   const results = await Promise.allSettled(
-    ids.map(async (id) => (await YIELD_ADAPTERS[id]()).getApySpot())
+    ids.map(async (id) =>
+      (await YIELD_ADAPTERS[id]()).getApySpot(fetchOpts.get(id))
+    )
   )
 
   const allPayloads: SpotPayload[] = []

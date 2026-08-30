@@ -28,6 +28,12 @@ export interface AdapterChain {
 export interface FetchOpts {
   /** Filter by canonical chain_id. Replaces the old name-matching chainFilter. */
   chainIds?: number[]
+  /**
+   * Pool ids to enumerate, pre-resolved by the caller when pool discovery does
+   * not belong to the adapter (Blend). UPPERCASE strkey, ready to flow straight
+   * into `PoolV{1,2}.load`. Absent for adapters that discover their own markets.
+   */
+  poolIds?: string[]
 }
 
 /**
@@ -181,6 +187,14 @@ export interface YieldAdapter {
   /** chainId → chain config. Source of truth for supported chains. */
   chains: Record<number, AdapterChain>
   ingestion?: IngestionFloors
+  /**
+   * `false` when the adapter has no way to enumerate its own markets on-chain
+   * (Blend: the factory exposes no pool list). The pipeline then pre-resolves
+   * the pool set from the `products` catalogue and passes it via
+   * `FetchOpts.poolIds` before calling `getProducts` / `getApySpot`. Default
+   * (absent) = the adapter enumerates its markets itself.
+   */
+  ownsMarketDiscovery?: boolean
 
   getProducts(opts?: FetchOpts): Promise<(SupplyProduct | BorrowProduct)[]>
   getApySpot(opts?: FetchOpts): Promise<SpotPayload[]>

@@ -4,36 +4,35 @@ import type { BorrowProduct, Collateral, SupplyProduct } from '@/lib/db/types'
 import type { FetchOpts } from '@/lib/protocols/core/types'
 
 import {
-  getBackstop,
   getPool,
   getTokenMetadata,
+  isRpcRefusal,
   primeTokenMetadata,
 } from '../common/api'
 import { BLEND_PROVIDER } from '../common/config'
 import { buildProductId } from '../common/utils'
+import { blendPoolIds } from '../listing'
 import { BLEND_V1_CHAINS } from './config'
 
 /**
- * Fetch static pool metadata for all active Morpho Blue markets.
- * Returns SupplyPool and BorrowPool.
- * One market → two documents (supply + borrow).
+ * Fetch static pool metadata for every Blend V1 pool.
+ * Returns SupplyProduct and BorrowProduct — one reserve → two documents.
  * Called by the daily pools sync job.
+ *
+ * The pool set comes from `./listing` — `opts.poolIds` (the `products`
+ * catalogue, injected by the pipeline) unioned with a fresh factory Deploy scan.
  */
 export async function fetchBlendV1Products(
   opts?: FetchOpts
 ): Promise<(SupplyProduct | BorrowProduct)[]> {
-  let chainIds = Object.keys(BLEND_V1_CHAINS).map(Number)
-  if (opts?.chainIds?.length) {
-    chainIds = chainIds.filter((id) => opts.chainIds!.includes(id))
+  // No `opts.chainIds` handling: Blend is single-chain (Stellar, id -1), so the
+  // filter is a no-op here. `apy-spot.ts` still threads it for a log line only.
+  const poolIds = await blendPoolIds('v1', opts, 'catalogue')
+  if (poolIds.length === 0) {
+    console.warn('[pools:blend_v1] no pool ids resolved — skipping')
+    return []
   }
-
-  const backstop = await getBackstop({ version: Version.V1 })
-  const poolIds = backstop.config?.rewardZone ?? []
-
-  console.log(`Discovered ${poolIds.length} pools in the Backstop reward zone.`)
-  console.log(`Reading ${poolIds.length} pool(s)…\n`)
-
-  console.log('chainIds', chainIds)
+  console.log(`[pools:blend_v1] ${poolIds.length} pools`)
 
   const products: (SupplyProduct | BorrowProduct)[] = []
   let borrowProductsCount = 0
@@ -41,119 +40,142 @@ export async function fetchBlendV1Products(
   const now = new Date()
 
   for (const poolId of poolIds) {
-    const pool = await getPool({ version: Version.V1, poolId })
-    const name = pool.metadata?.name ?? poolId
-    console.log(`■ Pool "${name}" (${poolId}) — ${pool.reserves.size} reserves`)
+    try {
+      const pool = await getPool({ version: Version.V1, poolId })
 
-    // One request for the pool.s token metadata instead of one per reserve.
-    await primeTokenMetadata([...pool.reserves.keys()])
+      // Hubble surfaces every historical `Deploy`, including superseded
+      // redeployments still in `status: Setup` with no positions; skip them.
+      // Do NOT filter statuses 4/5: pools frozen post-hack still hold real
+      // user funds and must stay listed.
+      if (pool.metadata?.status === 6) {
+        console.log(
+          `[pools:blend_v1] pool ${poolId} skipped: status 6 (setup / not launched)`
+        )
+        continue
+      }
 
-    // ─── Build collateral list for this pool ────────────────────────────
-    // All reserves usable as collateral in this pool — Blend pools are
-    // multi-collateral, like AAVE (unlike Morpho's isolated pairs).
-    const poolCollaterals: Collateral[] = []
-    for (const [assetId, reserve] of pool.reserves) {
-      const collateralFactor = reserve.getCollateralFactor()
-      if (collateralFactor <= 0) continue
+      const name = pool.metadata?.name ?? poolId
+      console.log(
+        `■ Pool "${name}" (${poolId}) — ${pool.reserves.size} reserves`
+      )
 
-      const token = await getTokenMetadata(assetId)
+      // One request for the pool's token metadata instead of one per reserve.
+      await primeTokenMetadata([...pool.reserves.keys()])
 
-      poolCollaterals.push({
-        symbol: token.symbol,
-        name: token.name,
-        address: assetId,
-        decimals: token.decimals,
-        ltv: null, // Blend exposes a single collateral factor, no separate max-LTV
-        lltv: collateralFactor,
-        canBeCollateral: true,
-      })
-    }
+      // ─── Build collateral list for this pool ────────────────────────────
+      // All reserves usable as collateral in this pool — Blend pools are
+      // multi-collateral, like AAVE (unlike Morpho's isolated pairs).
+      const poolCollaterals: Collateral[] = []
+      for (const [assetId, reserve] of pool.reserves) {
+        const collateralFactor = reserve.getCollateralFactor()
+        if (collateralFactor <= 0) continue
 
-    for (const assetId of pool.reserves.keys()) {
-      const token = await getTokenMetadata(assetId)
+        const token = await getTokenMetadata(assetId)
 
-      const supplyProduct: SupplyProduct = {
-        _id: buildProductId({ poolId, assetId, kind: 'supply' }),
-        kind: 'supply',
-        protocol: {
-          provider: BLEND_PROVIDER,
-          type: 'reserve',
-          version: Version.V1.toLowerCase(),
-          subgraphUrl: '',
-          name,
-          chain: {
-            id: -1,
-            name: BLEND_V1_CHAINS[-1].slug,
-          },
-          address: poolId,
-          meta: {
-            wasmHash: pool.metadata?.wasmHash ?? '',
-            admin: pool.metadata?.admin ?? '',
-            name: pool.metadata?.name ?? '',
-            backstop: pool.metadata?.backstop ?? '',
-            backstopRate: pool.metadata?.backstopRate ?? 0,
-            maxPositions: pool.metadata?.maxPositions ?? 0,
-            minCollateral: (pool.metadata?.minCollateral ?? 0n).toString(),
-            oracle: pool.metadata?.oracle ?? '',
-            status: pool.metadata?.status ?? 0,
-            reserveList: pool.metadata?.reserveList ?? [],
-            latestLedger: pool.metadata?.latestLedger ?? 0,
-          },
-        },
-        asset: {
+        poolCollaterals.push({
           symbol: token.symbol,
           name: token.name,
           address: assetId,
           decimals: token.decimals,
-        },
-        active: true,
-        createdAt: now,
-        updatedAt: now,
+          ltv: null, // Blend exposes a single collateral factor, no separate max-LTV
+          lltv: collateralFactor,
+          canBeCollateral: true,
+        })
       }
-      products.push(supplyProduct)
-      vaultProductsCount++
 
-      const borrowProduct: BorrowProduct = {
-        _id: buildProductId({ poolId, assetId, kind: 'borrow' }),
-        kind: 'borrow',
-        protocol: {
-          provider: BLEND_PROVIDER,
-          type: 'reserve',
-          version: Version.V1.toLowerCase(),
-          subgraphUrl: '',
-          name,
-          chain: {
-            id: -1,
-            name: BLEND_V1_CHAINS[-1].slug,
+      for (const assetId of pool.reserves.keys()) {
+        const token = await getTokenMetadata(assetId)
+
+        const supplyProduct: SupplyProduct = {
+          _id: buildProductId({ poolId, assetId, kind: 'supply' }),
+          kind: 'supply',
+          protocol: {
+            provider: BLEND_PROVIDER,
+            type: 'reserve',
+            version: Version.V1.toLowerCase(),
+            subgraphUrl: '',
+            name,
+            chain: {
+              id: -1,
+              name: BLEND_V1_CHAINS[-1].slug,
+            },
+            address: poolId,
+            meta: {
+              wasmHash: pool.metadata?.wasmHash ?? '',
+              admin: pool.metadata?.admin ?? '',
+              name: pool.metadata?.name ?? '',
+              backstop: pool.metadata?.backstop ?? '',
+              backstopRate: pool.metadata?.backstopRate ?? 0,
+              maxPositions: pool.metadata?.maxPositions ?? 0,
+              minCollateral: (pool.metadata?.minCollateral ?? 0n).toString(),
+              oracle: pool.metadata?.oracle ?? '',
+              status: pool.metadata?.status ?? 0,
+              reserveList: pool.metadata?.reserveList ?? [],
+              latestLedger: pool.metadata?.latestLedger ?? 0,
+            },
           },
-          address: poolId,
-          meta: {
-            wasmHash: pool.metadata?.wasmHash ?? '',
-            admin: pool.metadata?.admin ?? '',
-            name: pool.metadata?.name ?? '',
-            backstop: pool.metadata?.backstop ?? '',
-            backstopRate: pool.metadata?.backstopRate ?? 0,
-            maxPositions: pool.metadata?.maxPositions ?? 0,
-            minCollateral: (pool.metadata?.minCollateral ?? 0n).toString(),
-            oracle: pool.metadata?.oracle ?? '',
-            status: pool.metadata?.status ?? 0,
-            reserveList: pool.metadata?.reserveList ?? [],
-            latestLedger: pool.metadata?.latestLedger ?? 0,
+          asset: {
+            symbol: token.symbol,
+            name: token.name,
+            address: assetId,
+            decimals: token.decimals,
           },
-        },
-        asset: {
-          symbol: token.symbol,
-          name: token.name,
-          address: assetId,
-          decimals: token.decimals,
-        },
-        collaterals: poolCollaterals,
-        active: true,
-        createdAt: now,
-        updatedAt: now,
+          active: true,
+          createdAt: now,
+          updatedAt: now,
+        }
+        products.push(supplyProduct)
+        vaultProductsCount++
+
+        const borrowProduct: BorrowProduct = {
+          _id: buildProductId({ poolId, assetId, kind: 'borrow' }),
+          kind: 'borrow',
+          protocol: {
+            provider: BLEND_PROVIDER,
+            type: 'reserve',
+            version: Version.V1.toLowerCase(),
+            subgraphUrl: '',
+            name,
+            chain: {
+              id: -1,
+              name: BLEND_V1_CHAINS[-1].slug,
+            },
+            address: poolId,
+            meta: {
+              wasmHash: pool.metadata?.wasmHash ?? '',
+              admin: pool.metadata?.admin ?? '',
+              name: pool.metadata?.name ?? '',
+              backstop: pool.metadata?.backstop ?? '',
+              backstopRate: pool.metadata?.backstopRate ?? 0,
+              maxPositions: pool.metadata?.maxPositions ?? 0,
+              minCollateral: (pool.metadata?.minCollateral ?? 0n).toString(),
+              oracle: pool.metadata?.oracle ?? '',
+              status: pool.metadata?.status ?? 0,
+              reserveList: pool.metadata?.reserveList ?? [],
+              latestLedger: pool.metadata?.latestLedger ?? 0,
+            },
+          },
+          asset: {
+            symbol: token.symbol,
+            name: token.name,
+            address: assetId,
+            decimals: token.decimals,
+          },
+          collaterals: poolCollaterals,
+          active: true,
+          createdAt: now,
+          updatedAt: now,
+        }
+        products.push(borrowProduct)
+        borrowProductsCount++
       }
-      products.push(borrowProduct)
-      borrowProductsCount++
+    } catch (err) {
+      if (isRpcRefusal(err)) throw err // 500 → QStash replays
+      console.error(
+        `[pools:blend_v1] pool ${poolId} skipped: ${
+          err instanceof Error ? err.message : err
+        }`
+      )
     }
   }
 

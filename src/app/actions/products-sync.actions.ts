@@ -9,6 +9,8 @@ import {
   upsertProducts,
 } from '@/lib/db/repositories/products'
 import type { BorrowProduct, Product, SupplyProduct } from '@/lib/db/types'
+import { catalogueFetchOpts } from '@/lib/protocols/core/catalogue-opts'
+import type { FetchOpts } from '@/lib/protocols/core/types'
 
 // ─── Product shape guard ─────────────────────────────────────────────────────
 // Non-crashing shape only: a product without a usable `_id` would corrupt the
@@ -95,12 +97,21 @@ const ENUMERATION_RETRY_DELAY_MS = 5_000
  * a few seconds, no backoff affordable inside a cron invocation outlasts it
  * either — the next hourly run is the real fallback, and reconcile repairs the
  * hourly rows once the products exist.
+ *
+ * `opts.poolIds` — the catalogue set for a catalogue-seeded adapter — is
+ * resolved once by `catalogueFetchOpts` before this runs and reused by both
+ * attempts; it is never re-read from the DB inside the `catch`. Anything the
+ * adapter layers on top of it (Blend's `listing.ts` adds a fresh factory
+ * `Deploy` scan) may resolve differently between the two attempts — harmless,
+ * since those terms are additive and a retry just gives a transient RPC refusal
+ * a second chance.
  */
 async function enumerate(
-  id: ProtocolName
+  id: ProtocolName,
+  opts?: FetchOpts
 ): Promise<(SupplyProduct | BorrowProduct)[]> {
   try {
-    return await (await YIELD_ADAPTERS[id]()).getProducts()
+    return await (await YIELD_ADAPTERS[id]()).getProducts(opts)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.warn(
@@ -108,7 +119,7 @@ async function enumerate(
         ` retrying once in ${ENUMERATION_RETRY_DELAY_MS}ms`
     )
     await new Promise((r) => setTimeout(r, ENUMERATION_RETRY_DELAY_MS))
-    return (await YIELD_ADAPTERS[id]()).getProducts()
+    return (await YIELD_ADAPTERS[id]()).getProducts(opts)
   }
 }
 
@@ -142,7 +153,19 @@ export async function syncProducts(
     }
   }
 
-  const results = await Promise.allSettled(ids.map(enumerate))
+  // Catalogue-seeded adapters (Blend — no on-chain market list) get their pool
+  // set from `products` here; see src/lib/protocols/core/catalogue-opts.ts. This
+  // file stays adapter-agnostic. Resolved ONCE per run so the retry inside
+  // `enumerate` reuses the same set. `activeOnly: false` — the hourly sync
+  // probes everything ever seen, so a relisting is caught.
+  const fetchOpts = await catalogueFetchOpts(ids, { activeOnly: false })
+
+  // `enumerate` is called through an arrow, not passed by reference: as a bare
+  // `.map` callback it would receive `(id, index, array)` and bind the array to
+  // its second parameter.
+  const results = await Promise.allSettled(
+    ids.map((id) => enumerate(id, fetchOpts.get(id)))
+  )
 
   const allProducts: Product[] = []
   const protoCounts: Partial<Record<ProtocolName, number>> = {}

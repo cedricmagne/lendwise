@@ -418,6 +418,32 @@ export async function listActiveProducts(): Promise<
     .where(eq(products.active, true))
 }
 
+/**
+ * Distinct on-chain contract addresses in the product registry for a provider
+ * (optionally one version), sorted, values as stored.
+ *
+ * The catalogue-seeded enumeration source for adapters with no on-chain market
+ * list of their own (`YieldAdapter.ownsMarketDiscovery === false`, Blend today).
+ * The pipeline reads this and hands it to the adapter via `FetchOpts.poolIds`;
+ * the adapter never touches the DB. An empty result is a valid state (a fresh
+ * environment before its bootstrap script has run), not a floor to patch.
+ */
+export async function distinctProtocolAddresses(
+  provider: string,
+  version?: string,
+  opts?: { activeOnly?: boolean }
+): Promise<string[]> {
+  const conds = [eq(products.provider, provider)]
+  if (version) conds.push(eq(products.version, version))
+  if (opts?.activeOnly) conds.push(eq(products.active, true))
+  const rows = await db
+    .selectDistinct({ address: products.protocolAddress })
+    .from(products)
+    .where(and(...conds))
+    .orderBy(asc(products.protocolAddress))
+  return rows.map((r) => r.address)
+}
+
 // ─── Public catalogue reads (GraphQL / MCP) ─────────────────────────────────
 
 export interface ProductFilters {

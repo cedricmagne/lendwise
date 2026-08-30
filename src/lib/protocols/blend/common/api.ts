@@ -3,11 +3,13 @@ import {
   TokenMetadata as BlendTokenMetadata,
   FixedMath,
   Network,
+  PoolFactoryEventType,
   PoolV1,
   PoolV2,
   Version,
   getOracleDecimals,
   getOraclePrice,
+  poolFactoryEventFromEventResponse,
 } from '@blend-capital/blend-sdk'
 import { Address, Networks, rpc as stellarRpc } from '@stellar/stellar-sdk'
 
@@ -154,6 +156,105 @@ export async function getPool({
     return await pacedRpc(() => PoolV2.load(network, poolId))
   }
   return await pacedRpc(() => PoolV1.load(network, poolId))
+}
+
+/**
+ * Every pool address the factory has deployed, read from its `Deploy` events
+ * over the RPC's full retention window (~7 days on mainnet). This is the ONLY
+ * on-chain enumeration Blend exposes: the factory contract has `is_pool` (a
+ * validator) and `deploy`, but no `get_pools`, and blend-sdk 3.3.0 ships no
+ * `PoolFactoryV2` reader. `blend/listing.ts` unions it into the `getProducts`
+ * pool set — it catches a pool minted in the last week before it lands in
+ * `products`.
+ *
+ * RPC only, never the DB — same rule as `getBackstop`. This function rejects on
+ * a refusal (429/5xx/timeout) and on any malformed-event failure; it does not
+ * decide what that means. `blend/listing.ts` catches both and degrades this
+ * term to `[]` (the union proceeds on the known catalogue set alone) — a pool
+ * younger than the RPC window just waits for the next run.
+ *
+ * Uses `server._getEvents` (the RAW variant) on purpose:
+ * `poolFactoryEventFromEventResponse` decodes the base64 XDR itself and must be
+ * handed the raw strings — a pre-parsed `EventResponse` makes it throw on every
+ * event. Raw base64 also sidesteps the dual-XDR-copy identity trap (see
+ * `primeTokenMetadata`).
+ */
+export async function getFactoryDeployedPools(
+  version: 'v1' | 'v2'
+): Promise<string[]> {
+  const backstop = await getBackstop({
+    version: version === 'v2' ? Version.V2 : Version.V1,
+  })
+  const factoryId = backstop.config.poolFactory
+
+  const server = new stellarRpc.Server(network.rpc, network.opts)
+
+  // Oldest ledger the RPC still serves events for; +1 keeps us strictly inside
+  // the range `getEvents` accepts.
+  const { oldestLedger } = await pacedRpc(() => server.getHealth())
+  const startLedger = oldestLedger + 1
+
+  const PAGE_LIMIT = 200
+  const MAX_PAGES = 30
+  const filters: stellarRpc.Api.EventFilter[] = [
+    { type: 'contract', contractIds: [factoryId] },
+  ]
+
+  const events: stellarRpc.Api.RawEventResponse[] = []
+  let cursor: string | undefined
+  let truncated = true
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const res = await pacedRpc(() =>
+      server._getEvents(
+        cursor
+          ? { filters, cursor, limit: PAGE_LIMIT }
+          : { filters, startLedger, limit: PAGE_LIMIT }
+      )
+    )
+    events.push(...res.events)
+    cursor = res.cursor
+    // A missing cursor after a full page means the RPC gave us everything it
+    // has; without this guard the next iteration falls back to the `startLedger`
+    // branch and re-requests the identical first page up to `MAX_PAGES` times.
+    if (!cursor || res.events.length < PAGE_LIMIT) {
+      truncated = false
+      break
+    }
+  }
+
+  // Should never fire — the factory has deployed ~11 pools in its lifetime and
+  // the window is a week — but a silent partial list is worse than a logged one.
+  if (truncated) {
+    console.warn(
+      `[blend:discovery] factory Deploy scan hit the ${MAX_PAGES}-page guard ` +
+        `for ${version}; the pool list may be incomplete`
+    )
+  }
+
+  return deployedPoolsFromEvents(events)
+}
+
+/**
+ * Raw factory `getEvents` responses → the UPPERCASE, deduped, sorted list of
+ * deployed pool addresses. Pure and network-free so it is unit-tested directly;
+ * `getFactoryDeployedPools` owns the RPC pagination that feeds it.
+ *
+ * Each event goes through blend-sdk's `poolFactoryEventFromEventResponse`,
+ * which returns `undefined` for anything that is not a well-formed factory
+ * event. Only `Deploy` carries a pool address.
+ */
+export function deployedPoolsFromEvents(
+  events: readonly stellarRpc.Api.RawEventResponse[]
+): string[] {
+  const addresses: string[] = []
+  for (const ev of events) {
+    const parsed = poolFactoryEventFromEventResponse(ev)
+    if (parsed?.eventType === PoolFactoryEventType.Deploy) {
+      addresses.push(parsed.poolAddress)
+    }
+  }
+  return [...new Set(addresses.map((a) => a.toUpperCase()))].sort()
 }
 
 /**

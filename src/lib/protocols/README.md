@@ -40,8 +40,12 @@ src/lib/protocols/
 │       ├── queries.ts + generated/  # GraphQL documents + codegen output
 │       └── …
 ├── morpho/common/ + v1/       # same shape; v1/config.ts also owns MORPHO_V1_INGESTION
-└── compound/common/ + v3/     # same shape; per-chain subgraph overrides live in
-    └── {ethereum,polygon,…}/  #   chain dirs consumed via createChainRegistry
+├── compound/common/ + v3/     # same shape; per-chain subgraph overrides live in
+│   └── {ethereum,polygon,…}/  #   chain dirs consumed via createChainRegistry
+└── blend/                     # catalogue-seeded (ownsMarketDiscovery: false) — see below
+    ├── common/                #   config, api (RPC), utils — shared by v1 + v2
+    ├── listing.ts            #   THE predicate, at PROVIDER level (one rule, both versions)
+    └── v{1,2}/               #   index.ts, meta.ts, products.ts, apy-spot.ts
 ```
 
 Three registries wire adapters into the app:
@@ -80,6 +84,7 @@ export interface YieldAdapter {
   version: string //                                          ('v3')
   chains: Record<number, AdapterChain> // chainId → { slug, …extras }
   ingestion?: IngestionFloors
+  ownsMarketDiscovery?: boolean //  false → the pipeline seeds opts.poolIds from `products`
 
   getProducts(opts?: FetchOpts): Promise<(SupplyProduct | BorrowProduct)[]>
   getApySpot(opts?: FetchOpts): Promise<SpotPayload[]>
@@ -98,6 +103,16 @@ export interface YieldAdapter {
   neighbouring hour instead. Compound went 1,160 healed rows without a single real observation that way, purely
   because its subgraphs' hourly/daily accountings were never declared on the adapter
   (fixed 2026-07-24). Omit only when the protocol genuinely publishes no history.
+
+An adapter with no on-chain way to enumerate its own markets sets
+`ownsMarketDiscovery: false`. The pipeline then pre-resolves its pool set from the
+`products` catalogue (`distinctProtocolAddresses`) and passes it in via
+`FetchOpts.poolIds` before calling `getProducts` / `getApySpot` — the same
+DB-blind contract as `getApyHistory(params.targets)`. `getProducts` may union
+that known set with a fresh on-chain scan (`listing.ts`); `getApySpot` takes the
+known set alone (the catalogue is authoritative for what to collect). Such a
+protocol also ships a one-off bootstrap script (`scripts/<name>-bootstrap.ts`)
+to populate `products` on a fresh environment — Blend's reads Hubble.
 
 ### The history contract — one method, one merged dataset
 

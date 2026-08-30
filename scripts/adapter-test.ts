@@ -7,6 +7,7 @@
  */
 import { PROTOCOLS_META, type ProtocolName } from '@/config/protocols-meta'
 import { YIELD_ADAPTERS } from '@/config/protocols-server'
+import { distinctProtocolAddresses } from '@/lib/db/repositories/products'
 import type { Product } from '@/lib/db/types'
 import { toHistoryResult } from '@/lib/protocols/core/history-result'
 import type { HistoryTarget, YieldAdapter } from '@/lib/protocols/core/types'
@@ -145,13 +146,29 @@ async function main(): Promise<void> {
   const chainIds = Object.keys(adapter.chains).map(Number)
   let failures = 0
 
+  // Catalogue-seeded adapters (Blend — no on-chain market list) need their pool
+  // set handed in, the same way the orchestrators do it. Adapters that discover
+  // their own markets get `undefined`, exactly as before. `activeOnly: true` is
+  // the cheap catalogue read; both calls below get the same set so the
+  // products/spot diff check stays honest.
+  const opts =
+    adapter.ownsMarketDiscovery === false
+      ? {
+          poolIds: await distinctProtocolAddresses(
+            adapter.provider,
+            adapter.version,
+            { activeOnly: true }
+          ),
+        }
+      : undefined
+
   console.log(
     `\n▶ ${adapter.name} (${adapter.id}) — chains: ${chainIds.join(', ')}\n`
   )
 
   const [products, spots] = await Promise.all([
-    adapter.getProducts(),
-    adapter.getApySpot(),
+    adapter.getProducts(opts),
+    adapter.getApySpot(opts),
   ])
 
   if (products.length === 0 || spots.length === 0) {
