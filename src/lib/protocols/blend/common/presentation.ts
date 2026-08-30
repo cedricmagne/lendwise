@@ -29,13 +29,14 @@ export function blendPoolName(p: ProductRow): string {
 }
 
 /**
- * Blend's app is one dashboard for every pool, on every version — V1's and
+ * Blend's app is one deployment for every pool, on every version — V1's and
  * V2's backstops are both configured into the same `mainnet.blend.capital`
  * deployment (see its `.env.production`), and the pool page resolves the
- * version from the contract itself. `protocolAddress` IS the pool contract
- * id (`defaultPoolIdentity`'s `poolId`/`poolAddress`), matching the `poolId`
- * query param the dashboard reads off `router.query`.
+ * version from the contract itself. Links straight to the supply or borrow
+ * action for the row's own asset, not the pool overview: `/supply/` or
+ * `/borrow/` keyed on `p.kind`, `poolId` = `protocolAddress` (the pool
+ * contract id — `defaultPoolIdentity`) and `assetId` = `assetAddress`.
  */
 export function blendProductLink(p: ProductRow): string {
-  return `https://mainnet.blend.capital/dashboard/?poolId=${p.protocolAddress}`
+  return `https://mainnet.blend.capital/${p.kind}/?poolId=${p.protocolAddress}&assetId=${p.assetAddress}`
 }
