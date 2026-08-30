@@ -255,7 +255,7 @@ const createColumns = (
       return (
         <div className="flex w-full items-center gap-1">
           <div
-            className={`flex items-center ${overlapping ? '-space-x-2' : 'gap-1'}`}
+            className={`flex items-center ${overlapping ? '-space-x' : 'gap-1'}`}
           >
             {visible.map((collateral) => (
               <Tooltip key={collateral.symbol}>
@@ -276,7 +276,7 @@ const createColumns = (
           {overlapping && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="text-muted-foreground hover:text-foreground inline-flex h-5 shrink-0 cursor-default items-center rounded-md border border-dashed px-1.5 text-xs font-medium transition-colors">
+                <span className="text-muted-foreground hover:text-foreground ml-1 inline-flex h-5 shrink-0 cursor-default items-center rounded-md border border-dashed text-[9px] transition-colors">
                   +{overflow.length}
                 </span>
               </TooltipTrigger>
