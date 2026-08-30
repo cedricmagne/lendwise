@@ -22,8 +22,8 @@ const EXPECTED_HOOKS: Record<ProtocolName, string[]> = {
   aave_v3: ['networkSlug', 'productLink'],
   morpho_v1: ['poolName', 'poolIdentity', 'productLink'],
   compound_v3: ['productLink'],
-  blend_v1: ['poolName'],
-  blend_v2: ['poolName'],
+  blend_v1: ['poolName', 'productLink'],
+  blend_v2: ['poolName', 'productLink'],
 }
 
 describe('PROTOCOLS_PRESENTATION', () => {

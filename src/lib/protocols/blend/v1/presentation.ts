@@ -7,10 +7,11 @@
 import type { ProtocolName } from '@/config/protocols-meta'
 import type { ProtocolPresentation } from '@/lib/protocols/core/presentation'
 
-import { blendPoolName } from '../common/presentation'
+import { blendPoolName, blendProductLink } from '../common/presentation'
 
 export const BLEND_V1_PRESENTATION = {
   blend_v1: {
     poolName: blendPoolName,
+    productLink: blendProductLink,
   },
 } satisfies Partial<Record<ProtocolName, ProtocolPresentation>>
