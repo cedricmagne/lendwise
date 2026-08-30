@@ -245,25 +245,32 @@ const createColumns = (
       const MAX_VISIBLE = 4
       const visible = collaterals.slice(0, MAX_VISIBLE)
       const overflow = collaterals.slice(MAX_VISIBLE)
+      const overlapping = overflow.length > 0
       return (
-        <div className="flex w-full items-center -space-x-2">
-          {visible.map((collateral) => (
-            <Tooltip key={collateral.symbol}>
-              <TooltipTrigger asChild>
-                <span className="shrink-0">
-                  <TokenIcon
-                    symbol={collateral.symbol}
-                    className="ring-background rounded-full ring-2"
-                  />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>{collateral.symbol}</TooltipContent>
-            </Tooltip>
-          ))}
-          {overflow.length > 0 && (
+        <div className="flex w-full items-center gap-1">
+          <div
+            className={`flex items-center ${overlapping ? '-space-x-2' : 'gap-1'}`}
+          >
+            {visible.map((collateral) => (
+              <Tooltip key={collateral.symbol}>
+                <TooltipTrigger asChild>
+                  <span className="shrink-0">
+                    <TokenIcon
+                      symbol={collateral.symbol}
+                      className={
+                        overlapping ? 'ring-background rounded-full ring-2' : ''
+                      }
+                    />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{collateral.symbol}</TooltipContent>
+              </Tooltip>
+            ))}
+          </div>
+          {overlapping && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="text-muted-foreground hover:text-foreground bg-background relative ml-1 inline-flex h-5 shrink-0 cursor-default items-center rounded-md border border-dashed px-1.5 text-xs font-medium transition-colors">
+                <span className="text-muted-foreground hover:text-foreground inline-flex h-5 shrink-0 cursor-default items-center rounded-md border border-dashed px-1.5 text-xs font-medium transition-colors">
                   +{overflow.length}
                 </span>
               </TooltipTrigger>
