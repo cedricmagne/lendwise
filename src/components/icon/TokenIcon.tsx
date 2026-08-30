@@ -5,23 +5,12 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 
 import { useTokenIcon } from '@/hooks/useTokenIcon'
+import { getStaticTokenIcon } from '@/lib/token-icons'
 
 type TokenIconProps = {
   symbol?: string
   size?: number
   className?: string
-}
-
-// Native asset icons — stored in /public/icons/native/
-// These are high-priority tokens that should load instantly
-// IMPORTANT: Only add icons here if the SVG file actually exists in /public/icons/native/
-// Otherwise, the component will try to load a non-existent file and show fallback instead of fetching from CoinGecko
-const NATIVE_ICONS: Record<string, string> = {
-  // Add your native icons here after placing SVG files in /public/icons/native/
-  // Example:
-  eth: '/icons/native/eth.svg',
-  btc: '/icons/native/btc.svg',
-  xlm: '/icons/native/xlm.svg',
 }
 
 export const TokenIcon = ({
@@ -36,9 +25,10 @@ export const TokenIcon = ({
   useEffect(() => {
     const lower = symbol.toLowerCase()
 
-    // Priority 1: Local native icons (instant load)
-    if (NATIVE_ICONS[lower]) {
-      setSrc(NATIVE_ICONS[lower])
+    // Priority 1: Static table (native + grouped icons, instant load)
+    const staticIcon = getStaticTokenIcon(lower)
+    if (staticIcon) {
+      setSrc(staticIcon)
       setError(false)
       return
     }

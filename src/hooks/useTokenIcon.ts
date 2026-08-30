@@ -3,6 +3,7 @@
 import useSWR from 'swr'
 
 import { getTokenIcon } from '@/app/actions/token-icon.actions'
+import { getStaticTokenIcon } from '@/lib/token-icons'
 
 /**
  * Fetcher function for SWR
@@ -32,11 +33,14 @@ async function fetchCoinIcon(symbol: string): Promise<string | null> {
 
 /**
  * Hook to fetch and cache token icon URLs
- * Uses SWR for data fetching and localStorage for persistence
+ * Checks the static table first (instant, no network); only symbols missing
+ * from it fall through to SWR + the CoinGecko-backed server action.
  */
 export function useTokenIcon(symbol?: string) {
+  const staticIcon = symbol ? getStaticTokenIcon(symbol) : undefined
+
   const { data: icon } = useSWR(
-    symbol ? ['tokenIcon', symbol.toLowerCase()] : null,
+    !staticIcon && symbol ? ['tokenIcon', symbol.toLowerCase()] : null,
     async ([, sym]) => fetchCoinIcon(sym),
     {
       revalidateOnFocus: false,
@@ -45,5 +49,5 @@ export function useTokenIcon(symbol?: string) {
     }
   )
 
-  return icon
+  return staticIcon ?? icon
 }

@@ -1,4 +1,27 @@
+import { getCoinGeckoId } from '@/lib/crypto-mapping'
+
 const COINGECKO_API = 'https://api.coingecko.com/api/v3'
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * CoinGecko's free tier rate-limits aggressively (429). Retry a couple of
+ * times with backoff before giving up, same pattern as lib/defillama.ts.
+ */
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  attempt = 0
+): Promise<Response> {
+  const res = await fetch(url, init)
+  if ((res.status === 429 || res.status >= 500) && attempt < 2) {
+    await sleep(attempt === 0 ? 1000 : 3000)
+    return fetchWithRetry(url, init, attempt + 1)
+  }
+  return res
+}
 
 export type CoinGeckoCoin = {
   id: string
@@ -24,8 +47,12 @@ export type CoinGeckoDetail = {
 export async function searchCoinBySymbol(
   symbol: string
 ): Promise<string | null> {
+  // Known symbols skip the coins/list scan (a full-catalog payload) entirely.
+  const knownId = getCoinGeckoId(symbol)
+  if (knownId) return knownId
+
   try {
-    const res = await fetch(
+    const res = await fetchWithRetry(
       `${COINGECKO_API}/coins/list?include_platform=false`,
       {
         next: { revalidate: 60 * 60 * 24 }, // 24h cache for coin list
@@ -62,7 +89,7 @@ export async function searchCoinBySymbol(
  */
 export async function getCoinIconUrl(id: string): Promise<string | null> {
   try {
-    const res = await fetch(`${COINGECKO_API}/coins/${id}`, {
+    const res = await fetchWithRetry(`${COINGECKO_API}/coins/${id}`, {
       next: { revalidate: 60 * 60 * 24 * 7 }, // 7 days cache for coin details
     })
 
