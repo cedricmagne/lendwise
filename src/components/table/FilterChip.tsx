@@ -141,13 +141,20 @@ export function FilterChip({
                   className="text-xs"
                 >
                   <div
-                    className={`text-2xs mr-2 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border ${
+                    className={`text-2xs mr-2 flex h-3.5 w-3.5 shrink-0 items-center justify-center border ${
+                      multiSelect ? 'rounded-sm' : 'rounded-full'
+                    } ${
                       selectedValues.has(opt.value)
                         ? 'border-primary bg-primary text-primary-foreground'
                         : 'border-muted-foreground/50 bg-transparent'
                     }`}
                   >
-                    {selectedValues.has(opt.value) && '✓'}
+                    {selectedValues.has(opt.value) &&
+                      (multiSelect ? (
+                        '✓'
+                      ) : (
+                        <div className="h-1.5 w-1.5 rounded-full bg-current" />
+                      ))}
                   </div>
                   <span className="flex-1">{opt.label}</span>
                   {counts?.get(opt.value) !== undefined && (

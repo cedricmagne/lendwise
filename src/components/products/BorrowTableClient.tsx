@@ -691,29 +691,43 @@ export function BorrowTableClient() {
         })
     )
 
-  const protocolCounts = applyFiltersExcept('protocol').reduce((acc, m) => {
-    acc.set(m.protocol, (acc.get(m.protocol) ?? 0) + 1)
-    return acc
-  }, new Map<string, number>())
-
-  const networkCounts = applyFiltersExcept('network').reduce((acc, m) => {
-    acc.set(m.network, (acc.get(m.network) ?? 0) + 1)
-    return acc
-  }, new Map<string, number>())
-
-  const tokenCounts = applyFiltersExcept('assetSymbol').reduce((acc, m) => {
-    acc.set(m.assetSymbol, (acc.get(m.assetSymbol) ?? 0) + 1)
-    return acc
-  }, new Map<string, number>())
-
-  const collateralCounts = applyFiltersExcept('collaterals').reduce(
-    (acc, m) => {
-      m.collaterals.forEach((c) => {
-        acc.set(c.symbol, (acc.get(c.symbol) ?? 0) + 1)
-      })
-      return acc
-    },
-    new Map<string, number>()
+  // Every option gets an entry, 0 included — a `.reduce()` over the filtered
+  // rows would omit a protocol with no matches instead of showing it at 0,
+  // same reasoning as the supply table.
+  const protocolCounts = new Map<string, number>(
+    protocolOptions
+      .map((o) => o.value)
+      .map((v) => [
+        v,
+        applyFiltersExcept('protocol').filter((m) => m.protocol === v).length,
+      ])
+  )
+  const networkCounts = new Map<string, number>(
+    networkOptions
+      .map((o) => o.value)
+      .map((v) => [
+        v,
+        applyFiltersExcept('network').filter((m) => m.network === v).length,
+      ])
+  )
+  const tokenCounts = new Map<string, number>(
+    tokenOptions
+      .map((o) => o.value)
+      .map((v) => [
+        v,
+        applyFiltersExcept('assetSymbol').filter((m) => m.assetSymbol === v)
+          .length,
+      ])
+  )
+  const collateralCounts = new Map<string, number>(
+    collateralOptions
+      .map((o) => o.value)
+      .map((v) => [
+        v,
+        applyFiltersExcept('collaterals').filter((m) =>
+          m.collaterals.some((c) => c.symbol === v)
+        ).length,
+      ])
   )
 
   // The bar is deliberately market-wide, not table-wide: it is what tells a user
