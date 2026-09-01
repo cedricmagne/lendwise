@@ -2,8 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 
-import posthog from 'posthog-js'
-
+import { identifyWallet } from '@/lib/analytics/identifyWallet'
 import { formatAddress } from '@/lib/utils'
 import { useWalletStore } from '@/stores/walletStore'
 import type { Wallet } from '@/stores/walletStore'
@@ -97,10 +96,7 @@ export function StellarWalletProvider({
       }
 
       addWallets([newWallet])
-      posthog.identify(address, {
-        wallet_address: address,
-        chain_family: 'stellar',
-      })
+      identifyWallet({ address, chainFamily: 'stellar' })
 
       // Deselect other active wallets
       const allWallets = useWalletStore.getState().wallets

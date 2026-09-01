@@ -3,12 +3,12 @@
 import { useEffect } from 'react'
 
 import { getEnsName } from '@wagmi/core'
-import posthog from 'posthog-js'
 import type { Address } from 'viem'
 import { useAccount, useConfig } from 'wagmi'
 import { mainnet } from 'wagmi/chains'
 
 import { useMultiWalletManager } from '@/hooks/useMultiWalletManager'
+import { identifyWallet } from '@/lib/analytics/identifyWallet'
 import { formatAddress } from '@/lib/utils'
 import { type Wallet, useWalletStore } from '@/stores/walletStore'
 
@@ -49,6 +49,10 @@ export function WalletWatcherProvider({
   const addWalletToStore = async (walletAddress: string, isActive = false) => {
     if (hasWallet(walletAddress)) {
       addOrUpdateClient(walletAddress as Address, chain)
+      // Re-run identification for wallets restored from a previous session
+      // (e.g. wagmi auto-reconnect) so a returning visitor is linked back to
+      // their canonical PostHog person instead of staying anonymous.
+      identifyWallet({ address: walletAddress, chainFamily: 'evm' })
       return
     }
 
@@ -84,13 +88,11 @@ export function WalletWatcherProvider({
     addWallets([newWallet])
     addOrUpdateClient(walletAddress as Address, chain)
 
-    if (isActive) {
-      posthog.identify(walletAddress, {
-        wallet_address: walletAddress,
-        ens_name: ensName ?? undefined,
-        chain_family: 'evm',
-      })
-    }
+    identifyWallet({
+      address: walletAddress,
+      chainFamily: 'evm',
+      ensName,
+    })
   }
 
   // Listen to accountsChanged event from MetaMask

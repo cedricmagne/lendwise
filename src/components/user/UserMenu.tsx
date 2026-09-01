@@ -219,7 +219,7 @@ export const UserMenu = () => {
           </Button>
         </DropdownMenuTrigger>
         {renderDropdownContent(() => {
-          posthog.capture('wallet_disconnected', { network_family: 'stellar' })
+          posthog.capture('wallet_disconnected', { chain_family: 'stellar' })
           disconnectStellar(activeWallet.address)
         })}
       </DropdownMenu>
@@ -254,7 +254,7 @@ export const UserMenu = () => {
               </Button>
             </DropdownMenuTrigger>
             {renderDropdownContent(() => {
-              posthog.capture('wallet_disconnected', { network_family: 'evm' })
+              posthog.capture('wallet_disconnected', { chain_family: 'evm' })
               openAccountModal()
             })}
           </DropdownMenu>

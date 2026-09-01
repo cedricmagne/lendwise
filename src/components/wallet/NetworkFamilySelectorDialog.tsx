@@ -55,7 +55,7 @@ export function NetworkFamilySelectorDialog({
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => {
-                posthog.capture('wallet_connected', { network_family: 'evm' })
+                posthog.capture('wallet_connected', { chain_family: 'evm' })
                 onOpenChange(false)
                 onSelectEVM()
               }}
@@ -89,7 +89,7 @@ export function NetworkFamilySelectorDialog({
               whileTap={{ scale: 0.98 }}
               onClick={() => {
                 posthog.capture('wallet_connected', {
-                  network_family: 'stellar',
+                  chain_family: 'stellar',
                 })
                 onOpenChange(false)
                 onSelectStellar()
